@@ -1,0 +1,22 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Node
+node_modules/
+dist/
+
+# Flutter
+revela_mobile/build/
+revela_mobile/.dart_tool/
+revela_mobile/.flutter-plugins
+revela_mobile/.flutter-plugins-dependencies
+revela_mobile/.idea/
+*.apk
+*.aab
+
+# General
+.DS_Store
+Thumbs.db

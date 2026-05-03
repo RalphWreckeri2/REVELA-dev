@@ -1,0 +1,481 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+/* ── Reset ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Root / Page background ── */
+.login-root {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f4f0; /* Bright, clean, subtle green-gray base */
+  font-family:
+    "Inter",
+    -apple-system,
+    sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Topographic Overlay to emphasize GIS */
+.topo-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0.08;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M54.627 0l.83.83v58.34l-.83.83H5.373l-.83-.83V.83l.83-.83h49.254zm-1.66 2.49H7.033v55.02h45.934V2.49z' fill='%231a3a1a' fill-opacity='0.4' fill-rule='evenodd'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Fluid Ambient Orbs ── */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 1;
+  animation: liquidFloat 20s infinite alternate ease-in-out;
+}
+
+.orb-tl {
+  width: 400px;
+  height: 400px;
+  background: rgba(168, 224, 99, 0.35);
+  top: -100px;
+  left: -50px;
+  animation-delay: 0s;
+}
+
+.orb-br {
+  width: 350px;
+  height: 350px;
+  background: rgba(247, 201, 72, 0.3);
+  bottom: -100px;
+  right: -50px;
+  animation-delay: -5s;
+}
+
+.orb-mid {
+  width: 250px;
+  height: 250px;
+  background: rgba(86, 171, 47, 0.15);
+  top: 30%;
+  right: 25%;
+  animation-duration: 25s;
+}
+
+.seal {
+  width: 48px;
+  height: 48px;
+  object-fit: contain; /* Keeps the picture from warping */
+}
+
+@keyframes liquidFloat {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(40px, 40px) scale(1.05);
+  }
+  100% {
+    transform: translate(-20px, -40px) scale(0.95);
+  }
+}
+
+/* ── Light Frosted Glass Card ── */
+.login-card {
+  display: flex;
+  width: 800px;
+  min-height: 500px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.75); /* High opacity for readability */
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 1);
+  box-shadow:
+    0 25px 50px rgba(26, 58, 26, 0.1),
+    0 5px 15px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 2;
+}
+
+/* ── LEFT PANEL ── */
+.left-panel {
+  width: 320px;
+  flex-shrink: 0;
+  padding: 48px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: linear-gradient(
+    180deg,
+    rgba(86, 171, 47, 0.05) 0%,
+    rgba(255, 255, 255, 0.4) 100%
+  );
+  border-right: 1px solid rgba(26, 58, 26, 0.08);
+  position: relative;
+}
+
+.left-inner-orb {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(247, 201, 72, 0.15) 0%,
+    transparent 70%
+  );
+  top: -50px;
+  left: -50px;
+  pointer-events: none;
+}
+
+.seal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1;
+}
+
+.seal {
+  width: 48px;
+  height: 48px;
+}
+
+.muni-pre {
+  font-size: 10px;
+  color: rgba(26, 58, 26, 0.6);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.muni-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a3a1a;
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
+.muni-loc {
+  font-size: 11px;
+  color: rgba(26, 58, 26, 0.5);
+}
+
+.left-brand {
+  z-index: 1;
+}
+.gold-bar {
+  width: 32px;
+  height: 4px;
+  background: #d4af37;
+  border-radius: 2px;
+  margin-bottom: 24px;
+}
+.powered-by {
+  font-size: 10px;
+  color: rgba(26, 58, 26, 0.5);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.wordmark {
+  font-size: 36px;
+  font-weight: 800;
+  color: #1a3a1a;
+  letter-spacing: 2px;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.tagline {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(26, 58, 26, 0.7);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.brand-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(26, 58, 26, 0.15), transparent);
+  margin-bottom: 16px;
+}
+.brand-desc {
+  font-size: 11px;
+  color: rgba(26, 58, 26, 0.6);
+  line-height: 1.6;
+}
+
+/* ── RIGHT FORM PANEL ── */
+.right-panel {
+  flex: 1;
+  padding: 56px 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.portal-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.portal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #56ab2f;
+  box-shadow: 0 0 8px rgba(86, 171, 47, 0.5);
+}
+.portal-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a3a1a;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.form-heading {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a3a1a;
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+.form-sub {
+  font-size: 14px;
+  color: rgba(26, 58, 26, 0.6);
+  margin-bottom: 36px;
+  font-weight: 400;
+}
+
+/* ── Boomer-Friendly Form Fields ── */
+.field {
+  margin-bottom: 22px;
+}
+
+.field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a3a1a;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input-wrap {
+  position: relative;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: rgba(26, 58, 26, 0.4);
+  transition: color 0.3s ease;
+}
+
+/* Bounded, clear input boxes */
+.glass-input {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid rgba(26, 58, 26, 0.15);
+  border-radius: 10px;
+  padding: 14px 14px 14px 42px;
+  font-size: 15px; /* Larger text */
+  color: #1a3a1a;
+  outline: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+.glass-input::placeholder {
+  color: rgba(26, 58, 26, 0.3);
+  font-weight: 400;
+}
+
+.glass-input:focus {
+  border-color: #56ab2f;
+  box-shadow: 0 0 0 4px rgba(86, 171, 47, 0.15);
+}
+
+.glass-input:focus ~ .input-icon {
+  color: #56ab2f;
+}
+
+.glass-input--pw {
+  padding-right: 48px;
+} /* Ensures text doesn't hide behind the eye icon */
+.glass-input--otp {
+  padding-left: 14px;
+}
+
+/* ── Password Toggle Visibility Fixed ── */
+.pw-toggle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(26, 58, 26, 0.5); /* High contrast */
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.pw-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+.pw-toggle:hover {
+  color: #1a3a1a;
+}
+
+.forgot-row {
+  text-align: right;
+  margin-bottom: 28px;
+  margin-top: -8px;
+}
+.forgot-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #56ab2f;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.forgot-btn:hover {
+  color: #1a3a1a;
+  text-decoration: underline;
+}
+
+/* ── OTP Recovery ── */
+.otp-box {
+  background: #f9fbf9;
+  border: 1px solid rgba(86, 171, 47, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.otp-desc {
+  font-size: 13px;
+  color: #1a3a1a;
+  margin-bottom: 16px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.otp-action-row {
+  display: flex;
+  gap: 12px;
+}
+.otp-action-row .glass-input {
+  flex: 1;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.otp-send-btn {
+  padding: 0 20px;
+  border-radius: 8px;
+  border: none;
+  background: #56ab2f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.otp-send-btn:hover {
+  background: #458a25;
+}
+
+/* ── Primary CTA ── */
+.signin-btn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 10px;
+  border: none;
+  background: #1a3a1a;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  margin-bottom: 28px;
+  box-shadow: 0 8px 16px rgba(26, 58, 26, 0.2);
+}
+
+.signin-btn:hover {
+  background: #2d5a1b;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px rgba(26, 58, 26, 0.25);
+}
+.signin-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* ── Legal Warning ── */
+.legal-note {
+  font-size: 11px;
+  color: #8b0000;
+  text-align: center;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+  padding: 14px;
+  background: rgba(139, 0, 0, 0.04);
+  border-radius: 8px;
+  border: 1px solid rgba(139, 0, 0, 0.1);
+  font-weight: 500;
+}
+
+/* ── Responsive ── */
+@media (max-width: 800px) {
+  .login-card {
+    flex-direction: column;
+    width: 92%;
+    min-height: auto;
+  }
+  .left-panel {
+    width: 100%;
+    padding: 32px;
+    border-right: none;
+    border-bottom: 1px solid rgba(26, 58, 26, 0.08);
+  }
+  .right-panel {
+    padding: 40px 32px;
+  }
+}

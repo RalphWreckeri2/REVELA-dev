@@ -1,10 +1,32 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "../styles/LoginPage.css";
 import sealImg from "../assets/seal.png";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
-  const [showOtp, setShowOtp]           = useState(false);
+  const [showOtp, setShowOtp] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [otpInput, setOtpInput] = useState("");
+  const navigate = useNavigate();
+
+  const handleLogin = () => {
+    if (!username || !password) {
+      window.alert("Please enter your username and password.");
+      return;
+    }
+    navigate("/home");
+  };
+
+  const handleSendOtp = () => {
+    if (!username) {
+      window.alert("Enter your username or email first to receive an OTP.");
+      return;
+    }
+    window.alert("One-time password sent to your registered contact.");
+    setShowOtp(true);
+  };
 
   return (
     <div className="login-root">
@@ -69,7 +91,13 @@ export default function LoginPage() {
                 <circle cx="8" cy="5" r="3"/>
                 <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
               </svg>
-              <input type="text" className="glass-input" placeholder="admin@mataasnakahoy.gov.ph" />
+              <input
+                type="text"
+                className="glass-input"
+                placeholder="admin@mataasnakahoy.gov.ph"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
             </div>
           </div>
 
@@ -85,6 +113,8 @@ export default function LoginPage() {
                 type={showPassword ? "text" : "password"}
                 className="glass-input glass-input--pw"
                 placeholder="••••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
               <button
                 className="pw-toggle"
@@ -109,7 +139,7 @@ export default function LoginPage() {
 
           {/* Forgot password */}
           <div className="forgot-row">
-            <button className="forgot-btn" onClick={() => setShowOtp(!showOtp)}>
+            <button className="forgot-btn" type="button" onClick={() => setShowOtp(!showOtp)}>
               Forgot password?
             </button>
           </div>
@@ -121,14 +151,20 @@ export default function LoginPage() {
                 Enter your registered email or phone number to receive a one-time password.
               </p>
               <div className="otp-action-row">
-                <input type="text" className="glass-input glass-input--otp" placeholder="Email or phone" />
-                <button className="otp-send-btn">Send OTP</button>
+                <input
+                  type="text"
+                  className="glass-input glass-input--otp"
+                  placeholder="Email or phone"
+                  value={otpInput}
+                  onChange={(e) => setOtpInput(e.target.value)}
+                />
+                <button className="otp-send-btn" type="button" onClick={handleSendOtp}>Send OTP</button>
               </div>
             </div>
           )}
 
           {/* Primary CTA */}
-          <button className="signin-btn">Secure Login</button>
+          <button className="signin-btn" type="button" onClick={handleLogin}>Secure Login</button>
 
           <p className="legal-note">
             RESTRICTED ACCESS: Authorized BPLO personnel only.<br />

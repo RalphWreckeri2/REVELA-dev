@@ -23,3 +23,7 @@ Thumbs.db
 
 # Mobile
 .vscode/
+
+# macOS generated files
+revela_mobile/macos/Flutter/GeneratedPluginRegistrant.swift
+revela_mobile/macos/Flutter/ephemeral/

@@ -1,0 +1,35 @@
+import 'package:flutter/material.dart';
+
+class AppColors {
+  // Primary greens
+  static const Color darkGreen = Color(0xFF1B5E20);
+  static const Color midGreen = Color(0xFF2E7D32);
+  static const Color lightGreen = Color(0xFF388E3C);
+  static const Color paleGreen = Color(0xFFE8F5E9);
+
+  // Accent yellow/gold
+  static const Color gold = Color(0xFFFFC107);
+  static const Color lightGold = Color(0xFFFFF8E1);
+
+  // Neutrals
+  static const Color white = Color(0xFFFFFFFF);
+  static const Color background = Color(0xFFF4F6F4);
+  static const Color textDark = Color(0xFF1A2B1A);
+  static const Color textMid = Color(0xFF4A5C4A);
+  static const Color textLight = Color(0xFF8A9E8A);
+  static const Color borderColor = Color(0xFFD0DDD0);
+}
+
+class AppTheme {
+  static ThemeData get theme {
+    return ThemeData(
+      useMaterial3: true,
+      fontFamily: 'Roboto',
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppColors.darkGreen,
+        brightness: Brightness.light,
+      ),
+      scaffoldBackgroundColor: AppColors.background,
+    );
+  }
+}

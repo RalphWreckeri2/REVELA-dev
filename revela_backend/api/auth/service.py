@@ -1,0 +1,199 @@
+import random
+import bcrypt
+import os
+import requests
+from api.models.user import find_user_by_email, find_user_by_id, update_last_login, update_password
+from api.models.otp import create_otp, get_valid_otp, delete_otp, invalidate_user_otps
+from flask_jwt_extended import create_access_token
+
+
+def login_user(email, password):
+    """
+    1. Find user by email
+    2. Verify password with bcrypt
+    3. Return JWT with {userID, role} in payload
+    """
+    user = find_user_by_email(email)
+
+    if not user:
+        return None, "Invalid email or password"
+
+    # bcrypt check — password is the raw string, user["userPassword"] is the hash
+    password_matches = bcrypt.checkpw(
+        password.encode("utf-8"),
+        user["userPassword"].encode("utf-8")
+    )
+
+    if not password_matches:
+        return None, "Invalid email or password"
+
+    # Stamp last login
+    update_last_login(user["userID"])
+
+    # Create JWT — additional_claims carries role into the token
+    token = create_access_token(
+        identity=str(user["userID"]),
+        additional_claims={"role": user["userRole"]}
+    )
+
+    return token, None
+
+
+def request_otp(identifier):
+    """
+    identifier can be email or phone number.
+    1. Find user
+    2. Generate 5-digit OTP
+    3. Store in DB
+    4. Send via SMS or Email
+    """
+    if "@" in identifier:
+        user = find_user_by_email(identifier)
+    else:
+        from api.models.user import find_user_by_phone
+        user = find_user_by_phone(identifier)
+
+    if not user:
+        # Don't reveal if user exists or not — always return success
+        return True
+
+    # Invalidate any existing OTPs for this user
+    invalidate_user_otps(user["userID"])
+
+    otp_code = str(random.randint(10000, 99999))  # 5-digit
+
+    create_otp(user["userID"], otp_code)
+
+    # Decide channel based on identifier format
+    if "@" in identifier:
+        send_otp_email(identifier, otp_code)
+    else:
+        send_otp_sms(identifier, otp_code)
+
+    return True
+
+
+def send_otp_sms(phone_number, otp_code):
+    """Send OTP via Mocean SMS gateway."""
+    try:
+        # Format phone number to international format (+63...)
+        formatted_phone = format_phone_number(phone_number)
+
+        if not formatted_phone:
+            print(f"SMS error: Invalid phone number format: {phone_number}")
+            return False
+
+        response = requests.post(
+            "https://rest.moceanapi.com/rest/2/sms",
+            headers={
+                "Authorization": f"Bearer {os.getenv('MOCEAN_API_KEY')}",
+            },
+            data={
+                "mocean-from": os.getenv("MOCEAN_FROM", "REVELA"),
+                "mocean-to": formatted_phone,
+                "mocean-text": f"Your REVELA password reset code is: {otp_code}. Valid for 15 minutes. Do not share this code.",
+            },
+            timeout=10
+        )
+
+        # Check HTTP status
+        if response.status_code != 200:
+            print(f"SMS error: HTTP {response.status_code} - {response.text}")
+            return False
+
+        # Parse JSON response and check API status
+        try:
+            api_response = response.json()
+            if api_response.get("status") == 0:
+                print(f"SMS sent successfully to {formatted_phone}")
+                return True
+            else:
+                print(f"SMS API error: {api_response}")
+                return False
+        except Exception as parse_err:
+            print(f"SMS error parsing response: {parse_err}")
+            return False
+
+    except Exception as e:
+        print(f"SMS error: {type(e).__name__} - {e}")
+        return False
+
+
+def format_phone_number(phone):
+    """
+    Convert phone number to international format (+63...)
+    Handles: 09123456789 → +639123456789
+             +639123456789 → +639123456789
+             639123456789 → +639123456789
+    """
+    if not phone:
+        return None
+
+    # Remove all non-digit characters except leading +
+    clean_phone = phone.strip()
+    if clean_phone.startswith("+"):
+        clean_phone = clean_phone[1:]
+
+    clean_phone = "".join(filter(str.isdigit, clean_phone))
+
+    # Handle Philippine numbers
+    if clean_phone.startswith("0"):
+        # Convert 09123456789 to 639123456789
+        clean_phone = "63" + clean_phone[1:]
+    elif not clean_phone.startswith("63"):
+        # Assume it's a partial number and prepend 63
+        clean_phone = "63" + clean_phone
+
+    return f"+{clean_phone}" if len(clean_phone) > 10 else None
+
+
+def send_otp_email(email, otp_code):
+    """Send OTP via Resend email API."""
+    try:
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {os.getenv('RESEND_API_KEY')}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": os.getenv("RESEND_FROM"),
+                "to": [email],
+                "subject": "REVELA Password Reset OTP",
+                "text": f"Your REVELA password reset code is: {otp_code}. Valid for 15 minutes. Do not share this code.",
+            }
+        )
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Email error: {e}")
+        return False
+
+
+def reset_password(identifier, otp_code, new_password):
+    """
+    1. Find user
+    2. Validate OTP
+    3. bcrypt hash new password
+    4. UPDATE USERS
+    5. DELETE OTP record
+    """
+    if "@" in identifier:
+        user = find_user_by_email(identifier)
+    else:
+        from api.models.user import find_user_by_phone
+        user = find_user_by_phone(identifier)
+
+    if not user:
+        return False, "Invalid request"
+
+    otp_record = get_valid_otp(user["userID"], otp_code)
+
+    if not otp_record:
+        return False, "OTP is invalid or has expired"
+
+    hashed = bcrypt.hashpw(new_password.encode(
+        "utf-8"), bcrypt.gensalt()).decode("utf-8")
+    update_password(user["userID"], hashed)
+    delete_otp(otp_record["uprID"])
+
+    return True, None

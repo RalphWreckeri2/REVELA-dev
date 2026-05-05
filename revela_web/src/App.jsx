@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';   // ← add this
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import MapPage from './pages/MapPage';
@@ -11,25 +13,28 @@ import ExportReportsPage from './pages/ExportReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 
-function App() {
+export default function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <Routes>
-        <Route path="/" element={<LoginPage />} />
-        <Route path="/home" element={<HomePage />} />
-        <Route path="/map" element={<MapPage />} />
-        <Route path="/registry" element={<RegistryPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/inspections" element={<InspectionPage />} />
-        <Route path="/users" element={<UserManagementPage />} />
-        <Route path="/reports" element={<ExportReportsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        </Routes>
-      </BrowserRouter>
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<LoginPage />} />
+
+            {/* Protected */}
+            <Route path="/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+            <Route path="/map" element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+            <Route path="/registry" element={<ProtectedRoute><RegistryPage /></ProtectedRoute>} />
+            <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+            <Route path="/inspections" element={<ProtectedRoute><InspectionPage /></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><ExportReportsPage /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          </Routes>
+        </BrowserRouter>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
-
-export default App;

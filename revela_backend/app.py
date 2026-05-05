@@ -1,36 +1,30 @@
 from flask import Flask
+from flask_jwt_extended import JWTManager
+from flask_mysqldb import MySQL
+from config import Config
 from flask_cors import CORS
-from dotenv import load_dotenv
-import os
-import pymysql
-
-load_dotenv()
-
-app = Flask(__name__)
-CORS(app)
-
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
-
-def get_db():
-    return pymysql.connect(
-        host=os.getenv('DB_HOST'),
-        port=int(os.getenv('DB_PORT')),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        database=os.getenv('DB_NAME'),
-        cursorclass=pymysql.cursors.DictCursor
-    )
 
 
-@app.route('/ping')
-def ping():
-    try:
-        conn = get_db()
-        conn.close()
-        return {'status': 'ok', 'db': 'connected'}
-    except Exception as e:
-        return {'status': 'error', 'message': str(e)}, 500
+mysql = MySQL()
+jwt = JWTManager()
 
 
-if __name__ == '__main__':
+def create_app():
+    app = Flask(__name__)
+    CORS(app, origins=["http://localhost:5173", "http://localhost:3000"])
+    app.config.from_object(Config)
+
+    # Init extensions
+    mysql.init_app(app)
+    jwt.init_app(app)
+
+    # Register blueprints
+    from api.auth.routes import auth_bp
+    app.register_blueprint(auth_bp, url_prefix="/api/auth")
+
+    return app
+
+
+if __name__ == "__main__":
+    app = create_app()
     app.run(debug=True)

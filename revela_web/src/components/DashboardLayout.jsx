@@ -230,13 +230,13 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
 
   return (
     <header className="top-navbar frosted-glass">
-      <div className="search-bar">
+      {/*<div className="search-bar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
         <input type="text" placeholder={searchPlaceholder} />
-      </div>
+      </div>*/}
 
       <div className="top-nav-right">
         <div className="notification-wrapper">
@@ -292,6 +292,7 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
  * @param {{ children: React.ReactNode, user?: object, onLogout?: () => void }} props
  */
 export default function DashboardLayout({ children, user, onLogout }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const handleLogout = () => {
     if (!window.confirm("Are you sure you want to log out?")) {
@@ -304,7 +305,16 @@ export default function DashboardLayout({ children, user, onLogout }) {
   };
 
   return (
-    <div className="saas-root">
+    <div className={`saas-root ${isMobileMenuOpen ? "mobile-open" : ""}`}>
+      
+      <button 
+        className="mobile-toggle" 
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+      >
+
+        {isMobileMenuOpen ? "✕" : "☰"}
+      
+      </button>
       <Sidebar onLogout={handleLogout} />
 
       <div className="saas-main">

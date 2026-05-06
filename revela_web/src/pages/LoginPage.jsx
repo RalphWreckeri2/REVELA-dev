@@ -385,8 +385,20 @@ export default function LoginPage() {
           )}
 
           {/* ── Primary CTA ── */}
-          <button className="signin-btn" type="button" onClick={handleLogin} disabled={loginLoading}>
-            {loginLoading ? "Signing in..." : "Secure Login"}
+          <button 
+            className="signin-btn" 
+            type="button" 
+            onClick={handleLogin} 
+            disabled={loginLoading}
+          >
+            {loginLoading ? (
+              <div className="btn-loader-container">
+                <span className="spinner"></span>
+                Signing in...
+              </div>
+            ) : (
+              "Secure Login"
+            )}
           </button>
 
           <p className="legal-note">

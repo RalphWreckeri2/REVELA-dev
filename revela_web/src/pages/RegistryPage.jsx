@@ -3,6 +3,7 @@
  * Business Registry — wired to /api/registry with upload, search, filter, pagination.
  */
 
+import Papa from "papaparse";
 import { useState, useEffect, useCallback, useContext } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import StatusBadge from "../components/StatusBadge";
@@ -438,6 +439,39 @@ export default function RegistryPage() {
     }
   }, [page, debouncedSearch, barangay, status, pageSize, token]);
 
+  // ── Export CSV Handler ───────────────────────────────────────────────────
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch data from the existing Python API 
+      // We set limit to 10000 to bypass the 10-row page limit
+      const result = await getRegistryRequest({ 
+        limit: 10000, 
+        status: status !== "All Status" ? status : undefined,
+        barangayID: barangay !== "All Barangays" ? barangay : undefined,
+        search: debouncedSearch
+      }, token);
+
+      // 2. Convert the JSON results to CSV
+      const csv = Papa.unparse(result.data);
+
+      // 3. Download the file to the browser
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `REVELA_Registry_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Export failed:", err);
+      setError("Export failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Reset page to 1 whenever filters change (search, barangay, status, pageSize)
   useEffect(() => {
     setPage(1);
@@ -464,7 +498,13 @@ export default function RegistryPage() {
           <p className="page-subtitle">Official BPLO-registered establishments in Mataasnakahoy.</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="ghost-btn"><Icon.Download /> Export CSV</button>
+          <button 
+            className="ghost-btn" 
+            onClick={handleExport} 
+            disabled={loading}
+          >
+            <Icon.Download /> {loading ? "Exporting..." : "Export CSV"}
+          </button>
           {user?.role === "Admin" && (
             <button className="primary-btn" onClick={() => setShowUpload(true)}>
               <Icon.Upload /> Upload File

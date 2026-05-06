@@ -29,7 +29,7 @@ def get_current_role():
 def admin_required():
     """
     Decorator for ADMIN-only routes.
-    Returns 403 if role != 'Admin'.
+    Returns 403 if role != 'Admin' and role != 'SUPER_ADMIN'.
     Usage: @admin_required()
     """
     def decorator(fn):
@@ -41,7 +41,7 @@ def admin_required():
                 return jsonify({"error": "Unauthorized", "message": str(e)}), 401
 
             role = get_current_role()
-            if role != "Admin":
+            if role not in ("Admin", "SUPER_ADMIN"):
                 return jsonify({"error": "Forbidden", "message": "Admins only"}), 403
 
             return fn(*args, **kwargs)

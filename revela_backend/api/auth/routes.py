@@ -43,9 +43,8 @@ def me():
         "role":     claims.get("role"),
     }), 200
 
+
 # ── POST /api/auth/request-otp ────────────────────────────────────────────────
-
-
 @auth_bp.route("/request-otp", methods=["POST"])
 def request_otp_route():
     data = request.get_json()

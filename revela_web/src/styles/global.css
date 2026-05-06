@@ -678,6 +678,13 @@ html.theme-dark .menu-item.active {
   color: var(--color-primary);
 }
 
+/*Spinner animation for loading states*/
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── 5. RESPONSIVE ────────────────────────────────────────── */
 @media (max-width: 900px) {
   :root {

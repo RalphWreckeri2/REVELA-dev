@@ -3,6 +3,8 @@ import { loginRequest, getMeRequest } from "../services/api";
 
 const AuthContext = createContext(null);
 
+export { AuthContext };
+
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);   // JWT lives in memory only
   const [user, setUser] = useState(null);

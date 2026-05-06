@@ -1,14 +1,20 @@
 /**
  * RegistryPage.jsx
- * Business Registry — searchable, filterable data table.
- * All layout handled by DashboardLayout. All styling via global.css.
+ * Business Registry — wired to /api/registry with upload, search, filter, pagination.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import StatusBadge from "../components/StatusBadge";
+import { AuthContext } from "../context/AuthContext";
+import {
+  getRegistryRequest,
+  uploadRegistryFile,
+  getBusinessByIdRequest,
+  getBarangaysRequest,
+} from "../services/api";
 
-// ── Icons (inline SVGs kept as tiny components to avoid an icon lib dep) ──
+// ── Icons ─────────────────────────────────────────────────────────────────────
 const Icon = {
   Upload: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -48,136 +54,408 @@ const Icon = {
       <circle cx="12" cy="12" r="3"/>
     </svg>
   ),
+  Database: () => (
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+    </svg>
+  ),
+  Check: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  ),
+  AlertCircle: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  ),
+  X: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  ),
 };
 
-// ── Realistic mock data ───────────────────────────────────────────────────
-const ALL_BUSINESSES = [
-  { id: "MNK-0001", name: "Dela Cruz Sari-Sari Store",   type: "Sari-Sari Store",  barangay: "Poblacion I",    owner: "Maria Dela Cruz",   status: "registered",   permit: "2026-01-15", expiry: "2026-12-31" },
-  { id: "MNK-0002", name: "Reyes Hardware & Construction",type: "Hardware",         barangay: "Kinalaglagan",   owner: "Jose Reyes",         status: "registered",   permit: "2026-02-03", expiry: "2026-12-31" },
-  { id: "MNK-0003", name: "Nangkaan Carinderia",          type: "Carinderia",       barangay: "Nangkaan",       owner: "Lourdes Santos",     status: "expired",      permit: "2025-01-10", expiry: "2025-12-31" },
-  { id: "MNK-0004", name: "Santos Vulcanizing Shop",      type: "Vulcanizing",      barangay: "Poblacion II",   owner: "Pedro Santos",       status: "registered",   permit: "2026-01-20", expiry: "2026-12-31" },
-  { id: "MNK-0005", name: "Unknown Eatery (Flagged)",     type: "Carinderia",       barangay: "Poblacion I",    owner: "Unknown",            status: "unregistered", permit: "—",          expiry: "—"          },
-  { id: "MNK-0006", name: "Mataasnakahoy Bakery",         type: "Bakery",           barangay: "Luta Norte",     owner: "Angelica Ramos",     status: "registered",   permit: "2026-03-01", expiry: "2026-12-31" },
-  { id: "MNK-0007", name: "Bautista Billiard Hall",       type: "Recreation",       barangay: "Kinalaglagan",   owner: "Ramon Bautista",     status: "expired",      permit: "2024-12-01", expiry: "2025-12-31" },
-  { id: "MNK-0008", name: "JM General Merchandise",       type: "General Store",    barangay: "Nangkaan",       owner: "Joel Mercado",       status: "registered",   permit: "2026-01-05", expiry: "2026-12-31" },
-  { id: "MNK-0009", name: "Unregistered Piggery (Flag)",  type: "Livestock",        barangay: "Bts. Aplaya",    owner: "Unknown",            status: "unregistered", permit: "—",          expiry: "—"          },
-  { id: "MNK-0010", name: "Flores Pharmacy",              type: "Pharmacy",         barangay: "Poblacion I",    owner: "Dr. Carina Flores",  status: "registered",   permit: "2026-02-14", expiry: "2026-12-31" },
-  { id: "MNK-0011", name: "Gonzales Rice Trading",        type: "Rice Trading",     barangay: "Luta Sur",       owner: "Ernesto Gonzales",   status: "registered",   permit: "2026-01-28", expiry: "2026-12-31" },
-  { id: "MNK-0012", name: "Suspect Welding Shop",         type: "Welding",          barangay: "Poblacion II",   owner: "Unknown",            status: "unregistered", permit: "—",          expiry: "—"          },
-  { id: "MNK-0013", name: "Cruz Motor Parts",             type: "Auto Parts",       barangay: "Kinalaglagan",   owner: "Benito Cruz",        status: "registered",   permit: "2026-03-11", expiry: "2026-12-31" },
-  { id: "MNK-0014", name: "Aling Nena's Tindahan",        type: "Sari-Sari Store",  barangay: "Nangkaan",       owner: "Nena Aquino",        status: "expired",      permit: "2025-06-01", expiry: "2025-12-31" },
-  { id: "MNK-0015", name: "Mataasnakahoy Feeds & Supply", type: "Agricultural",     barangay: "Luta Norte",     owner: "Victor Villanueva",  status: "registered",   permit: "2026-01-09", expiry: "2026-12-31" },
-  { id: "MNK-0016", name: "Sta. Maria Internet Café",     type: "Internet Café",    barangay: "Poblacion I",    owner: "Sta. Maria Corp.",   status: "registered",   permit: "2026-02-22", expiry: "2026-12-31" },
-  { id: "MNK-0017", name: "Unknown Welding (Flagged)",    type: "Welding",          barangay: "Luta Sur",       owner: "Unknown",            status: "unregistered", permit: "—",          expiry: "—"          },
-  { id: "MNK-0018", name: "Laguna de Mataasnakahoy Inn",  type: "Lodging",          barangay: "Bts. Aplaya",    owner: "Rosa Laguna",        status: "registered",   permit: "2026-01-30", expiry: "2026-12-31" },
-];
 
-const BARANGAYS = ["All Barangays", "Poblacion I", "Poblacion II", "Kinalaglagan", "Nangkaan", "Luta Norte", "Luta Sur", "Bts. Aplaya"];
-const STATUSES  = ["All Status", "registered", "expired", "unregistered"];
-const PAGE_SIZE = 8;
+const STATUS_FILTERS = ["All Status", "Active", "Expired", "Revoked", "Pending"];
+const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
+const DEFAULT_PAGE_SIZE = 10;
 
-// ── Status badge config ───────────────────────────────────────────────────
+// ── Status helpers ─────────────────────────────────────────────────────────────
 function getStatusVariant(status) {
-  return { registered: "green", expired: "gold", unregistered: "red" }[status] ?? "default";
-}
-function getStatusLabel(status) {
-  return { registered: "Registered", expired: "Expired", unregistered: "Unregistered" }[status] ?? status;
+  return { Active: "green", Expired: "gold", Revoked: "red", Pending: "default" }[status] ?? "default";
 }
 
-// ── Upload CSV Modal ──────────────────────────────────────────────────────
-function UploadModal({ onClose }) {
-  const [dragging, setDragging] = useState(false);
-  const [file, setFile] = useState(null);
+// ── Empty State ───────────────────────────────────────────────────────────────
+function EmptyState({ hasFilters, onUpload }) {
+  if (hasFilters) {
+    return (
+      <tr>
+        <td colSpan={9} style={styles.emptyCell}>
+          <div style={styles.emptyContent}>
+            <span style={{ color: "var(--color-muted)", fontSize: 13 }}>
+              No businesses match your current filters.
+            </span>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td colSpan={9} style={{ ...styles.emptyCell, paddingTop: 64, paddingBottom: 64 }}>
+        <div style={styles.emptyContent}>
+          <div style={{ color: "var(--color-muted)", marginBottom: 16, opacity: 0.4 }}>
+            <Icon.Database />
+          </div>
+          <p style={{ fontWeight: 700, fontSize: 15, color: "var(--color-ink)", marginBottom: 6 }}>
+            No businesses in the registry yet
+          </p>
+          <p style={{ fontSize: 13, color: "var(--color-muted)", marginBottom: 20, maxWidth: 340 }}>
+            Upload the official BPLO registry CSV or Excel file to get started.
+            The system will geocode each entry automatically.
+          </p>
+          <button className="primary-btn" onClick={onUpload}>
+            <Icon.Upload /> Upload Registry File
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ── Upload Modal ──────────────────────────────────────────────────────────────
+function UploadModal({ onClose, onSuccess, token }) {
+  const [dragging,   setDragging]   = useState(false);
+  const [file,       setFile]       = useState(null);
+  const [loading,    setLoading]    = useState(false);
+  const [summary,    setSummary]    = useState(null);  // result after upload
+  const [error,      setError]      = useState("");
+
+  const handleFile = (f) => {
+    setError("");
+    setSummary(null);
+    const allowed = ["csv", "xlsx", "xls"];
+    const ext     = f.name.split(".").pop().toLowerCase();
+    if (!allowed.includes(ext)) {
+      setError("Only CSV and Excel files are accepted (.csv, .xlsx, .xls)");
+      return;
+    }
+    setFile(f);
+  };
+
+  const handleSubmit = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await uploadRegistryFile(file, token);
+      setSummary(result);
+    } catch (err) {
+      setError(err.message || "Upload failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDone = () => {
+    if (summary) onSuccess();  // trigger table refresh
+    onClose();
+  };
+
+  return (
+    <div style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
+      <div style={styles.modalCard} onClick={e => e.stopPropagation()}>
+
+        <div style={styles.modalHeader}>
+          <h3 style={styles.modalTitle}>
+            {summary ? "Upload Complete" : "Upload BPLO Registry"}
+          </h3>
+          {!loading && (
+            <button style={styles.closeBtn} onClick={handleDone}>
+              <Icon.X />
+            </button>
+          )}
+        </div>
+
+        {/* ── Success summary view ── */}
+        {summary ? (
+          <div>
+            <div style={styles.summaryResult}>
+              <div style={styles.summaryResultRow}>
+                <span style={{ color: "var(--color-muted)" }}>Total rows in file</span>
+                <strong>{summary.total_rows}</strong>
+              </div>
+              <div style={styles.summaryResultRow}>
+                <span style={{ color: "var(--color-primary)" }}>Successfully inserted</span>
+                <strong style={{ color: "var(--color-primary)" }}>{summary.inserted}</strong>
+              </div>
+              <div style={styles.summaryResultRow}>
+                <span style={{ color: "var(--color-muted)" }}>Geocoded successfully</span>
+                <strong>{summary.geocoded_ok}</strong>
+              </div>
+              <div style={styles.summaryResultRow}>
+                <span style={{ color: "var(--color-gold-dark)" }}>Geocoding failed</span>
+                <strong style={{ color: "var(--color-gold-dark)" }}>{summary.geocoded_failed}</strong>
+              </div>
+              <div style={styles.summaryResultRow}>
+                <span style={{ color: "var(--color-muted)" }}>Skipped (duplicate / missing name)</span>
+                <strong>{summary.skipped}</strong>
+              </div>
+            </div>
+
+            {summary.errors?.length > 0 && (
+              <div style={styles.errorList}>
+                <p style={{ fontWeight: 600, fontSize: 12, marginBottom: 6 }}>Skipped rows:</p>
+                {summary.errors.slice(0, 5).map((e, i) => (
+                  <p key={i} style={{ fontSize: 11, color: "var(--color-muted)", marginBottom: 2 }}>{e}</p>
+                ))}
+                {summary.errors.length > 5 && (
+                  <p style={{ fontSize: 11, color: "var(--color-muted)" }}>
+                    + {summary.errors.length - 5} more
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div style={styles.modalFooter}>
+              <button className="primary-btn" onClick={handleDone}>
+                <Icon.Check /> Done
+              </button>
+            </div>
+          </div>
+
+        ) : loading ? (
+          /* ── Loading / processing view ── */
+          <div style={styles.loadingState}>
+            <div style={styles.spinner} />
+            <p style={{ fontWeight: 600, color: "var(--color-ink)", marginTop: 16 }}>
+              Processing your file…
+            </p>
+            <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>
+              Geocoding addresses via Google Maps API. This may take a minute.
+            </p>
+          </div>
+
+        ) : (
+          /* ── Upload form view ── */
+          <>
+            <p style={styles.modalSub}>
+              Upload the official BPLO registry CSV or Excel file. The system
+              will geocode each business address and seed the registry table.
+            </p>
+
+            {/* Drop zone */}
+            <div
+              style={{ ...styles.dropZone, ...(dragging ? styles.dropZoneActive : {}) }}
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+            >
+              <Icon.Upload />
+              {file ? (
+                <p style={{ color: "var(--color-primary)", fontWeight: 600, marginTop: 8 }}>
+                  {file.name}
+                </p>
+              ) : (
+                <>
+                  <p style={{ fontWeight: 600, marginTop: 8, color: "var(--color-ink)" }}>
+                    Drag &amp; drop your file here
+                  </p>
+                  <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>
+                    or click to browse &nbsp;·&nbsp; CSV, XLSX, XLS accepted
+                  </p>
+                </>
+              )}
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                style={styles.fileInput}
+                onChange={e => handleFile(e.target.files[0])}
+              />
+            </div>
+
+            {/* Column hint */}
+            <div style={styles.csvHint}>
+              <strong>Expected columns (flexible naming):</strong>
+              &nbsp; business_name, barangay, business_type, line_of_business,
+              business_address, status, last_renewal_date
+            </div>
+
+            {error && (
+              <div style={styles.errorBanner}>
+                <Icon.AlertCircle /> &nbsp;{error}
+              </div>
+            )}
+
+            <div style={styles.modalFooter}>
+              <button className="ghost-btn" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                className="primary-btn"
+                disabled={!file}
+                style={!file ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                onClick={handleSubmit}
+              >
+                <Icon.Upload /> Process File
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Business Detail Modal ─────────────────────────────────────────────────────
+function BusinessDetailModal({ businessId, onClose, token }) {
+  const [business, setBusiness] = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState("");
+
+  useEffect(() => {
+    async function fetch() {
+      try {
+        const data = await getBusinessByIdRequest(businessId, token);
+        setBusiness(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetch();
+  }, [businessId, token]);
 
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
-      <div style={styles.modalCard} onClick={e => e.stopPropagation()}>
+      <div style={{ ...styles.modalCard, width: 520 }} onClick={e => e.stopPropagation()}>
         <div style={styles.modalHeader}>
-          <h3 style={styles.modalTitle}>Upload BPLO Registry CSV</h3>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+          <h3 style={styles.modalTitle}>Business Details</h3>
+          <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
         </div>
 
-        <p style={styles.modalSub}>
-          Upload the official BPLO registry CSV file. The system will geocode each entry
-          and cross-reference it against the Google Maps dataset.
-        </p>
+        {loading && <p style={{ color: "var(--color-muted)", fontSize: 13 }}>Loading…</p>}
+        {error   && <p style={{ color: "var(--color-danger)", fontSize: 13 }}>{error}</p>}
 
-        {/* Drop zone */}
-        <div
-          style={{ ...styles.dropZone, ...(dragging ? styles.dropZoneActive : {}) }}
-          onDragOver={e => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={e => { e.preventDefault(); setDragging(false); setFile(e.dataTransfer.files[0]); }}
-        >
-          <Icon.Upload />
-          {file
-            ? <p style={{ color: "var(--color-primary)", fontWeight: 600, marginTop: 8 }}>{file.name}</p>
-            : <>
-                <p style={{ fontWeight: 600, marginTop: 8, color: "var(--color-ink)" }}>Drag & drop your CSV here</p>
-                <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>or click to browse</p>
-              </>
-          }
-          <input
-            type="file" accept=".csv"
-            style={styles.fileInput}
-            onChange={e => setFile(e.target.files[0])}
-          />
-        </div>
+        {business && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              ["Business Name",    business.businessName],
+              ["Business Type",    business.businessType    || "—"],
+              ["Line of Business", business.lineOfBusiness  || "—"],
+              ["Address",          business.businessAddress || "—"],
+              ["Barangay",         business.barangayName    || "—"],
+              ["Status",           business.applicationStatus],
+              ["Last Renewal",     business.lastRenewalDate ? business.lastRenewalDate.slice(0, 10) : "—"],
+              ["Coordinates",      business.latitude ? `${business.latitude}, ${business.longitude}` : "Not geocoded"],
+            ].map(([label, value]) => (
+              <div key={label} style={{ display: "flex", gap: 12 }}>
+                <span style={{ minWidth: 140, fontSize: 12, color: "var(--color-muted)", fontWeight: 500 }}>
+                  {label}
+                </span>
+                <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: label === "Business Name" ? 600 : 400 }}>
+                  {label === "Status"
+                    ? <StatusBadge variant={getStatusVariant(value)}>{value}</StatusBadge>
+                    : value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
-        <div style={styles.csvHint}>
-          <strong>Required columns:</strong> business_name, owner, type, barangay, permit_no, issue_date, expiry_date
-        </div>
-
-        <div style={styles.modalFooter}>
-          <button className="ghost-btn" onClick={onClose}>Cancel</button>
-          <button
-            className="primary-btn"
-            disabled={!file}
-            style={!file ? { opacity: 0.5, cursor: "not-allowed" } : {}}
-          >
-            <Icon.Upload /> Process CSV
-          </button>
+        <div style={{ ...styles.modalFooter, marginTop: 24 }}>
+          <button className="ghost-btn" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function RegistryPage() {
-  const [search,   setSearch]   = useState("");
-  const [barangay, setBarangay] = useState("All Barangays");
-  const [status,   setStatus]   = useState("All Status");
-  const [page,     setPage]     = useState(1);
-  const [showModal,setShowModal]= useState(false);
+  const { token, user } = useContext(AuthContext);
 
-  // Filter & search
-  const filtered = useMemo(() => {
-    return ALL_BUSINESSES.filter(b => {
-      const matchSearch   = b.name.toLowerCase().includes(search.toLowerCase()) ||
-                            b.owner.toLowerCase().includes(search.toLowerCase()) ||
-                            b.id.toLowerCase().includes(search.toLowerCase());
-      const matchBarangay = barangay === "All Barangays" || b.barangay === barangay;
-      const matchStatus   = status   === "All Status"    || b.status   === status;
-      return matchSearch && matchBarangay && matchStatus;
-    });
-  }, [search, barangay, status]);
+  const [businesses,    setBusinesses]    = useState([]);
+  const [total,         setTotal]         = useState(0);
+  const [totalPages,    setTotalPages]    = useState(1);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState("");
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const [search,        setSearch]        = useState("");
+  const [barangay,      setBarangay]      = useState("All Barangays");
+  const [status,        setStatus]        = useState("All Status");
+  const [page,          setPage]          = useState(1);
+  const [pageSize,      setPageSize]      = useState(DEFAULT_PAGE_SIZE);
 
-  const resetPage = () => setPage(1);
+  const [showUpload,    setShowUpload]    = useState(false);
+  const [detailId,      setDetailId]      = useState(null);
 
-  // Summary counts
-  const counts = useMemo(() => ({
-    total:        ALL_BUSINESSES.length,
-    registered:   ALL_BUSINESSES.filter(b => b.status === "registered").length,
-    expired:      ALL_BUSINESSES.filter(b => b.status === "expired").length,
-    unregistered: ALL_BUSINESSES.filter(b => b.status === "unregistered").length,
-  }), []);
+  // Dynamic barangay list loaded from API
+  const [barangays,     setBarangays]     = useState([]);
+  useEffect(() => {
+    async function loadBarangays() {
+      try {
+        const data = await getBarangaysRequest(token);
+        setBarangays(data);
+      } catch (err) {
+        console.error("Failed to load barangays", err);
+      }
+    }
+    loadBarangays();
+  }, [token]);
+
+  // Debounced search — wait 400ms after typing before firing the request
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // ── Fetch businesses ──────────────────────────────────────────────────────
+  const fetchBusinesses = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = { page, limit: pageSize };
+      if (debouncedSearch)                         params.search     = debouncedSearch;
+      if (barangay !== "All Barangays")            params.barangayID = barangay; // sends ID
+      if (status   !== "All Status")               params.status     = status;
+
+      const result = await getRegistryRequest(params, token);
+      setBusinesses(result.data   ?? []);
+      setTotal(result.total       ?? 0);
+      setTotalPages(Math.max(1, result.pages ?? Math.ceil((result.total ?? 0) / pageSize)));
+    } catch (err) {
+      setError(err.message || "Failed to load registry.");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearch, barangay, status, pageSize, token]);
+
+  // Reset page to 1 whenever filters change (search, barangay, status, pageSize)
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, barangay, status, pageSize]);
+
+  // Fetch whenever page or filters change
+  useEffect(() => {
+    if (!token) return;
+    fetchBusinesses();
+  }, [fetchBusinesses, token]);
+
+  // ── Summary counts (derived from the full total, not just current page) ───
+  // These come from a dedicated summary endpoint in later sprints.
+  // For now we show the total returned.
+  const hasFilters = debouncedSearch || barangay !== "All Barangays" || status !== "All Status";
 
   return (
-    <DashboardLayout user={{ initials: "JD", name: "J. Dela Cruz" }}>
+    <DashboardLayout user={{ initials: user?.fullName?.charAt(0) ?? "?", name: user?.fullName ?? "" }}>
 
       {/* Page Header */}
       <div className="page-header">
@@ -187,19 +465,21 @@ export default function RegistryPage() {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button className="ghost-btn"><Icon.Download /> Export CSV</button>
-          <button className="primary-btn" onClick={() => setShowModal(true)}>
-            <Icon.Upload /> Upload CSV
-          </button>
+          {user?.role === "Admin" && (
+            <button className="primary-btn" onClick={() => setShowUpload(true)}>
+              <Icon.Upload /> Upload File
+            </button>
+          )}
         </div>
       </div>
 
       {/* Summary Strip */}
       <div style={styles.summaryStrip}>
         {[
-          { label: "Total Businesses",  value: counts.total,        color: "var(--color-ink)" },
-          { label: "Registered",        value: counts.registered,   color: "var(--color-primary)" },
-          { label: "Expired Permits",   value: counts.expired,      color: "var(--color-gold-dark)" },
-          { label: "Unregistered",      value: counts.unregistered, color: "var(--color-danger)" },
+          { label: "Total Businesses", value: loading ? "—" : total,                            color: "var(--color-ink)" },
+          { label: "Showing",          value: loading ? "—" : businesses.length,                color: "var(--color-primary)" },
+          { label: "Current Page",     value: loading ? "—" : `${page} / ${totalPages}`,        color: "var(--color-muted)" },
+          { label: "Page Size",        value: loading ? "—" : pageSize,                              color: "var(--color-muted)" },
         ].map(s => (
           <div key={s.label} className="frosted-glass saas-card" style={styles.summaryCard}>
             <span style={{ ...styles.summaryValue, color: s.color }}>{s.value}</span>
@@ -208,120 +488,177 @@ export default function RegistryPage() {
         ))}
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div style={styles.errorBanner}>
+          <Icon.AlertCircle /> &nbsp;{error}
+        </div>
+      )}
+
       {/* Filters Bar */}
       <div className="frosted-glass saas-card" style={styles.filtersBar}>
-        {/* Search */}
         <div className="search-bar" style={{ width: 280 }}>
           <Icon.Search />
           <input
             type="text"
-            placeholder="Search name, owner, ID..."
+            placeholder="Search name, type, address…"
             value={search}
-            onChange={e => { setSearch(e.target.value); resetPage(); }}
+            onChange={e => setSearch(e.target.value)}
           />
         </div>
 
         <div style={{ display: "flex", gap: 10, marginLeft: "auto", alignItems: "center" }}>
           <Icon.Filter />
 
-          {/* Barangay filter */}
           <select
             style={styles.select}
             value={barangay}
-            onChange={e => { setBarangay(e.target.value); resetPage(); }}
+            onChange={e => setBarangay(e.target.value)}
           >
-            {BARANGAYS.map(b => <option key={b}>{b}</option>)}
+            <option value="All Barangays">All Barangays</option>
+            {barangays.map(b => (
+              <option key={b.barangayID} value={b.barangayID}>
+                {b.barangayName}
+              </option>
+            ))}
           </select>
 
-          {/* Status filter */}
           <select
             style={styles.select}
             value={status}
-            onChange={e => { setStatus(e.target.value); resetPage(); }}
+            onChange={e => setStatus(e.target.value)}
           >
-            {STATUSES.map(s => <option key={s}>{s}</option>)}
+            {STATUS_FILTERS.map(s => <option key={s}>{s}</option>)}
           </select>
 
-          <span style={styles.resultCount}>{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
+          <label style={styles.pageSizeLabel}>
+            Rows
+            <select
+              style={{ ...styles.select, width: 120 }}
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+            >
+              {PAGE_SIZE_OPTIONS.map(size => (
+                <option key={size} value={size}>{`${size} per page`}</option>
+              ))}
+            </select>
+          </label>
+
+          <span style={styles.resultCount}>
+            {loading ? "Loading…" : `${total} result${total !== 1 ? "s" : ""}`}
+          </span>
         </div>
       </div>
 
       {/* Data Table */}
-      <div className="frosted-glass saas-card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="frosted-glass saas-card" style={{ padding: 0 }}>
         <div style={{ overflowX: "auto" }}>
           <table style={styles.table}>
             <thead>
               <tr style={styles.thead}>
-                {["Permit ID", "Business Name", "Type", "Barangay", "Owner", "Issue Date", "Expiry", "Status", ""].map(h => (
+                {["ID", "Business Name", "Type", "Barangay", "Address", "Last Renewal", "Status", ""].map(h => (
                   <th key={h} style={styles.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {paginated.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={9} style={styles.emptyCell}>
-                    No businesses match your current filters.
+                  <td colSpan={8} style={styles.emptyCell}>
+                    <div style={styles.emptyContent}>
+                      <span style={{ color: "var(--color-muted)", fontSize: 13 }}>Loading registry…</span>
+                    </div>
                   </td>
                 </tr>
-              ) : paginated.map((b, i) => (
-                <tr key={b.id} style={{ ...styles.tr, background: i % 2 === 0 ? "rgba(255,255,255,0.5)" : "transparent" }}>
-                  <td style={{ ...styles.td, fontFamily: "monospace", fontSize: 12, color: "var(--color-muted)" }}>{b.id}</td>
-                  <td style={{ ...styles.td, fontWeight: 600, color: "var(--color-ink)" }}>{b.name}</td>
-                  <td style={styles.td}>{b.type}</td>
-                  <td style={styles.td}>{b.barangay}</td>
-                  <td style={styles.td}>{b.owner}</td>
-                  <td style={{ ...styles.td, fontSize: 12 }}>{b.permit}</td>
-                  <td style={{ ...styles.td, fontSize: 12, color: b.status === "expired" ? "var(--color-gold-dark)" : "inherit" }}>
-                    {b.expiry}
-                  </td>
-                  <td style={styles.td}>
-                    <StatusBadge variant={getStatusVariant(b.status)}>
-                      {getStatusLabel(b.status)}
-                    </StatusBadge>
-                  </td>
-                  <td style={styles.td}>
-                    <button className="action-btn" style={styles.viewBtn}>
-                      <Icon.Eye /> View
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              ) : businesses.length === 0 ? (
+                <EmptyState hasFilters={!!hasFilters} onUpload={() => setShowUpload(true)} />
+              ) : (
+                businesses.map((b, i) => (
+                  <tr
+                    key={b.businessID}
+                    style={{ ...styles.tr, background: i % 2 === 0 ? "rgba(255,255,255,0.5)" : "transparent" }}
+                  >
+                    <td style={{ ...styles.td, fontFamily: "monospace", fontSize: 12, color: "var(--color-muted)" }}>
+                      #{b.businessID}
+                    </td>
+                    <td style={{ ...styles.td, fontWeight: 600, color: "var(--color-ink)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {b.businessName}
+                    </td>
+                    <td style={styles.td}>{b.businessType || "—"}</td>
+                    <td style={styles.td}>{b.barangayName || "—"}</td>
+                    <td style={{ ...styles.td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {b.businessAddress || "—"}
+                    </td>
+                    <td style={{ ...styles.td, fontSize: 12 }}>
+                      {b.lastRenewalDate ? b.lastRenewalDate.slice(0, 10) : "—"}
+                    </td>
+                    <td style={styles.td}>
+                      <StatusBadge variant={getStatusVariant(b.applicationStatus)}>
+                        {b.applicationStatus}
+                      </StatusBadge>
+                    </td>
+                    <td style={styles.td}>
+                      <button
+                        className="action-btn"
+                        style={styles.viewBtn}
+                        onClick={() => setDetailId(b.businessID)}
+                      >
+                        <Icon.Eye /> View
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div style={styles.pagination}>
-          <span style={styles.pageInfo}>
-            Page {page} of {totalPages || 1} &nbsp;·&nbsp; {filtered.length} entries
-          </span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              style={styles.pageBtn}
-              disabled={page === 1}
-              onClick={() => setPage(p => p - 1)}
-            >
-              <Icon.ChevronLeft />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+        {!loading && businesses.length > 0 && (
+          <div style={styles.pagination}>
+            <span style={styles.pageInfo}>
+              Page {page} of {totalPages} &nbsp;·&nbsp; {total} total entries
+            </span>
+            <div style={{ display: "flex", gap: 6 }}>
               <button
-                key={n}
-                style={{ ...styles.pageBtn, ...(n === page ? styles.pageBtnActive : {}) }}
-                onClick={() => setPage(n)}
+                style={styles.pageBtn}
+                disabled={page === 1}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
               >
-                {n}
+                <Icon.ChevronLeft /> Prev
               </button>
-            ))}
-            <button
-              style={styles.pageBtn}
-              disabled={page === totalPages || totalPages === 0}
-              onClick={() => setPage(p => p + 1)}
-            >
-              <Icon.ChevronRight />
-            </button>
+
+              {/* Show max 5 page buttons to avoid overflow */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 2)
+                .reduce((acc, n, idx, arr) => {
+                  if (idx > 0 && arr[idx - 1] !== n - 1) {
+                    acc.push(
+                      <button key={`gap-${n}`} style={{ ...styles.pageBtn, cursor: "default" }} disabled>…</button>
+                    );
+                  }
+                  acc.push(
+                    <button
+                      key={`page-${n}`}
+                      style={{ ...styles.pageBtn, ...(n === page ? styles.pageBtnActive : {}) }}
+                      onClick={() => setPage(n)}
+                    >
+                      {n}
+                    </button>
+                  );
+                  return acc;
+                }, [])}
+
+              <button
+                style={styles.pageBtn}
+                disabled={page === totalPages}
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              >
+                Next <Icon.ChevronRight />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Footer */}
@@ -331,207 +668,100 @@ export default function RegistryPage() {
       </footer>
 
       {/* Upload Modal */}
-      {showModal && <UploadModal onClose={() => setShowModal(false)} />}
+      {showUpload && (
+        <UploadModal
+          token={token}
+          onClose={() => setShowUpload(false)}
+          onSuccess={() => { fetchBusinesses(); setShowUpload(false); }}
+        />
+      )}
+
+      {/* Business Detail Modal */}
+      {detailId && (
+        <BusinessDetailModal
+          businessId={detailId}
+          token={token}
+          onClose={() => setDetailId(null)}
+        />
+      )}
 
     </DashboardLayout>
   );
 }
 
-// ── Scoped styles object (no new CSS file needed — layout specific values only) ──
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = {
-  summaryStrip: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 16,
-  },
-  summaryCard: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    padding: "18px 24px",
-    borderRadius: "var(--radius-lg)",
-  },
-  summaryValue: {
-    fontSize: 28,
-    fontWeight: 800,
-    lineHeight: 1,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: "var(--color-muted)",
-    fontWeight: 500,
-  },
-  filtersBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "14px 20px",
-    borderRadius: "var(--radius-lg)",
-  },
+  summaryStrip: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 },
+  summaryCard:  { display: "flex", flexDirection: "column", gap: 4, padding: "18px 24px", borderRadius: "var(--radius-lg)" },
+  summaryValue: { fontSize: 28, fontWeight: 800, lineHeight: 1 },
+  summaryLabel: { fontSize: 12, color: "var(--color-muted)", fontWeight: 500 },
+  filtersBar:   { display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderRadius: "var(--radius-lg)" },
   select: {
-    background: "rgba(248,249,250,0.8)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-sm)",
-    padding: "8px 12px",
-    fontSize: 13,
-    color: "var(--color-ink)",
-    fontFamily: "var(--font-base)",
-    cursor: "pointer",
-    outline: "none",
+    background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: 13,
+    color: "var(--color-ink)", fontFamily: "var(--font-base)", cursor: "pointer", outline: "none",
   },
-  resultCount: {
-    fontSize: 12,
-    color: "var(--color-muted)",
-    fontWeight: 500,
-    whiteSpace: "nowrap",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    fontSize: 13,
-  },
-  thead: {
-    background: "rgba(248,249,250,0.9)",
-    borderBottom: "1px solid var(--color-border)",
-  },
+  resultCount: { fontSize: 12, color: "var(--color-muted)", fontWeight: 500, whiteSpace: "nowrap" },
+  table:        { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  thead:        { background: "rgba(248,249,250,0.9)", borderBottom: "1px solid var(--color-border)" },
   th: {
-    padding: "12px 16px",
-    textAlign: "left",
-    fontSize: 11,
-    fontWeight: 700,
-    color: "var(--color-muted)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    whiteSpace: "nowrap",
+    padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700,
+    color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap",
   },
-  tr: {
-    borderBottom: "1px solid rgba(226,232,240,0.4)",
-    transition: "background 0.15s",
-  },
-  td: {
-    padding: "13px 16px",
-    color: "var(--color-muted)",
-    whiteSpace: "nowrap",
-  },
-  emptyCell: {
-    padding: "48px 16px",
-    textAlign: "center",
-    color: "var(--color-muted)",
-    fontSize: 14,
-  },
-  viewBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: 12,
-  },
-  pagination: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "14px 20px",
-    borderTop: "1px solid var(--color-border-soft)",
-  },
-  pageInfo: {
-    fontSize: 12,
-    color: "var(--color-muted)",
-  },
+  tr:           { borderBottom: "1px solid rgba(226,232,240,0.4)", transition: "background 0.15s" },
+  td:           { padding: "13px 16px", color: "var(--color-muted)", whiteSpace: "nowrap" },
+  emptyCell:    { padding: "48px 16px", textAlign: "center", color: "var(--color-muted)", fontSize: 14 },
+  emptyContent: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
+  viewBtn:      { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 },
+  pagination:   { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderTop: "1px solid var(--color-border-soft)" },
+  pageInfo:     { fontSize: 12, color: "var(--color-muted)" },
   pageBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: "var(--radius-sm)",
-    border: "1px solid var(--color-border)",
-    background: "#fff",
-    color: "var(--color-muted)",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 13,
-    fontWeight: 600,
-    fontFamily: "var(--font-base)",
-    transition: "all 0.15s",
+    minWidth: 32, height: 32, padding: "0 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)",
+    background: "#fff", color: "var(--color-muted)", cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    gap: 6, fontSize: 13, fontWeight: 600, fontFamily: "var(--font-base)", transition: "all 0.15s",
   },
-  pageBtnActive: {
-    background: "var(--color-primary)",
-    color: "#fff",
-    border: "1px solid var(--color-primary)",
-  },
+  pageBtnActive: { background: "var(--color-primary)", color: "#fff", border: "1px solid var(--color-primary)" },
+  pageSizeLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-muted)", cursor: "default" },
   // Modal
   modalBackdrop: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(26,32,44,0.4)",
-    backdropFilter: "blur(4px)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 100,
+    position: "fixed", inset: 0, background: "rgba(26,32,44,0.4)",
+    backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
   },
-  modalCard: {
-    background: "#fff",
-    borderRadius: "var(--radius-xl)",
-    padding: 32,
-    width: 480,
-    boxShadow: "0 25px 50px rgba(0,0,0,0.15)",
-  },
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    color: "var(--color-ink)",
-  },
-  closeBtn: {
-    background: "none",
-    border: "none",
-    fontSize: 16,
-    color: "var(--color-muted)",
-    cursor: "pointer",
-  },
-  modalSub: {
-    fontSize: 13,
-    color: "var(--color-muted)",
-    lineHeight: 1.6,
-    marginBottom: 24,
-  },
+  modalCard: { background: "#fff", borderRadius: "var(--radius-xl)", padding: 32, width: 480, boxShadow: "0 25px 50px rgba(0,0,0,0.15)" },
+  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  modalTitle: { fontSize: 18, fontWeight: 700, color: "var(--color-ink)" },
+  closeBtn: { background: "none", border: "none", color: "var(--color-muted)", cursor: "pointer", display: "flex", alignItems: "center" },
+  modalSub: { fontSize: 13, color: "var(--color-muted)", lineHeight: 1.6, marginBottom: 24 },
   dropZone: {
-    border: "2px dashed var(--color-border)",
-    borderRadius: "var(--radius-lg)",
-    padding: "32px 24px",
-    textAlign: "center",
-    cursor: "pointer",
-    position: "relative",
-    transition: "all 0.2s",
-    marginBottom: 16,
+    border: "2px dashed var(--color-border)", borderRadius: "var(--radius-lg)", padding: "32px 24px",
+    textAlign: "center", cursor: "pointer", position: "relative", transition: "all 0.2s", marginBottom: 16,
   },
-  dropZoneActive: {
-    borderColor: "var(--color-primary)",
-    background: "var(--color-primary-light)",
-  },
-  fileInput: {
-    position: "absolute",
-    inset: 0,
-    opacity: 0,
-    cursor: "pointer",
-  },
+  dropZoneActive: { borderColor: "var(--color-primary)", background: "var(--color-primary-light)" },
+  fileInput: { position: "absolute", inset: 0, opacity: 0, cursor: "pointer" },
   csvHint: {
-    background: "rgba(248,249,250,0.8)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-sm)",
-    padding: "10px 14px",
-    fontSize: 12,
-    color: "var(--color-muted)",
-    marginBottom: 24,
-    lineHeight: 1.6,
+    background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-sm)", padding: "10px 14px", fontSize: 12,
+    color: "var(--color-muted)", marginBottom: 16, lineHeight: 1.6,
   },
-  modalFooter: {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 10,
+  modalFooter: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 },
+  summaryResult: { display: "flex", flexDirection: "column", gap: 12, marginBottom: 20, padding: "16px", background: "rgba(248,249,250,0.8)", borderRadius: "var(--radius-lg)" },
+  summaryResultRow: { display: "flex", justifyContent: "space-between", fontSize: 13 },
+  errorList: { background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: "var(--radius-sm)", padding: "10px 14px", marginBottom: 16 },
+  errorBanner: {
+    display: "flex", alignItems: "center", gap: 8, background: "#fff5f5",
+    border: "1px solid #fed7d7", borderRadius: "var(--radius-sm)", padding: "10px 14px",
+    fontSize: 13, color: "var(--color-danger)", marginBottom: 4,
+  },
+  loadingState: {
+    display: "flex", flexDirection: "column", alignItems: "center",
+    padding: "40px 0", textAlign: "center",
+  },
+  spinner: {
+    width: 36, height: 36,
+    border: "3px solid var(--color-border)",
+    borderTopColor: "var(--color-primary)",
+    borderRadius: "50%",
+    animation: "spin 0.7s linear infinite",
   },
 };

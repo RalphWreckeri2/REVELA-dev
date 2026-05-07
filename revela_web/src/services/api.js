@@ -170,3 +170,83 @@ export async function getBarangaysRequest(token) {
   });
   return await handleResponse(res);
 }
+
+export async function getFlagsRequest(params = {}, token) {
+  if (!token) {
+    throw new Error("Missing authentication token.");
+  }
+
+  try {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set("page", params.page);
+    if (params.limit) qs.set("limit", params.limit);
+    if (params.color) qs.set("color", params.color);
+    if (params.barangayID) qs.set("barangayID", params.barangayID);
+
+    const res = await fetch(`${BASE_URL}/flags/?${qs.toString()}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function createYellowFlagRequest(payload, token) {
+  if (!token) {
+    throw new Error("Missing authentication token.");
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/flags/yellow`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function escalateFlagToBlackRequest(logId, token) {
+  if (!token) {
+    throw new Error("Missing authentication token.");
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/flags/${logId}/black`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function runDetectionRequest(token) {
+  if (!token) {
+    throw new Error("Missing authentication token.");
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/flags/run-detection`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}

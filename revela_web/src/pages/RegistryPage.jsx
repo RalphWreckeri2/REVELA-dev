@@ -131,22 +131,37 @@ function EmptyState({ hasFilters, onUpload }) {
 
 // ── Upload Modal ──────────────────────────────────────────────────────────────
 function UploadModal({ onClose, onSuccess, token }) {
-  const [dragging,   setDragging]   = useState(false);
-  const [file,       setFile]       = useState(null);
-  const [loading,    setLoading]    = useState(false);
-  const [summary,    setSummary]    = useState(null);  // result after upload
-  const [error,      setError]      = useState("");
+  const [dragging,    setDragging]    = useState(false);
+  const [file,        setFile]        = useState(null);
+  const [fileRowCount, setFileRowCount] = useState(null);
+  const [loading,     setLoading]     = useState(false);
+  const [summary,     setSummary]     = useState(null);  // result after upload
+  const [error,       setError]       = useState("");
 
   const handleFile = (f) => {
     setError("");
     setSummary(null);
+    setFileRowCount(null);
     const allowed = ["csv", "xlsx", "xls"];
     const ext     = f.name.split(".").pop().toLowerCase();
     if (!allowed.includes(ext)) {
       setError("Only CSV and Excel files are accepted (.csv, .xlsx, .xls)");
       return;
     }
+
     setFile(f);
+    if (ext === "csv") {
+      Papa.parse(f, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          setFileRowCount(Array.isArray(results.data) ? results.data.length : null);
+        },
+        error: () => {
+          setFileRowCount(null);
+        },
+      });
+    }
   };
 
   const handleSubmit = async () => {
@@ -235,7 +250,7 @@ function UploadModal({ onClose, onSuccess, token }) {
           <div style={styles.loadingState}>
             <div style={styles.spinner} />
             <p style={{ fontWeight: 600, color: "var(--color-ink)", marginTop: 16 }}>
-              Processing your file…
+              Processing your file{fileRowCount ? ` — ${fileRowCount} row${fileRowCount !== 1 ? "s" : ""}` : ""}…
             </p>
             <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>
               Geocoding addresses via Google Maps API. This may take a minute.
@@ -259,9 +274,16 @@ function UploadModal({ onClose, onSuccess, token }) {
             >
               <Icon.Upload />
               {file ? (
-                <p style={{ color: "var(--color-primary)", fontWeight: 600, marginTop: 8 }}>
-                  {file.name}
-                </p>
+                <>
+                  <p style={{ color: "var(--color-primary)", fontWeight: 600, marginTop: 8 }}>
+                    {file.name}
+                  </p>
+                  {fileRowCount !== null && (
+                    <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4 }}>
+                      {fileRowCount} row{fileRowCount !== 1 ? "s" : ""} detected
+                    </p>
+                  )}
+                </>
               ) : (
                 <>
                   <p style={{ fontWeight: 600, marginTop: 8, color: "var(--color-ink)" }}>

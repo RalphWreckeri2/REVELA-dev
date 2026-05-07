@@ -25,6 +25,9 @@ def create_app():
     from api.registry.routes import registry_bp
     app.register_blueprint(registry_bp, url_prefix="/api/registry")
 
+    from api.flags.routes import flags_bp
+    app.register_blueprint(flags_bp, url_prefix="/api/flags")
+
     return app
 
 

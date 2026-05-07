@@ -4,9 +4,16 @@
  * All layout handled by DashboardLayout. All shared styling via global.css.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useLoadScript, GoogleMap, Data } from "@react-google-maps/api";
 import DashboardLayout from "../components/DashboardLayout";
 import StatusBadge from "../components/StatusBadge";
+import { useAuth } from "../context/AuthContext";
+import {
+  getFlagsRequest,
+  escalateFlagToBlackRequest,
+  runDetectionRequest,
+} from "../services/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────
 const Icon = {
@@ -168,85 +175,148 @@ const RISK_COLOR = {
 };
 
 // ── Map Canvas Placeholder ────────────────────────────────────────────────
-function MapCanvas({ layers, heatmapOn, onZoomIn, onZoomOut, onCenterMap }) {
+const DEFAULT_MAP_CENTER = { lat: 13.9174, lng: 121.0794 };
+const MAP_LIBRARIES = ["places", "marker"];
+const MAP_OPTIONS = {
+  disableDefaultUI: true,
+  clickableIcons: false,
+  zoomControl: false,
+  mapId: "34390388b3abb63aa84876a7",
+};
+
+function MapCanvas({ isLoaded, loadError, center, zoom, layers, flags, selectedFlagId, onMarkerClick, onZoomIn, onZoomOut, onCenterMap, runDetectionLoading }) {
+  const mapRef = useRef(null);
+  const markerRefs = useRef(new Map());
+
+  const handleMapLoad = useCallback((map) => {
+    mapRef.current = map;
+  }, []);
+
+  const handleMapUnmount = useCallback(() => {
+    markerRefs.current.forEach((marker) => marker.setMap(null));
+    markerRefs.current.clear();
+    mapRef.current = null;
+  }, []);
+
+  const handleBarangayLoad = useCallback((dataLayer) => {
+    dataLayer.loadGeoJson("/data/mataasnakahoy.json");
+    dataLayer.setStyle({
+      fillColor: "#1f7a1f",
+      strokeColor: "#166534",
+      strokeWeight: 1,
+      fillOpacity: 0.15,
+    });
+  }, []);
+
+  const handleBarangayUnmount = useCallback((dataLayer) => {
+    dataLayer.setMap(null);
+  }, []);
+
+  const buildMarkerContent = useCallback((flag, selected) => {
+    const element = document.createElement("div");
+    element.style.width = "18px";
+    element.style.height = "18px";
+    element.style.borderRadius = "50%";
+    const riskColor = RISK_COLOR[flag.risk]?.dot || "#ef4444";
+    element.style.backgroundColor = selected ? "#2563eb" : riskColor;
+    element.style.border = "2px solid #fff";
+    element.style.boxShadow = `0 0 14px ${selected ? "rgba(37,99,235,0.35)" : `${riskColor}55`}`;
+    element.style.cursor = "pointer";
+    element.title = flag.name || "Flag marker";
+    return element;
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current) return;
+
+    markerRefs.current.forEach((marker) => marker.setMap(null));
+    markerRefs.current.clear();
+
+    if (!layers.flags) return;
+
+    const visibleFlags = flags?.filter((flag) => flag.latitude != null && flag.longitude != null) || [];
+    visibleFlags.forEach((flag) => {
+      const marker = new window.google.maps.marker.AdvancedMarkerElement({
+        position: { lat: Number(flag.latitude), lng: Number(flag.longitude) },
+        map: mapRef.current,
+        content: buildMarkerContent(flag, flag.id === selectedFlagId),
+      });
+
+      marker.addListener("gmp-click", () => onMarkerClick(flag.id));
+      markerRefs.current.set(flag.id, marker);
+    });
+
+    return () => {
+      markerRefs.current.forEach((marker) => marker.setMap(null));
+      markerRefs.current.clear();
+    };
+  }, [isLoaded, layers.flags, flags, selectedFlagId, onMarkerClick, buildMarkerContent]);
+
+  if (loadError) {
+    return (
+      <div style={styles.mapCanvas}>
+        <div style={styles.mapPlaceholderText}>
+          <strong>Google Maps failed to load.</strong>
+          <span>Please set `VITE_GOOGLE_MAPS_API_KEY` in your `.env` file and restart the dev server.</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div style={styles.mapCanvas}>
+        <div style={styles.mapPlaceholderText}>
+          Loading Google Maps...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.mapCanvas}>
+      <GoogleMap
+        mapContainerStyle={styles.mapCanvas}
+        center={center}
+        zoom={zoom}
+        mapTypeId={layers.base ? "roadmap" : "satellite"}
+        options={MAP_OPTIONS}
+        onLoad={handleMapLoad}
+        onUnmount={handleMapUnmount}
+      >
+        {layers.barangay && (
+          <Data
+            onLoad={handleBarangayLoad}
+            onUnmount={handleBarangayUnmount}
+          />
+        )}
+      </GoogleMap>
 
-      {/* Simulated topo grid */}
-      <svg style={styles.topoOverlay} width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(86,171,47,0.08)" strokeWidth="1"/>
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)"/>
-      </svg>
-
-      {/* Heatmap blob simulation */}
-      {layers.heatmap && (
-        <div style={styles.heatmapLayer}>
-          <div style={{ ...styles.heatBlob, top: "30%", left: "35%", width: 180, height: 180, background: "radial-gradient(circle, rgba(239,68,68,0.35) 0%, transparent 70%)" }}/>
-          <div style={{ ...styles.heatBlob, top: "55%", left: "60%", width: 140, height: 140, background: "radial-gradient(circle, rgba(245,158,11,0.3) 0%, transparent 70%)" }}/>
-          <div style={{ ...styles.heatBlob, top: "20%", left: "65%", width: 100, height: 100, background: "radial-gradient(circle, rgba(239,68,68,0.25) 0%, transparent 70%)" }}/>
-          <div style={{ ...styles.heatBlob, top: "70%", left: "25%", width: 110, height: 110, background: "radial-gradient(circle, rgba(245,158,11,0.2) 0%, transparent 70%)" }}/>
+      {runDetectionLoading && (
+        <div style={styles.mapActionOverlay}>
+          <div style={styles.mapActionOverlayText}>
+            <strong>Running detection...</strong>
+            <span>Please wait while the latest analytics are processed.</span>
+          </div>
         </div>
       )}
 
-      {/* Simulated flag pins */}
-      {layers.flags && FLAGGED.map((f, i) => {
-        const positions = [
-          { top: "33%", left: "38%" }, { top: "58%", left: "63%" },
-          { top: "48%", left: "28%" }, { top: "22%", left: "52%" },
-          { top: "67%", left: "45%" }, { top: "40%", left: "70%" },
-          { top: "75%", left: "32%" },
-        ];
-        const pos = positions[i] || { top: "50%", left: "50%" };
-        const color = RISK_COLOR[f.risk].dot;
-        return (
-          <div key={f.id} style={{ ...styles.mapPin, ...pos }}>
-            <div style={{ ...styles.pinDot, background: color, boxShadow: `0 0 12px ${color}` }} />
-            <div style={styles.pinPulse(color)} />
-          </div>
-        );
-      })}
+      {layers.heatmap && (
+        <div style={styles.heatmapLayer} />
+      )}
 
-      {/* Center label */}
-      <div style={styles.mapWatermark}>
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(86,171,47,0.3)" strokeWidth="1.5">
-          <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-          <line x1="9" y1="3" x2="9" y2="21"/>
-          <line x1="15" y1="3" x2="15" y2="21"/>
-        </svg>
-        <span style={styles.mapWatermarkText}>Mataasnakahoy, Batangas</span>
-        <span style={styles.mapWatermarkSub}>Google Map tiles will render here</span>
-      </div>
-
-      {/* Zoom controls */}
       <div style={styles.zoomControls}>
         <button type="button" style={styles.mapBtn} onClick={onZoomIn}><Icon.ZoomIn /></button>
         <button type="button" style={styles.mapBtn} onClick={onZoomOut}><Icon.ZoomOut /></button>
         <button type="button" style={styles.mapBtn} onClick={onCenterMap}><Icon.Crosshair /></button>
       </div>
-
-      {/* Live legend */}
-      {layers.heatmap && (
-        <div style={styles.heatLegend}>
-          <span style={styles.legendTitle}>Risk Level</span>
-          {[["High", "#ef4444"], ["Medium", "#f59e0b"], ["Low", "#56ab2f"]].map(([label, color]) => (
-            <div key={label} style={styles.legendRow}>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: color }} />
-              <span>{label}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
 // ── Flag Item in Side Panel ───────────────────────────────────────────────
-function FlagCard({ flag, selected, onClick }) {
-  const risk = RISK_COLOR[flag.risk];
+function FlagCard({ flag, selected, onClick, onEscalate, canEscalate }) {
+  const risk = RISK_COLOR[flag.risk] || RISK_COLOR.high;
   return (
     <div
       onClick={onClick}
@@ -259,35 +329,44 @@ function FlagCard({ flag, selected, onClick }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <div>
           <p style={styles.flagName}>{flag.name}</p>
-          <p style={styles.flagMeta}>{flag.type} · {flag.barangay}</p>
+          <p style={styles.flagMeta}>{flag.type || flag.nearestLandmark || flag.barangay}</p>
         </div>
         <span style={{ ...styles.riskPill, background: risk.bg, color: risk.text }}>
-          {flag.risk.toUpperCase()}
+          {flag.risk?.toUpperCase() || "HIGH"}
         </span>
       </div>
 
-      <div style={styles.flagRow}>
-        <Icon.MapPin />
-        <span style={styles.flagCoords}>{flag.coords}</span>
-      </div>
+      {selected && (
+        <div style={styles.flagRow}>
+          <Icon.MapPin />
+          <span style={styles.flagCoords}>{flag.coords}</span>
+        </div>
+      )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-        <StatusBadge variant={flag.status === "unregistered" ? "red" : "gold"}>
-          {flag.status === "unregistered" ? "Unregistered" : "Expired"}
+        <StatusBadge variant={flag.status === "unregistered" ? "red" : flag.status === "review" ? "gold" : flag.status === "black" ? "default" : "green"}>
+          {flag.status === "unregistered" ? "Unregistered" : flag.status === "review" ? "Review" : flag.status === "black" ? "Black" : flag.status === "registered" ? "Registered" : "Unknown"}
         </StatusBadge>
         <div style={styles.scoreRow}>
           <span style={styles.scoreLabel}>Priority</span>
           <span style={{ ...styles.scoreValue, color: flag.priorityScore >= 80 ? "var(--color-danger)" : flag.priorityScore >= 50 ? "var(--color-gold-dark)" : "var(--color-primary)" }}>
-            {flag.priorityScore}
+            {flag.priorityScore ?? "—"}
           </span>
         </div>
       </div>
 
       {selected && (
         <div style={styles.flagActions}>
-          <button className="primary-btn" type="button" style={{ fontSize: 12, padding: "7px 14px" }} onClick={() => window.alert("Inspector dispatch workflow started.")}>
-            <Icon.Send /> Dispatch Inspector
-          </button>
+          {canEscalate && (
+            <button
+              className="primary-btn"
+              type="button"
+              style={{ fontSize: 12, padding: "7px 14px" }}
+              onClick={() => onEscalate(flag.logID)}
+            >
+              Escalate to Black
+            </button>
+          )}
           <button className="ghost-btn" type="button" style={{ fontSize: 12, padding: "7px 12px" }} onClick={() => window.alert("Opening selected establishment profile.")}>
             View Profile
           </button>
@@ -299,24 +378,128 @@ function FlagCard({ flag, selected, onClick }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────
 export default function MapPage() {
-  const [layers, setLayers] = useState({
-    base: true, heatmap: false, flags: true, barangay: false,
+  const { token, user } = useAuth();
+  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey,
+    libraries: MAP_LIBRARIES,
+    version: "beta"
   });
+  const [flags, setFlags] = useState([]);
+  const [loadingFlags, setLoadingFlags] = useState(false);
+  const [flagsError, setFlagsError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [runDetectionLoading, setRunDetectionLoading] = useState(false);
+  const [layers, setLayers] = useState({ base: true, heatmap: false, flags: true, barangay: false });
   const [selectedFlag, setSelectedFlag] = useState(null);
-  const [filterRisk,   setFilterRisk]   = useState("all");
-  const [search,       setSearch]       = useState("");
+  const [filterRisk, setFilterRisk] = useState("all");
+  const [search, setSearch] = useState("");
+  const [showFullList, setShowFullList] = useState(false);
 
   const toggleLayer = (id) => setLayers(prev => ({ ...prev, [id]: !prev[id] }));
-  const handleZoomIn = () => window.alert("Zooming in on the map.");
-  const handleZoomOut = () => window.alert("Zooming out of the map.");
-  const handleCenterMap = () => window.alert("Centering map on selected flag location.");
 
-  const visibleFlags = FLAGGED.filter(f => {
-    const matchRisk   = filterRisk === "all" || f.risk === filterRisk;
-    const matchSearch = f.name.toLowerCase().includes(search.toLowerCase()) ||
-                        f.barangay.toLowerCase().includes(search.toLowerCase());
+  const normalizeFlag = (flag) => {
+    const color = (flag.flagColor || "").toLowerCase();
+    const risk = color === "green" ? "low" : color === "yellow" ? "medium" : "high";
+    const status = color === "red" ? "unregistered" : color === "yellow" ? "review" : color === "black" ? "black" : "registered";
+    const coords = flag.latitude != null && flag.longitude != null
+      ? `${Number(flag.latitude).toFixed(4)}°, ${Number(flag.longitude).toFixed(4)}°`
+      : flag.coords || "Unknown location";
+
+    return {
+      ...flag,
+      id: flag.logID ?? flag.id,
+      name: flag.detectedName ?? flag.name ?? "Unknown",
+      type: flag.nearestLandmark ?? flag.type ?? "",
+      barangay: flag.barangayName ?? flag.barangay ?? "",
+      coords,
+      risk,
+      status,
+    };
+  };
+
+  const sourceFlags = token ? flags : FLAGGED;
+  const selectedFlagData = sourceFlags.find((f) => f.id === selectedFlag);
+  const mapCenter = selectedFlagData && selectedFlagData.latitude != null && selectedFlagData.longitude != null
+    ? { lat: Number(selectedFlagData.latitude), lng: Number(selectedFlagData.longitude) }
+    : DEFAULT_MAP_CENTER;
+  const mapZoom = selectedFlagData ? 14 : 12;
+
+  const fetchFlags = useCallback(async () => {
+    if (!token) return;
+    setLoadingFlags(true);
+    setFlagsError("");
+
+    try {
+      const result = await getFlagsRequest({ limit: 200 }, token);
+      setFlags((result.data ?? []).map(normalizeFlag));
+    } catch (err) {
+      setFlagsError(err.message || "Unable to load flags.");
+    } finally {
+      setLoadingFlags(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchFlags();
+  }, [fetchFlags]);
+
+  const handleEscalate = async (logId) => {
+    if (!token) return;
+    setActionLoading(true);
+    setActionError("");
+
+    try {
+      await escalateFlagToBlackRequest(logId, token);
+      await fetchFlags();
+      setSelectedFlag(logId);
+    } catch (err) {
+      setActionError(err.message || "Failed to escalate flag.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRunDetection = async () => {
+    if (!token) return;
+    setRunDetectionLoading(true);
+    setActionError("");
+
+    try {
+      await runDetectionRequest(token);
+      await fetchFlags();
+    } catch (err) {
+      setActionError(err.message || "Failed to run detection.");
+    } finally {
+      setRunDetectionLoading(false);
+    }
+  };
+
+  const handleMarkerClick = useCallback((id) => {
+    setSelectedFlag((prev) => (prev === id ? null : id));
+  }, []);
+
+  const handleZoomIn = () => {
+    window.alert("Zooming in on the map.");
+  };
+
+  const handleZoomOut = () => {
+    window.alert("Zooming out of the map.");
+  };
+
+  const handleCenterMap = () => {
+    window.alert("Centering map on the selected area.");
+  };
+
+  const visibleFlags = sourceFlags.filter(f => {
+    const matchRisk = filterRisk === "all" || f.risk === filterRisk;
+    const matchSearch = (f.name || "").toLowerCase().includes(search.toLowerCase()) ||
+                        (f.barangay || "").toLowerCase().includes(search.toLowerCase());
     return matchRisk && matchSearch;
   });
+
+  const isAdmin = user?.role === "Admin" || user?.role === "SUPER_ADMIN";
 
   return (
     <DashboardLayout user={{ initials: "JD", name: "J. Dela Cruz" }}>
@@ -328,12 +511,22 @@ export default function MapPage() {
           <p className="page-subtitle">
             Geospatial view of flagged and unregistered establishments in Mataasnakahoy.
           </p>
+          {(flagsError || actionError) && (
+            <p style={{ color: "var(--color-danger)", marginTop: 8 }}>
+              {flagsError || actionError}
+            </p>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={styles.livePill}>
             <span style={styles.liveDot} />
-            {FLAGGED.filter(f => f.status === "unregistered").length} Active Flags
+            {sourceFlags.length} Active Flags
           </span>
+          {isAdmin && (
+            <button className="primary-btn" type="button" onClick={handleRunDetection} disabled={runDetectionLoading || actionLoading}>
+              {runDetectionLoading ? "Running..." : "Run Detection"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -369,21 +562,29 @@ export default function MapPage() {
 
           {/* Map canvas */}
           <div className="frosted-glass" style={styles.mapWrapper}>
-<MapCanvas
-            layers={layers}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onCenterMap={handleCenterMap}
-          />
+            <MapCanvas
+              isLoaded={isLoaded}
+              loadError={loadError}
+              center={mapCenter}
+              zoom={mapZoom}
+              layers={layers}
+              flags={sourceFlags}
+              selectedFlagId={selectedFlag}
+              onMarkerClick={handleMarkerClick}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
+              onCenterMap={handleCenterMap}
+              runDetectionLoading={runDetectionLoading}
+            />
           </div>
 
           {/* Stats strip below map */}
           <div style={styles.statsStrip}>
             {[
-              { label: "Total Flags",    value: FLAGGED.length,                                       color: "var(--color-ink)" },
-              { label: "Unregistered",   value: FLAGGED.filter(f => f.status === "unregistered").length, color: "var(--color-danger)" },
-              { label: "Expired Permit", value: FLAGGED.filter(f => f.status === "expired").length,      color: "var(--color-gold-dark)" },
-              { label: "High Risk",      value: FLAGGED.filter(f => f.risk === "high").length,           color: "var(--color-danger)" },
+              { label: "Total Flags",    value: sourceFlags.length,                               color: "var(--color-ink)" },
+              { label: "Red Flags",      value: sourceFlags.filter(f => f.flagColor === "Red").length,   color: "var(--color-danger)" },
+              { label: "Yellow Flags",   value: sourceFlags.filter(f => f.flagColor === "Yellow").length, color: "var(--color-gold-dark)" },
+              { label: "Black Flags",    value: sourceFlags.filter(f => f.flagColor === "Black").length,  color: "var(--color-primary)" },
             ].map(s => (
               <div key={s.label} className="frosted-glass saas-card" style={styles.statCard}>
                 <span style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</span>
@@ -402,12 +603,18 @@ export default function MapPage() {
               <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)" }}>
                 Flagged Locations
               </h3>
+              <button
+                className="ghost-btn"
+                type="button"
+                style={{ fontSize: 12, padding: "6px 12px" }}
+                onClick={() => setShowFullList(true)}
+              >
+                See Full List
+              </button>
               <span className="badge badge--red" style={{ marginLeft: "auto" }}>
-                {FLAGGED.length}
+                {sourceFlags.length}
               </span>
             </div>
-
-            {/* Search */}
             <div className="search-bar" style={{ width: "100%", marginBottom: 10 }}>
               <Icon.Search />
               <input
@@ -450,6 +657,8 @@ export default function MapPage() {
                 flag={f}
                 selected={selectedFlag === f.id}
                 onClick={() => setSelectedFlag(prev => prev === f.id ? null : f.id)}
+                canEscalate={isAdmin && (f.flagColor === "Red" || f.flagColor === "Yellow")}
+                onEscalate={handleEscalate}
               />
             ))}
           </div>
@@ -462,7 +671,54 @@ export default function MapPage() {
         <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
       </footer>
 
+      {showFullList && (
+        <FullFlagListModal visibleFlags={visibleFlags} onClose={() => setShowFullList(false)} />
+      )}
     </DashboardLayout>
+  );
+}
+
+// ── Full Flag List Modal ───────────────────────────────────────────────────
+function FullFlagListModal({ visibleFlags, onClose }) {
+  return (
+    <div style={styles.modalBackdrop} onClick={onClose}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <h3 style={styles.modalTitle}>All Visible Flags</h3>
+          <button type="button" style={styles.closeBtn} onClick={onClose}>
+            <Icon.X />
+          </button>
+        </div>
+        <div style={styles.modalBody}>
+          <div style={styles.tableWrapper}>
+            <table style={styles.fullListTable}>
+              <thead>
+                <tr>
+                  <th style={styles.tableHeader}>ID</th>
+                  <th style={styles.tableHeader}>Name</th>
+                  <th style={styles.tableHeader}>Barangay</th>
+                  <th style={styles.tableHeader}>Risk</th>
+                  <th style={styles.tableHeader}>Status</th>
+                  <th style={styles.tableHeader}>Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleFlags.map((flag) => (
+                  <tr key={flag.id}>
+                    <td style={styles.tableCell}>{flag.id}</td>
+                    <td style={styles.tableCell}>{flag.name}</td>
+                    <td style={styles.tableCell}>{flag.barangay}</td>
+                    <td style={styles.tableCell}>{flag.risk}</td>
+                    <td style={styles.tableCell}>{flag.status}</td>
+                    <td style={styles.tableCell}>{flag.priorityScore ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -527,12 +783,115 @@ const styles = {
     position: "relative",
     height: 480,
   },
+  mapActionOverlay: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(15,23,42,0.6)",
+    zIndex: 20,
+    pointerEvents: "none",
+  },
+  mapActionOverlayText: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 6,
+    color: "#fff",
+    background: "rgba(15,23,42,0.8)",
+    borderRadius: "16px",
+    padding: "14px 20px",
+    fontSize: 14,
+    lineHeight: 1.4,
+    boxShadow: "0 18px 48px rgba(15,23,42,0.24)",
+  },
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 30,
+    background: "rgba(15,23,42,0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "min(100%, 960px)",
+    maxHeight: "90vh",
+    overflow: "hidden",
+    borderRadius: "22px",
+    background: "rgba(255,255,255,0.95)",
+    boxShadow: "0 24px 60px rgba(15,23,42,0.16)",
+    border: "1px solid rgba(148,163,184,0.18)",
+  },
+  modalHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    padding: "20px 24px 0",
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: 18,
+    fontWeight: 700,
+    color: "var(--color-ink)",
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    border: "1px solid var(--color-border)",
+    background: "#fff",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+  },
+  modalBody: {
+    padding: "0 24px 24px",
+  },
+  tableWrapper: {
+    overflowX: "auto",
+  },
+  fullListTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    minWidth: 720,
+  },
+  tableHeader: {
+    textAlign: "left",
+    padding: "12px 16px",
+    color: "var(--color-muted)",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.02em",
+    borderBottom: "1px solid rgba(148,163,184,0.24)",
+  },
+  tableCell: {
+    padding: "14px 16px",
+    borderBottom: "1px solid rgba(148,163,184,0.15)",
+    color: "var(--color-ink)",
+    fontSize: 13,
+  },
   mapCanvas: {
     width: "100%",
     height: "100%",
     background: "linear-gradient(135deg, #e8f5e2 0%, #d4edda 30%, #c8e6c9 60%, #dcedc8 100%)",
     position: "relative",
     overflow: "hidden",
+  },
+  mapPlaceholderText: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    textAlign: "center",
+    color: "#334155",
+    padding: 24,
   },
   topoOverlay: {
     position: "absolute",

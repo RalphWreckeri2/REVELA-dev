@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mataasnakahoy Barangay Boundary"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [121.0650, 13.9100],
+            [121.0850, 13.9100],
+            [121.0900, 13.9300],
+            [121.0800, 13.9500],
+            [121.0650, 13.9400],
+            [121.0620, 13.9200],
+            [121.0650, 13.9100]
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -28,6 +28,9 @@ def create_app():
     from api.flags.routes import flags_bp
     app.register_blueprint(flags_bp, url_prefix="/api/flags")
 
+    from api.users.routes import users_bp
+    app.register_blueprint(users_bp, url_prefix="/api/users")
+
     return app
 
 

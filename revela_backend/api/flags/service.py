@@ -8,13 +8,6 @@ from shapely.geometry import shape, Point
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 
 # ── Municipality spatial config ───────────────────────────────────────────────
-# Center of Mataasnakahoy, Batangas
-MUNICIPALITY_LAT = 13.9667
-MUNICIPALITY_LNG = 121.1167
-
-# Search radius for Google Places API (keep tight)
-SEARCH_RADIUS_M = 4000          # 4km — covers the municipality without pulling too far
-
 # Cross-referencing threshold: POI must be within this distance of a registry
 # entry to be considered a match (Green). Otherwise it becomes a Red Flag.
 THRESHOLD_M = 20
@@ -62,20 +55,15 @@ def _match_registry_to_google(place_id, business_id, detected_name):
 
 # ── Google Places fetch ───────────────────────────────────────────────────────
 
-def _fetch_all_places():
-    """
-    Paginate through Google Places Nearby Search until all results are fetched.
-    Returns a flat list of place dicts — already filtered to municipality bounds.
-    """
+def _fetch_places_for_point(lat, lng, radius_m, places_dict):
     url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
     params = {
-        "location": f"{MUNICIPALITY_LAT},{MUNICIPALITY_LNG}",
-        "radius":   SEARCH_RADIUS_M,
+        "location": f"{lat},{lng}",
+        "radius":   radius_m,
         "type":     "establishment",
         "key":      GOOGLE_MAPS_API_KEY,
     }
 
-    places = []
     outside_count = 0
 
     while True:
@@ -87,15 +75,20 @@ def _fetch_all_places():
             break
 
         for p in data.get("results", []):
-            loc = p.get("geometry", {}).get("location", {})
-            lat = loc.get("lat")
-            lng = loc.get("lng")
-
-            if lat is None or lng is None:
+            place_id = p.get("place_id")
+            # Deduplicate overlapping circles
+            if not place_id or place_id in places_dict:
                 continue
 
-            if _within_municipality(lat, lng):
-                places.append(p)
+            loc = p.get("geometry", {}).get("location", {})
+            p_lat = loc.get("lat")
+            p_lng = loc.get("lng")
+
+            if p_lat is None or p_lng is None:
+                continue
+
+            if _within_municipality(p_lat, p_lng):
+                places_dict[place_id] = p
             else:
                 outside_count += 1
 
@@ -106,7 +99,38 @@ def _fetch_all_places():
         time.sleep(2)
         params = {"pagetoken": next_token, "key": GOOGLE_MAPS_API_KEY}
 
-    return places, outside_count
+    return outside_count
+
+
+def _fetch_all_places():
+    """
+    Uses a grid-based search to bypass Google Places API's hard limit of 60 results
+    per query. Returns a flat list of place dicts — filtered to municipality bounds.
+    """
+    places_dict = {}
+    total_outside = 0
+
+    # Bounding Box roughly covering Mataasnakahoy derived from GeoJSON
+    min_lat, max_lat = 13.9490, 14.0115
+    min_lng, max_lng = 121.0129, 121.1251
+
+    # 2km step (approx 0.018 degrees). Search radius of 2000m ensures overlapping circles.
+    step = 0.018
+    radius_m = 2000
+
+    lat = min_lat
+    while lat <= max_lat:
+        lng = min_lng
+        while lng <= max_lng:
+            # Buffer the municipality polygon by ~2km to save API calls on far corners
+            if _MUNICIPALITY_BOUNDARY.buffer(0.02).contains(Point(lng, lat)):
+                outside = _fetch_places_for_point(
+                    lat, lng, radius_m, places_dict)
+                total_outside += outside
+            lng += step
+        lat += step
+
+    return list(places_dict.values()), total_outside
 
 
 # ── Registry loader ───────────────────────────────────────────────────────────
@@ -235,9 +259,27 @@ def run_detection():
             lat = loc.get("lat")
             lng = loc.get("lng")
             address = place.get("vicinity")   # street address from Places API
+            compound_code = place.get("plus_code", {}).get("compound_code", "")
 
             if not lat or not lng or not place_id:
                 continue
+
+            # ── STRICT TEXT-BASED LOCATION FILTER ──────────────────────────
+            # The spatial polygon boundary might overlap with neighboring towns
+            # according to Google Maps. We double-check the text representation.
+            location_text = f"{address} {compound_code}".lower()
+
+            # 1. Reject if it doesn't mention Mataasnakahoy (with spelling variations)
+            valid_spellings = ["mataasnakahoy",
+                               "mataas na kahoy", "mataas nakahoy"]
+            if not any(v in location_text for v in valid_spellings):
+                continue
+
+            # 2. Reject explicitly if it belongs to a neighboring municipality
+            forbidden_neighbors = ["lipa", "balete", "cuenca", "san jose"]
+            if any(town in location_text for town in forbidden_neighbors):
+                continue
+            # ───────────────────────────────────────────────────────────────
 
             if _already_flagged(place_id):
                 continue
@@ -306,8 +348,8 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50):
                 r.businessSize,                                  
                 COALESCE(g.nearestLandmark, r.businessAddress) AS resolvedAddress,
                 CASE
-                    WHEN g.placeID IS NOT NULL AND r.businessID IS NOT NULL THEN 'registry_and_maps'
-                    WHEN g.placeID IS NULL THEN 'registry_only'
+                    WHEN g.flagColor = 'Green' AND g.placeID IS NOT NULL AND r.businessID IS NOT NULL THEN 'registry_and_maps'
+                    WHEN g.flagColor = 'Green' AND g.placeID IS NULL THEN 'registry_only'
                     ELSE 'maps_only'
                 END AS flagSource
             FROM geospatial_logs g

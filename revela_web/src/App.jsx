@@ -11,7 +11,6 @@ import InspectionPage from './pages/InspectionPage';
 import UserManagementPage from './pages/UserManagementPage';
 import ExportReportsPage from './pages/ExportReportsPage';
 import SettingsPage from './pages/SettingsPage';
-import ProfilePage from './pages/ProfilePage';
 
 export default function App() {
   return (
@@ -31,7 +30,6 @@ export default function App() {
             <Route path="/users" element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><ExportReportsPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           </Routes>
         </BrowserRouter>
       </ThemeProvider>

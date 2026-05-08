@@ -375,6 +375,7 @@ def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_p
                     FROM geospatial_logs g
                     WHERE LOWER(g.detectedName) = LOWER(r.businessName)
                     AND g.barangayID = r.barangayID
+                    AND g.flagColor = 'Green'
                     ORDER BY g.detectedDate DESC
                     LIMIT 1
                 ) AS flagSource,

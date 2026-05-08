@@ -250,3 +250,60 @@ export async function runDetectionRequest(token) {
     connectionGuard(err);
   }
 }
+
+// ── User Management ───────────────────────────────────────────────────────────
+
+export async function getUsersRequest(token) {
+  try {
+    const res = await fetch(`${BASE_URL}/users/`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function createUserRequest(payload, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/users/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function updateUserRequest(userId, payload, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/users/${userId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function deleteUserRequest(userId, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/users/${userId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}

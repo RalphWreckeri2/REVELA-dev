@@ -810,7 +810,10 @@ export default function MapPage() {
               {["all", "Red", "Yellow", "Black", "Green"].map(c => (
                 <button
                   key={c}
-                  onClick={() => setFilterColor(c)}
+                  onClick={() => {
+                    setFilterColor(c);
+                    if (c !== "Green") setFilterSource("all");
+                  }}
                   style={{
                     ...styles.filterPill,
                     background:  filterColor === c ? (c === "all" ? "var(--color-ink)" : FLAG_COLORS[c]?.marker ?? "var(--color-ink)") : "rgba(248,249,250,0.9)",
@@ -823,8 +826,8 @@ export default function MapPage() {
               ))}
             </div>
 
-                      {/* Source filter — shows when Green or All is selected */}
-            {(filterColor === "Green" || filterColor === "all") && (
+            {/* Source filter — shows only when Green is selected */}
+            {filterColor === "Green" && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 {[
                   { value: "all",               label: "All Sources"        },

@@ -16,8 +16,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import "../styles/global.css";
 import myLogo from "../assets/logo.png";
+import ProfileModal from "../pages/ProfileModal";
 
 // ── Nav config — add new pages here, never touch the layout ──
 const NAV_ITEMS = [
@@ -41,7 +43,6 @@ const NAV_ITEMS = [
         label: "Map & Flags",
         path: "/map",
         href: "/map",
-        badge: { count: 12, variant: "red" },
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="10" r="3" />
@@ -76,7 +77,6 @@ const NAV_ITEMS = [
         label: "Inspections",
         path: "/inspections",
         href: "/inspections",
-        badge: { count: 5, variant: "red" },
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 11l3 3L22 4" />
@@ -199,7 +199,7 @@ function Sidebar({ onLogout }) {
   );
 }
 
-function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlaceholder = "Search businesses, barangays..." }) {
+function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlaceholder = "Search businesses, barangays...", onProfileClick }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationButtonRef = useRef(null);
   const notificationPopoverRef = useRef(null);
@@ -273,7 +273,7 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
         <button
           className="nav-profile"
           type="button"
-          onClick={() => navigate("/profile")}
+          onClick={onProfileClick}
         >
           <div className="nav-avatar">{user.initials}</div>
           <div className="nav-user-info">
@@ -291,17 +291,29 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
 /**
  * @param {{ children: React.ReactNode, user?: object, onLogout?: () => void }} props
  */
-export default function DashboardLayout({ children, user, onLogout }) {
+export default function DashboardLayout({ children, onLogout }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const navigate = useNavigate();
+  const { user: authUser, logout } = useAuth();
+
   const handleLogout = () => {
     if (!window.confirm("Are you sure you want to log out?")) {
       return;
     }
     if (typeof onLogout === "function") {
       onLogout();
+    } else if (logout) {
+      logout();
     }
     navigate("/");
+  };
+
+  const displayUser = {
+    initials: authUser?.fullName 
+      ? authUser.fullName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() 
+      : "?",
+    name: authUser?.fullName || "Unknown User"
   };
 
   return (
@@ -319,13 +331,15 @@ export default function DashboardLayout({ children, user, onLogout }) {
 
       <div className="saas-main">
         <div className="ambient-bg-mesh" />
-        <TopNavbar user={user} />
+        <TopNavbar user={displayUser} onProfileClick={() => setShowProfileModal(true)} />
 
         {/* Each page owns its .saas-content padding via this wrapper */}
         <main className="saas-content">
           {children}
         </main>
       </div>
+
+      {showProfileModal && <ProfileModal onClose={() => setShowProfileModal(false)} />}
     </div>
   );
 }

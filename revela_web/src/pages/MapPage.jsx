@@ -14,6 +14,9 @@ import {
   getFlagsRequest,
   escalateFlagToBlackRequest,
   runDetectionRequest,
+  createYellowFlagRequest,   
+  getBarangaysRequest,
+  assignInspectionRequest,
 } from "../services/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -51,6 +54,12 @@ const Icon = {
       <line x1="6" y1="12" x2="2" y2="12"/>
       <line x1="12" y1="6" x2="12" y2="2"/>
       <line x1="12" y1="22" x2="12" y2="18"/>
+    </svg>
+  ),
+  Send: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="22" y1="2" x2="11" y2="13"/>
+      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
     </svg>
   ),
   Search: () => (
@@ -142,7 +151,7 @@ function normalizeFlag(flag) {
 }
 
 // ── Flag Detail Modal ─────────────────────────────────────────────────────────
-function FlagDetailModal({ flag, onClose, onEscalate, isAdmin, actionLoading }) {
+function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, isAdmin, actionLoading }) {
   const fc = getFlagColor(flag.color);
 
   return (
@@ -197,14 +206,24 @@ function FlagDetailModal({ flag, onClose, onEscalate, isAdmin, actionLoading }) 
         <div style={styles.detailFooter}>
           <button className="ghost-btn" onClick={onClose}>Close</button>
           {isAdmin && (flag.color === "Red" || flag.color === "Yellow") && (
-            <button
-              className="primary-btn"
-              style={{ background: "#1e293b", borderColor: "#1e293b" }}
-              disabled={actionLoading}
-              onClick={() => onEscalate(flag.id)}
-            >
-              {actionLoading ? "Escalating…" : "Escalate to Black"}
-            </button>
+            <>
+              <button
+                className="primary-btn"
+                style={{ background: "#3b82f6", borderColor: "#3b82f6", display: "flex", alignItems: "center", gap: 6 }}
+                disabled={actionLoading}
+                onClick={() => onDispatch(flag)}
+              >
+                <Icon.Send /> Dispatch
+              </button>
+              <button
+                className="primary-btn"
+                style={{ background: "#1e293b", borderColor: "#1e293b" }}
+                disabled={actionLoading}
+                onClick={() => onEscalate(flag.id)}
+              >
+                {actionLoading ? "Escalating…" : "Escalate to Black"}
+              </button>
+            </>
           )}
           {flag.latitude && (
             <a
@@ -225,21 +244,79 @@ function FlagDetailModal({ flag, onClose, onEscalate, isAdmin, actionLoading }) 
 
 // ── Full Flag List Modal ───────────────────────────────────────────────────────
 function FullFlagListModal({ flags, onClose, onSelectFlag }) {
+  const [search, setSearch] = useState("");
+  const [filterColor, setFilterColor] = useState("all");
+  const [sortConfig, setSortConfig] = useState("date_desc");
+
+  const displayed = flags.filter(f => {
+    const matchColor = filterColor === "all" || f.color === filterColor;
+    const matchSearch = (f.name || "").toLowerCase().includes(search.toLowerCase()) ||
+                        (f.barangay || "").toLowerCase().includes(search.toLowerCase()) ||
+                        (f.address || "").toLowerCase().includes(search.toLowerCase());
+    return matchColor && matchSearch;
+  });
+
+  displayed.sort((a, b) => {
+    if (sortConfig === "date_desc") {
+      return (new Date(b.detectedDate || 0).getTime()) - (new Date(a.detectedDate || 0).getTime());
+    } else if (sortConfig === "date_asc") {
+      return (new Date(a.detectedDate || 0).getTime()) - (new Date(b.detectedDate || 0).getTime());
+    } else if (sortConfig === "name_asc") {
+      return (a.name || "").localeCompare(b.name || "");
+    } else if (sortConfig === "name_desc") {
+      return (b.name || "").localeCompare(a.name || "");
+    } else if (sortConfig === "id_desc") {
+      return Number(b.id) - Number(a.id);
+    } else if (sortConfig === "id_asc") {
+      return Number(a.id) - Number(b.id);
+    }
+    return 0;
+  });
+
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
       <div style={styles.fullListModal} onClick={e => e.stopPropagation()}>
 
-        <div style={styles.fullListHeader}>
-          <div>
-            <h3 style={styles.modalTitle}>All Flagged Locations</h3>
-            <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2 }}>
-              {flags.length} total · click a row to view on map
-            </p>
+        <div style={{ ...styles.fullListHeader, flexDirection: "column", gap: 16, alignItems: "stretch" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <h3 style={styles.modalTitle}>All Flagged Locations</h3>
+              <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2 }}>
+                {displayed.length} result{displayed.length !== 1 ? 's' : ''} · click a row to view on map
+              </p>
+            </div>
+            <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
           </div>
-          <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
+
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div className="search-bar" style={{ flex: 1, minWidth: 200, padding: "0 12px", height: 40 }}>
+              <Icon.Search />
+              <input
+                type="text"
+                placeholder="Search name, barangay, or address…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <select style={styles.modalSelect} value={filterColor} onChange={e => setFilterColor(e.target.value)}>
+              <option value="all">All Colors</option>
+              <option value="Red">Red Flags</option>
+              <option value="Yellow">Yellow Flags</option>
+              <option value="Black">Black Flags</option>
+              <option value="Green">Green Flags</option>
+            </select>
+            <select style={styles.modalSelect} value={sortConfig} onChange={e => setSortConfig(e.target.value)}>
+              <option value="date_desc">Newest First</option>
+              <option value="date_asc">Oldest First</option>
+              <option value="name_asc">Name (A-Z)</option>
+              <option value="name_desc">Name (Z-A)</option>
+              <option value="id_desc">ID (High to Low)</option>
+              <option value="id_asc">ID (Low to High)</option>
+            </select>
+          </div>
         </div>
 
-        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(80vh - 100px)" }}>
+        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(80vh - 140px)" }}>
           <table style={styles.fullListTable}>
             <thead>
               <tr>
@@ -249,13 +326,13 @@ function FullFlagListModal({ flags, onClose, onSelectFlag }) {
               </tr>
             </thead>
             <tbody>
-              {flags.length === 0 ? (
+              {displayed.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: "center", padding: "40px 16px", color: "var(--color-muted)", fontSize: 13 }}>
-                    No flags to display.
+                    No flags match your criteria.
                   </td>
                 </tr>
-              ) : flags.map((f, i) => {
+              ) : displayed.map((f, i) => {
                 const fc = getFlagColor(f.color);
                 return (
                   <tr
@@ -300,7 +377,7 @@ function FullFlagListModal({ flags, onClose, onSelectFlag }) {
 }
 
 // ── Map Canvas ────────────────────────────────────────────────────────────────
-function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, selectedFlagId, onMarkerClick, runDetectionLoading, satellite }) {
+function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, satellite }) {
   const markerRefs      = useRef(new Map());
   const internalMapRef  = useRef(null);
   const clusterRef      = useRef(null); 
@@ -308,6 +385,10 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, s
   const handleMapLoad = useCallback((map) => {
     internalMapRef.current = map;
     if (mapRef) mapRef.current = map;
+    
+    if (isPickingLocation) {
+      map.setOptions({ draggableCursor: 'crosshair' });
+    }
   }, [mapRef]);
 
   const handleMapUnmount = useCallback(() => {
@@ -429,6 +510,13 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, s
       }
     };
   }, [isLoaded, layers.flags, flags, selectedFlagId, onMarkerClick, buildMarkerContent]);
+  
+  // Update cursor dynamically if picking state changes
+  useEffect(() => {
+    if (internalMapRef.current) {
+      internalMapRef.current.setOptions({ draggableCursor: isPickingLocation ? 'crosshair' : null });
+    }
+  }, [isPickingLocation]);
 
   // Zoom controls that actually work
   const handleZoomIn = () => {
@@ -484,6 +572,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, s
         }}
         onLoad={handleMapLoad}
         onUnmount={handleMapUnmount}
+        onClick={onMapClick}
       >
         {layers.barangay && (
           <Data onLoad={handleBarangayLoad} onUnmount={dl => dl.setMap(null)} />
@@ -541,6 +630,203 @@ function FlagCard({ flag, selected, onClick }) {
   );
 }
 
+function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onSuccess }) {
+  const [form, setForm]     = useState(draft || { businessName: "", lat: "", lng: "", barangayID: "", notes: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError]   = useState("");
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  
+  const handlePickOnMap = () => {
+    onPickLocation(form); // pass current form state back to parent so it's not lost
+  };
+
+  const handleSubmit = async () => {
+    if (!form.businessName || !form.lat || !form.lng || !form.barangayID) {
+      setError("Business name, coordinates, and barangay are required.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await createYellowFlagRequest({
+        businessName: form.businessName,
+        lat:          parseFloat(form.lat),
+        lng:          parseFloat(form.lng),
+        barangayID:   parseInt(form.barangayID, 10),
+        notes:        form.notes || undefined,
+      }, token);
+      onSuccess();
+    } catch (err) {
+      setError(err.message || "Failed to create flag.");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
+      <div style={{ ...styles.detailModal, padding: 0 }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ ...styles.detailHeader, background: "#fef3c7", borderBottom: "1px solid #fde68a" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Add Yellow Flag
+            </span>
+          </div>
+          <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
+        </div>
+
+        {/* Body */}
+        <div style={styles.detailBody}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+            <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.6, maxWidth: "70%" }}>
+              Manually flag a suspected or unverified establishment. It will appear on the map immediately.
+            </p>
+            <button 
+              type="button" 
+              className="ghost-btn" 
+              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-primary)", borderColor: "var(--color-primary-light)", background: "var(--color-primary-light)" }}
+              onClick={handlePickOnMap}
+            >
+              <Icon.Crosshair /> Pick on Map
+            </button>
+          </div>
+
+          {error && (
+            <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 14 }}>
+              {error}
+            </div>
+          )}
+
+          {[
+            { label: "Business Name *", key: "businessName", placeholder: "e.g. Aling Nena's Tindahan" },
+            { label: "Latitude *",      key: "lat",          placeholder: "e.g. 13.9667" },
+            { label: "Longitude *",     key: "lng",          placeholder: "e.g. 121.1167" },
+            { label: "Notes",           key: "notes",        placeholder: "Reason for flagging…" },
+          ].map(({ label, key, placeholder }) => (
+            <div key={key} style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                {label}
+              </label>
+              <input
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", outline: "none" }}
+                placeholder={placeholder}
+                value={form[key]}
+                onChange={e => set(key, e.target.value)}
+              />
+            </div>
+          ))}
+
+          <div style={{ marginBottom: 4 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Barangay *
+            </label>
+            <select
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "#fff", cursor: "pointer" }}
+              value={form.barangayID}
+              onChange={e => set("barangayID", e.target.value)}
+            >
+              <option value="">Select barangay…</option>
+              {barangays.map(b => (
+                <option key={b.barangayID} value={b.barangayID}>{b.barangayName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={styles.detailFooter}>
+          <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
+          <button
+            className="primary-btn"
+            style={{ background: "#d97706", borderColor: "#d97706" }}
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? "Saving…" : "+ Add Yellow Flag"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dispatch Modal ────────────────────────────────────────────────────────────
+function DispatchModal({ flag, token, onClose, onSuccess }) {
+  const [inspectors, setInspectors] = useState([]);
+  const [selectedUID, setSelectedUID] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch(`http://127.0.0.1:5000/api/users/?role=Inspector`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        setInspectors(Array.isArray(data) ? data : (data.data ?? []));
+        setFetching(false);
+      })
+      .catch(() => { setFetching(false); setError("Could not load inspectors."); });
+  }, [token]);
+
+  const handleAssign = async () => {
+    if (!selectedUID) { setError("Select an inspector first."); return; }
+    setLoading(true);
+    setError("");
+    try {
+      await assignInspectionRequest({ logID: flag.id, userID: parseInt(selectedUID, 10) }, token);
+      onSuccess();
+      onClose();
+    } catch (err) {
+      setError(err.message || "Assignment failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fc = getFlagColor(flag.color);
+
+  return (
+    <div style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
+      <div style={{ ...styles.detailModal, padding: 24, width: 440 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={styles.modalTitle}>Dispatch Inspector</h3>
+          {!loading && <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 20 }}>
+          <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text }}>{fc.label}</span>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: 14, color: "var(--color-ink)", marginBottom: 2 }}>{flag.name}</p>
+            <p style={{ fontSize: 12, color: "var(--color-muted)" }}>{flag.barangay} · Log #{flag.id}</p>
+          </div>
+        </div>
+        {error && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 16 }}>
+            <Icon.AlertTriangle /> &nbsp;{error}
+          </div>
+        )}
+        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Select Inspector</label>
+        {fetching ? (
+          <p style={{ fontSize: 13, color: "var(--color-muted)" }}>Loading inspectors…</p>
+        ) : (
+          <select style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "#fff", cursor: "pointer", marginBottom: 4 }} value={selectedUID} onChange={e => setSelectedUID(e.target.value)}>
+            <option value="">Choose an inspector…</option>
+            {inspectors.map(u => (<option key={u.userID} value={u.userID}>{u.fullName}</option>))}
+          </select>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24 }}>
+          <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
+          <button className="primary-btn" style={{ background: "#3b82f6", borderColor: "#3b82f6", display: "flex", alignItems: "center", gap: 6 }} onClick={handleAssign} disabled={loading || fetching}>{loading ? "Dispatching…" : <><Icon.Send /> Dispatch</>}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MapPage() {
   const { token, user }    = useContext(AuthContext);
@@ -564,12 +850,18 @@ export default function MapPage() {
   const [selectedFlag, setSelectedFlag] = useState(null);   // logID of selected flag
   const [modalFlag,    setModalFlag]    = useState(null);   // flag object shown in detail modal
   const [showFullList, setShowFullList] = useState(false);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
   const [filterColor,  setFilterColor]  = useState("all");
   const [search,       setSearch]       = useState("");
   const [satellite, setSatellite] = useState(false);
   const [filterSource, setFilterSource] = useState("all");
 
   const isAdmin = user?.role === "Admin" || user?.role === "SUPER_ADMIN";
+
+  const [showYellowModal, setShowYellowModal] = useState(false);
+  const [isPickingYellowLocation, setIsPickingYellowLocation] = useState(false);
+  const [yellowDraft, setYellowDraft]         = useState(null);
+  const [barangays,       setBarangays]       = useState([]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchFlags = useCallback(async () => {
@@ -587,6 +879,13 @@ export default function MapPage() {
   }, [token]);
 
   useEffect(() => { fetchFlags(); }, [fetchFlags]);
+
+  useEffect(() => {
+    if (!token || !isAdmin) return;
+    getBarangaysRequest(token)
+      .then(data => setBarangays(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [token, isAdmin]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const handleEscalate = async (logId) => {
@@ -645,6 +944,15 @@ export default function MapPage() {
       mapRef.current.setZoom(16);
     }
   };
+  
+  // ── Map click (for "Drop a Pin" feature) ──────────────────────────────────
+  const handleMapClick = useCallback((e) => {
+    if (isPickingYellowLocation) {
+      setYellowDraft(prev => ({ ...prev, lat: e.latLng.lat().toFixed(6), lng: e.latLng.lng().toFixed(6) }));
+      setIsPickingYellowLocation(false);
+      setShowYellowModal(true);
+    }
+  }, [isPickingYellowLocation]);
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const visibleFlags = flags.filter(f => {
@@ -694,12 +1002,25 @@ export default function MapPage() {
             {flags.filter(f => f.color !== "Green").length} Active Flags
           </span>
           {isAdmin && (
-            <button className="primary-btn" type="button" onClick={handleRunDetection} disabled={runDetectionLoading}>
-              {runDetectionLoading ? "Running…" : "Run Detection"}
-            </button>
+            <>
+              <button className="ghost-btn" type="button" onClick={() => setShowYellowModal(true)}>
+                + Yellow Flag
+              </button>
+              <button className="primary-btn" type="button" onClick={handleRunDetection} disabled={runDetectionLoading}>
+                {runDetectionLoading ? "Running…" : "Run Detection"}
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {/* Banner showing when picking location */}
+      {isPickingYellowLocation && (
+        <div style={styles.pickingBanner}>
+          <Icon.Crosshair /> Click anywhere on the map to set the flag's coordinates. 
+          <button style={{ marginLeft: 16, background: "none", border: "none", color: "#fff", textDecoration: "underline", cursor: "pointer" }} onClick={() => { setIsPickingYellowLocation(false); setShowYellowModal(true); }}>Cancel</button>
+        </div>
+      )}
 
       {/* Map layout */}
       <div style={styles.mapLayout}>
@@ -752,6 +1073,8 @@ export default function MapPage() {
               flags={visibleFlags}
               selectedFlagId={selectedFlag}
               onMarkerClick={handleMarkerClick}
+              onMapClick={handleMapClick}
+              isPickingLocation={isPickingYellowLocation}
               runDetectionLoading={runDetectionLoading}
               satellite={satellite}
             />
@@ -885,6 +1208,7 @@ export default function MapPage() {
           flag={modalFlag}
           onClose={() => { setModalFlag(null); setSelectedFlag(null); }}
           onEscalate={handleEscalate}
+          onDispatch={(flag) => setDispatchTarget(flag)}
           isAdmin={isAdmin}
           actionLoading={actionLoading}
         />
@@ -893,12 +1217,40 @@ export default function MapPage() {
       {/* Full list modal */}
       {showFullList && (
         <FullFlagListModal
-          flags={visibleFlags}
+          flags={flags}
           onClose={() => setShowFullList(false)}
           onSelectFlag={(id) => {
             const flag = flags.find(f => f.id === id);
             if (flag) handleSidePanelClick(flag);
           }}
+        />
+      )}
+
+      {dispatchTarget && (
+        <DispatchModal
+          flag={dispatchTarget}
+          token={token}
+          onClose={() => setDispatchTarget(null)}
+          onSuccess={() => {
+            setDispatchTarget(null);
+            setModalFlag(null);
+            fetchFlags();
+          }}
+        />
+      )}
+
+      {showYellowModal && (
+        <YellowFlagModal
+          token={token}
+          barangays={barangays}
+          draft={yellowDraft}
+          onPickLocation={(currentForm) => {
+            setYellowDraft(currentForm);
+            setShowYellowModal(false);
+            setIsPickingYellowLocation(true);
+          }}
+          onClose={() => setShowYellowModal(false)}
+          onSuccess={() => { setShowYellowModal(false); setYellowDraft(null); fetchFlags(); }}
         />
       )}
 
@@ -925,6 +1277,7 @@ const styles = {
   mapBtn:       { width: 36, height: 36, background: "rgba(255,255,255,0.95)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-muted)", backdropFilter: "blur(8px)" },
   overlay:      { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.5)", zIndex: 20 },
   overlayCard:  { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#fff", background: "rgba(15,23,42,0.8)", borderRadius: 16, padding: "16px 24px", fontSize: 14 },
+  pickingBanner:{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "var(--color-primary)", color: "#fff", padding: "12px 24px", borderRadius: 30, zIndex: 100, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, boxShadow: "0 10px 25px rgba(0,0,0,0.2)" },
 
   statsStrip: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 },
   statCard:   { display: "flex", flexDirection: "column", gap: 2, padding: "14px 18px", borderRadius: "var(--radius-lg)" },
@@ -960,4 +1313,5 @@ const styles = {
   fullListTable:  { width: "100%", borderCollapse: "collapse", minWidth: 640, fontSize: 13 },
   th: { textAlign: "left", padding: "10px 16px", color: "var(--color-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid rgba(148,163,184,0.2)", fontWeight: 700, whiteSpace: "nowrap" },
   td: { padding: "12px 16px", borderBottom: "1px solid rgba(148,163,184,0.12)", color: "var(--color-ink)", verticalAlign: "middle" },
+  modalSelect:    { padding: "0 12px", height: 40, borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", background: "rgba(248,249,250,0.8)", fontSize: 13, color: "var(--color-ink)", outline: "none", cursor: "pointer", fontFamily: "var(--font-base)" },
 };

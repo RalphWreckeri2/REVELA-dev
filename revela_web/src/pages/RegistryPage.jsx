@@ -8,6 +8,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import StatusBadge from "../components/StatusBadge";
 import { UploadModal } from "../components/UploadModal";
 import { AuthContext } from "../context/AuthContext";
+import Papa from "papaparse";
 import {
   getRegistryRequest,
   uploadRegistryFile,
@@ -47,6 +48,13 @@ const Icon = {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  ),
+  Import: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
     </svg>
   ),
   Eye: () => (
@@ -289,6 +297,11 @@ export default function RegistryPage() {
     }
   };
 
+  // ── Import / Sync Handler ────────────────────────────────────────────────
+  const handleImport = () => {
+    window.alert("Permit renewal synchronization import is under development.");
+  };
+
   // Reset page to 1 whenever filters change (search, barangay, status, pageSize)
   useEffect(() => {
     setPage(1);
@@ -315,6 +328,13 @@ export default function RegistryPage() {
           <p className="page-subtitle">Official BPLO-registered establishments in Mataasnakahoy.</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
+          <button 
+            className="ghost-btn" 
+            onClick={handleImport} 
+            disabled={loading}
+          >
+            <Icon.Import /> Import
+          </button>
           <button 
             className="ghost-btn" 
             onClick={handleExport} 
@@ -579,5 +599,13 @@ const styles = {
     gap: 6, fontSize: 13, fontWeight: 600, fontFamily: "var(--font-base)", transition: "all 0.15s",
   },
   pageBtnActive: { background: "var(--color-primary)", color: "#fff", border: "1px solid var(--color-primary)" },
-  pageSizeLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-muted)", cursor: "default" }, 
+  pageSizeLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-muted)", cursor: "default" },
+
+  // Modal styles
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalCard:     { background: "#fff", borderRadius: "var(--radius-xl)", padding: 32, boxShadow: "0 24px 60px rgba(15,23,42,0.18)", position: "relative", maxHeight: "90vh", overflowY: "auto" },
+  modalHeader:   { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+  modalTitle:    { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", margin: 0 },
+  closeBtn:      { background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 },
+  modalFooter:   { display: "flex", justifyContent: "flex-end", gap: 10 },
 };

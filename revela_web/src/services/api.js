@@ -307,3 +307,119 @@ export async function deleteUserRequest(userId, token) {
     connectionGuard(err);
   }
 }
+
+// ── Inspections ───────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/inspections/tasks
+ * Inspector's own assigned/in-progress tasks.
+ */
+export async function getInspectorTasksRequest(token) {
+  try {
+    const res = await fetch(`${BASE_URL}/inspections/tasks`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+/**
+ * POST /api/inspections/assign
+ * Admin assigns a flag to an inspector.
+ * @param {{ logID: number, userID: number }} payload
+ */
+export async function assignInspectionRequest(payload, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/inspections/assign`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+/**
+ * POST /api/inspections/submit
+ * Inspector submits their field report.
+ * @param {{ logID, inspectionResult, verifiedLat?, verifiedLng?, notes?, photoURL? }} payload
+ */
+export async function submitInspectionRequest(payload, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/inspections/submit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+/**
+ * POST /api/inspections/:id/verify
+ * Admin verifies a submitted report → updates flagColor.
+ * @param {number} reportId
+ */
+export async function verifyInspectionRequest(reportId, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/inspections/${reportId}/verify`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+/**
+ * GET /api/inspections
+ * Admin: all reports, filterable by status and barangayID.
+ * @param {{ status?, barangayID?, page?, limit? }} params
+ */
+export async function getInspectionsRequest(params = {}, token) {
+  try {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set("status", params.status);
+    if (params.barangayID) qs.set("barangayID", params.barangayID);
+    if (params.page) qs.set("page", params.page);
+    if (params.limit) qs.set("limit", params.limit);
+
+    const res = await fetch(`${BASE_URL}/inspections/?${qs.toString()}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+/**
+ * GET /api/users (reuse if you already have this, otherwise add it)
+ * Fetch inspector list for the assign dropdown.
+ */
+export async function getInspectorsRequest(token) {
+  try {
+    const res = await fetch(`${BASE_URL}/users/?role=Inspector`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}

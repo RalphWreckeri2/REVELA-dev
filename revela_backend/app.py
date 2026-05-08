@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, app
 from flask_jwt_extended import JWTManager
 from flask_mysqldb import MySQL
 from config import Config
@@ -30,6 +30,9 @@ def create_app():
 
     from api.users.routes import users_bp
     app.register_blueprint(users_bp, url_prefix="/api/users")
+
+    from api.inspections.routes import inspections_bp
+    app.register_blueprint(inspections_bp, url_prefix="/api/inspections")
 
     return app
 

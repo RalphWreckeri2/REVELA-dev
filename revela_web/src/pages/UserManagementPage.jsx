@@ -23,7 +23,7 @@ function RoleBadge({ role }) {
 }
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
-function CreateUserModal({ onClose, onSuccess, token }) {
+function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
   const [formData, setFormData] = useState({ fullName: "", email: "", role: "Admin", phone: "" });
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState("");
@@ -35,7 +35,7 @@ function CreateUserModal({ onClose, onSuccess, token }) {
     try {
       const result = await createUserRequest(formData, token);
       onSuccess();
-      onSuccessMsg(`✅ User "${formData.fullName}" created successfully. Temporary password: admin123`);
+      onSuccessMsg(`User "${formData.fullName}" created successfully. Temporary password: admin123`);
       onClose();
     } catch (err) {
       setError(err.message || "Failed to create user.");
@@ -191,6 +191,48 @@ function EditUserModal({ user, onClose, onSuccess, token }) {
   );
 }
 
+// ── Delete Modal ──────────────────────────────────────────────────────────────
+function DeleteUserModal({ targetUser, onClose, onSuccess, token }) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      await deleteUserRequest(targetUser.userID, token);
+      onSuccess();
+      onClose();
+    } catch (err) {
+      setError(err.message || "Failed to remove user.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.backdrop} onClick={onClose}>
+      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+        <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        <h3 style={styles.modalTitle}>Remove User</h3>
+
+        {error && <p style={styles.errorBanner}>{error}</p>}
+
+        <p style={{ fontSize: 14, color: "var(--color-ink)", marginBottom: 24, lineHeight: 1.5 }}>
+          Are you sure you want to permanently remove <strong>{targetUser.fullName}</strong>? This action cannot be undone.
+        </p>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button type="button" className="ghost-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="primary-btn" style={{ background: "var(--color-danger)", borderColor: "var(--color-danger)" }} onClick={handleConfirm} disabled={loading}>
+            {loading ? "Removing…" : "Remove User"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function UserManagementPage() {
   const { token, user } = useAuth();
@@ -199,7 +241,8 @@ export default function UserManagementPage() {
   const [error,          setError]          = useState("");
   const [showCreate,     setShowCreate]     = useState(false);
   const [editingUser,    setEditingUser]    = useState(null);
-  const [successMsg, setSuccessMsg] = useState("");
+  const [userToDelete,   setUserToDelete]   = useState(null);
+  const [successMsg,     setSuccessMsg]     = useState("");
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -215,16 +258,6 @@ export default function UserManagementPage() {
   };
 
   useEffect(() => { fetchUsers(); }, [token]);
-
-  const handleDelete = async (targetUser) => {
-    if (!window.confirm(`Are you sure you want to permanently remove ${targetUser.fullName}?`)) return;
-    try {
-      await deleteUserRequest(targetUser.userID, token);
-      await fetchUsers();
-    } catch (err) {
-      setError(err.message || "Failed to delete user.");
-    }
-  };
 
   // ── Access control ────────────────────────────────────────────────────────
   if (user?.role !== "SUPER_ADMIN") {
@@ -257,6 +290,7 @@ export default function UserManagementPage() {
       </div>
 
       {error && <p style={styles.errorBanner}>{error}</p>}
+      {successMsg && <p style={styles.successBanner}>{successMsg}</p>}
 
       <div className="saas-card frosted-glass" style={{ overflowX: "auto", padding: 0 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -322,7 +356,7 @@ export default function UserManagementPage() {
                         className="ghost-btn"
                         type="button"
                         style={{ padding: "6px 12px", fontSize: 12, color: "var(--color-danger)", borderColor: "var(--color-danger-light)" }}
-                        onClick={() => handleDelete(u)}
+                        onClick={() => setUserToDelete(u)}
                       >
                         Remove
                       </button>
@@ -359,6 +393,19 @@ export default function UserManagementPage() {
           onSuccess={fetchUsers}
         />
       )}
+
+      {userToDelete && (
+        <DeleteUserModal
+          targetUser={userToDelete}
+          token={token}
+          onClose={() => setUserToDelete(null)}
+          onSuccess={() => {
+            fetchUsers();
+            setSuccessMsg(`User "${userToDelete.fullName}" was removed.`);
+            setTimeout(() => setSuccessMsg(""), 6000);
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }
@@ -372,4 +419,5 @@ const styles = {
   label:       { display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 },
   input:       { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.8)", fontSize: 14, fontFamily: "var(--font-base)", boxSizing: "border-box" },
   errorBanner: { background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 16 },
+  successBanner: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#15803d", marginBottom: 16 },
 };

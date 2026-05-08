@@ -1,21 +1,22 @@
 /**
  * MapPage.jsx
- * Map & Flags — large map canvas + heatmap toggle + flagged locations side panel.
- * All layout handled by DashboardLayout. All shared styling via global.css.
+ * Map & Flags — Google Maps with color-coded pin markers, click-to-open detail
+ * modal, working zoom controls, fixed "See Full List" modal.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
 import { useLoadScript, GoogleMap, Data } from "@react-google-maps/api";
 import DashboardLayout from "../components/DashboardLayout";
 import StatusBadge from "../components/StatusBadge";
-import { useAuth } from "../context/AuthContext";
+import { AuthContext } from "../context/AuthContext";
 import {
   getFlagsRequest,
   escalateFlagToBlackRequest,
   runDetectionRequest,
 } from "../services/api";
 
-// ── Icons ─────────────────────────────────────────────────────────────────
+// ── Icons ─────────────────────────────────────────────────────────────────────
 const Icon = {
   Layers: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -57,12 +58,6 @@ const Icon = {
       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </svg>
   ),
-  Send: () => (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="22" y1="2" x2="11" y2="13"/>
-      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-    </svg>
-  ),
   ZoomIn: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="11" cy="11" r="8"/>
@@ -78,186 +73,389 @@ const Icon = {
       <line x1="8" y1="11" x2="14" y2="11"/>
     </svg>
   ),
+  X: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  ),
+  ExternalLink: () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+      <polyline points="15 3 21 3 21 9"/>
+      <line x1="10" y1="14" x2="21" y2="3"/>
+    </svg>
+  ),
 };
 
-// ── Mock flagged locations ────────────────────────────────────────────────
-const FLAGGED = [
-  {
-    id: "F-001",
-    name: "Unknown Eatery",
-    type: "Carinderia",
-    barangay: "Poblacion I",
-    coords: "13.9174° N, 121.0794° E",
-    status: "unregistered",
-    risk: "high",
-    detectedVia: "Google Maps Cross-ref",
-    priorityScore: 91,
-  },
-  {
-    id: "F-002",
-    name: "Unregistered Piggery",
-    type: "Livestock",
-    barangay: "Bts. Aplaya",
-    coords: "13.9201° N, 121.0812° E",
-    status: "unregistered",
-    risk: "high",
-    detectedVia: "Google Maps Cross-ref",
-    priorityScore: 88,
-  },
-  {
-    id: "F-003",
-    name: "Suspect Welding Shop",
-    type: "Welding",
-    barangay: "Poblacion II",
-    coords: "13.9155° N, 121.0771° E",
-    status: "unregistered",
-    risk: "high",
-    detectedVia: "Satellite Imagery",
-    priorityScore: 85,
-  },
-  {
-    id: "F-004",
-    name: "Nangkaan Carinderia",
-    type: "Carinderia",
-    barangay: "Nangkaan",
-    coords: "13.9098° N, 121.0743° E",
-    status: "expired",
-    risk: "medium",
-    detectedVia: "Permit Expiry Scan",
-    priorityScore: 62,
-  },
-  {
-    id: "F-005",
-    name: "Bautista Billiard Hall",
-    type: "Recreation",
-    barangay: "Kinalaglagan",
-    coords: "13.9133° N, 121.0759° E",
-    status: "expired",
-    risk: "medium",
-    detectedVia: "Permit Expiry Scan",
-    priorityScore: 58,
-  },
-  {
-    id: "F-006",
-    name: "Unknown Welding Shop",
-    type: "Welding",
-    barangay: "Luta Sur",
-    coords: "13.9047° N, 121.0718° E",
-    status: "unregistered",
-    risk: "high",
-    detectedVia: "Google Maps Cross-ref",
-    priorityScore: 79,
-  },
-  {
-    id: "F-007",
-    name: "Aling Nena's Tindahan",
-    type: "Sari-Sari Store",
-    barangay: "Nangkaan",
-    coords: "13.9091° N, 121.0737° E",
-    status: "expired",
-    risk: "low",
-    detectedVia: "Permit Expiry Scan",
-    priorityScore: 34,
-  },
-];
+// ── Constants ─────────────────────────────────────────────────────────────────
+const DEFAULT_MAP_CENTER = { lat: 13.9667, lng: 121.1167 };
+const MAP_LIBRARIES      = ["places", "marker"];
+// const MAP_OPTIONS        = {
+//  disableDefaultUI: true,
+//  clickableIcons:   false,
+//  zoomControl:      false,
+//  mapTypeId:        isSatellite ? "satellite" : "roadmap",
+//  mapId:            isSatellite ? undefined : "34390388b3abb63aa84876a7",
+//};
 
 const LAYER_OPTIONS = [
   { id: "base",     label: "Base Map" },
-  { id: "heatmap",  label: "Risk Heatmap (DBSCAN)" },
+  { id: "heatmap",  label: "Risk Heatmap" },
   { id: "flags",    label: "Flag Markers" },
   { id: "barangay", label: "Barangay Boundaries" },
 ];
 
-const RISK_COLOR = {
-  high:   { bg: "var(--color-danger-light)",  text: "var(--color-danger)",       dot: "#ef4444" },
-  medium: { bg: "var(--color-gold-light)",    text: "var(--color-gold-dark)",    dot: "#f59e0b" },
-  low:    { bg: "var(--color-primary-light)", text: "var(--color-primary-dark)", dot: "#56ab2f" },
+// Flag color → UI color mapping
+const FLAG_COLORS = {
+  Red:    { marker: "#ef4444", bg: "#fee2e2", text: "#b91c1c", label: "Unregistered" },
+  Yellow: { marker: "#f59e0b", bg: "#fef3c7", text: "#92400e", label: "Suspected"    },
+  Black:  { marker: "#1e293b", bg: "#f1f5f9", text: "#1e293b", label: "Non-Responsive" },
+  Green:  { marker: "#22c55e", bg: "#dcfce7", text: "#15803d", label: "Compliant"    },
 };
 
-// ── Map Canvas Placeholder ────────────────────────────────────────────────
-const DEFAULT_MAP_CENTER = { lat: 13.9174, lng: 121.0794 };
-const MAP_LIBRARIES = ["places", "marker"];
-const MAP_OPTIONS = {
-  disableDefaultUI: true,
-  clickableIcons: false,
-  zoomControl: false,
-  mapId: "34390388b3abb63aa84876a7",
-};
+const defaultColor = { marker: "#94a3b8", bg: "#f1f5f9", text: "#64748b", label: "Unknown" };
 
-function MapCanvas({ isLoaded, loadError, center, zoom, layers, flags, selectedFlagId, onMarkerClick, onZoomIn, onZoomOut, onCenterMap, runDetectionLoading }) {
-  const mapRef = useRef(null);
-  const markerRefs = useRef(new Map());
+function getFlagColor(flagColor) {
+  return FLAG_COLORS[flagColor] ?? defaultColor;
+}
+
+// ── Normalise flag from API → UI shape ────────────────────────────────────────
+function normalizeFlag(flag) {
+  const color  = flag.flagColor ?? "Red";
+  const coords =
+    flag.latitude != null && flag.longitude != null
+      ? `${Number(flag.latitude).toFixed(6)}°N, ${Number(flag.longitude).toFixed(6)}°E`
+      : "No coordinates";
+
+  return {
+    ...flag,
+    id:       flag.logID ?? flag.id,
+    name:     flag.detectedName ?? "Unknown Establishment",
+    barangay: flag.barangayName ?? "Unknown Barangay",
+    address:  flag.resolvedAddress ?? flag.nearestLandmark ?? "",  
+    source:   flag.flagSource ?? "registry_only", 
+    size:     flag.businessSize ?? "—",                 
+    coords,
+    color,
+  };
+}
+
+// ── Flag Detail Modal ─────────────────────────────────────────────────────────
+function FlagDetailModal({ flag, onClose, onEscalate, isAdmin, actionLoading }) {
+  const fc = getFlagColor(flag.color);
+
+  return (
+    <div style={styles.modalBackdrop} onClick={onClose}>
+      <div style={styles.detailModal} onClick={e => e.stopPropagation()}>
+
+        {/* Header strip */}
+        <div style={{ ...styles.detailHeader, background: fc.bg }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Color dot */}
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: fc.marker, flexShrink: 0, display: "inline-block" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: fc.text, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {fc.label}
+            </span>
+          </div>
+          <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
+        </div>
+
+        {/* Body */}
+        <div style={styles.detailBody}>
+          <h2 style={styles.detailName}>{flag.name}</h2>
+
+          <div style={styles.detailGrid}>
+            {[
+              ["Log ID",      `#${flag.id}`],
+              ["Barangay",    flag.barangay  || "—"],
+              ["Address",     flag.address   || "—"],
+              ["Business Size", flag.size      || "—"],
+              ["Source",      flag.source === "registry_and_maps"
+                              ? "✅ In Registry & Google Maps"
+                              : flag.source === "maps_only"
+                              ? "🗺️ Google Maps Only"
+                              : "📋 In Registry"],
+              // -------------------------------
+              ["Coordinates", flag.coords],
+              ["Detected",    flag.detectedDate ? flag.detectedDate.slice(0, 10) : "—"],
+              ["Flag Status", flag.color],
+            ].map(([label, value]) => (
+              <div key={label} style={styles.detailRow}>
+                <span style={styles.detailLabel}>{label}</span>
+                <span style={styles.detailValue}>
+                  {label === "Flag Status"
+                    ? <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text }}>{fc.label}</span>
+                    : value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div style={styles.detailFooter}>
+          <button className="ghost-btn" onClick={onClose}>Close</button>
+          {isAdmin && (flag.color === "Red" || flag.color === "Yellow") && (
+            <button
+              className="primary-btn"
+              style={{ background: "#1e293b", borderColor: "#1e293b" }}
+              disabled={actionLoading}
+              onClick={() => onEscalate(flag.id)}
+            >
+              {actionLoading ? "Escalating…" : "Escalate to Black"}
+            </button>
+          )}
+          {flag.latitude && (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}`}
+              target="_blank"
+              rel="noreferrer"
+              className="ghost-btn"
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none" }}
+            >
+              <Icon.ExternalLink /> View on Google Maps
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Full Flag List Modal ───────────────────────────────────────────────────────
+function FullFlagListModal({ flags, onClose, onSelectFlag }) {
+  return (
+    <div style={styles.modalBackdrop} onClick={onClose}>
+      <div style={styles.fullListModal} onClick={e => e.stopPropagation()}>
+
+        <div style={styles.fullListHeader}>
+          <div>
+            <h3 style={styles.modalTitle}>All Flagged Locations</h3>
+            <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2 }}>
+              {flags.length} total · click a row to view on map
+            </p>
+          </div>
+          <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
+        </div>
+
+        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(80vh - 100px)" }}>
+          <table style={styles.fullListTable}>
+            <thead>
+              <tr>
+                {["ID", "Name", "Barangay", "Address", "Detected", "Flag", ""].map(h => (
+                  <th key={h} style={styles.th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {flags.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "40px 16px", color: "var(--color-muted)", fontSize: 13 }}>
+                    No flags to display.
+                  </td>
+                </tr>
+              ) : flags.map((f, i) => {
+                const fc = getFlagColor(f.color);
+                return (
+                  <tr
+                    key={f.id}
+                    style={{ background: i % 2 === 0 ? "rgba(248,249,250,0.6)" : "transparent", cursor: "pointer" }}
+                    onClick={() => { onSelectFlag(f.id); onClose(); }}
+                  >
+                    <td style={styles.td}>
+                      <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--color-muted)" }}>#{f.id}</span>
+                    </td>
+                    <td style={{ ...styles.td, fontWeight: 600, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {f.name}
+                    </td>
+                    <td style={styles.td}>{f.barangay || "—"}</td>
+                    <td style={{ ...styles.td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {f.address || "—"}
+                    </td>
+                    <td style={{ ...styles.td, fontSize: 11 }}>
+                      {f.detectedDate ? f.detectedDate.slice(0, 10) : "—"}
+                    </td>
+                    <td style={styles.td}>
+                      <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text }}>{fc.label}</span>
+                    </td>
+                    <td style={styles.td}>
+                      <button
+                        className="ghost-btn"
+                        style={{ fontSize: 11, padding: "4px 10px" }}
+                        onClick={e => { e.stopPropagation(); onSelectFlag(f.id); onClose(); }}
+                      >
+                        View on Map
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Map Canvas ────────────────────────────────────────────────────────────────
+function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, selectedFlagId, onMarkerClick, runDetectionLoading, satellite }) {
+  const markerRefs      = useRef(new Map());
+  const internalMapRef  = useRef(null);
+  const clusterRef      = useRef(null); 
 
   const handleMapLoad = useCallback((map) => {
-    mapRef.current = map;
-  }, []);
+    internalMapRef.current = map;
+    if (mapRef) mapRef.current = map;
+  }, [mapRef]);
 
   const handleMapUnmount = useCallback(() => {
-    markerRefs.current.forEach((marker) => marker.setMap(null));
+    markerRefs.current.forEach(m => m.setMap(null));
     markerRefs.current.clear();
-    mapRef.current = null;
+    internalMapRef.current = null;
   }, []);
 
   const handleBarangayLoad = useCallback((dataLayer) => {
     dataLayer.loadGeoJson("/data/mataasnakahoy.json");
     dataLayer.setStyle({
-      fillColor: "#1f7a1f",
-      strokeColor: "#166534",
+      fillColor:    "#1f7a1f",
+      strokeColor:  "#166534",
       strokeWeight: 1,
-      fillOpacity: 0.15,
+      fillOpacity:  0.12,
     });
   }, []);
 
-  const handleBarangayUnmount = useCallback((dataLayer) => {
-    dataLayer.setMap(null);
+  // Build a proper pin-shaped SVG marker element
+  const buildMarkerContent = useCallback((flag, selected) => {
+    const fc = getFlagColor(flag.color);
+    const color = selected ? "#2563eb" : fc.marker;
+    const size  = selected ? 36 : 30;
+
+    const el = document.createElement("div");
+    el.style.cssText = `
+      width: ${size}px;
+      height: ${size}px;
+      cursor: pointer;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+      transition: transform 0.15s;
+    `;
+    el.innerHTML = `
+      <svg viewBox="0 0 24 32" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 20 12 20s12-11 12-20C24 5.37 18.63 0 12 0z"
+          fill="${color}" />
+        <circle cx="12" cy="12" r="5" fill="white" opacity="0.9"/>
+      </svg>
+    `;
+    el.title = flag.name;
+    return el;
   }, []);
 
-  const buildMarkerContent = useCallback((flag, selected) => {
-    const element = document.createElement("div");
-    element.style.width = "18px";
-    element.style.height = "18px";
-    element.style.borderRadius = "50%";
-    const riskColor = RISK_COLOR[flag.risk]?.dot || "#ef4444";
-    element.style.backgroundColor = selected ? "#2563eb" : riskColor;
-    element.style.border = "2px solid #fff";
-    element.style.boxShadow = `0 0 14px ${selected ? "rgba(37,99,235,0.35)" : `${riskColor}55`}`;
-    element.style.cursor = "pointer";
-    element.title = flag.name || "Flag marker";
-    return element;
-  }, []);
+  // Recreate markers whenever flags or selection changes
 
   useEffect(() => {
-    if (!isLoaded || !mapRef.current) return;
+    if (!isLoaded || !internalMapRef.current) return;
 
-    markerRefs.current.forEach((marker) => marker.setMap(null));
+    // Clear old markers and cluster
+    markerRefs.current.forEach(m => m.map = null);
     markerRefs.current.clear();
+    if (clusterRef.current) {
+      clusterRef.current.clearMarkers();
+      clusterRef.current = null;
+    }
 
     if (!layers.flags) return;
 
-    const visibleFlags = flags?.filter((flag) => flag.latitude != null && flag.longitude != null) || [];
-    visibleFlags.forEach((flag) => {
+    const visibleFlags = flags.filter(f => f.latitude != null && f.longitude != null);
+    const markers = [];
+
+    visibleFlags.forEach(flag => {
       const marker = new window.google.maps.marker.AdvancedMarkerElement({
         position: { lat: Number(flag.latitude), lng: Number(flag.longitude) },
-        map: mapRef.current,
-        content: buildMarkerContent(flag, flag.id === selectedFlagId),
+        map:      internalMapRef.current,
+        content:  buildMarkerContent(flag, flag.id === selectedFlagId),
       });
 
       marker.addListener("gmp-click", () => onMarkerClick(flag.id));
       markerRefs.current.set(flag.id, marker);
+      markers.push(marker);
+    });
+
+    // Cluster markers that are close together
+    clusterRef.current = new MarkerClusterer({
+      map: internalMapRef.current,
+      markers,
+      algorithm: new SuperClusterAlgorithm({
+        radius: 80,        // smaller = breaks apart sooner
+        maxZoom: 16,       // at zoom 16+, show individual pins
+        minPoints: 2,      // only cluster if 2+ pins overlap
+      }),
+      renderer: {
+        render: ({ count, position }) => {
+          const size = count > 100 ? 56 : count > 50 ? 48 : count > 10 ? 42 : 36;
+          const el = document.createElement("div");
+          el.style.cssText = `
+            width: ${size}px;
+            height: ${size}px;
+            background: #22c55e;
+            border: 3px solid #16a34a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: ${count > 99 ? 11 : 13}px;
+            font-family: sans-serif;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+          `;
+          el.textContent = count;
+
+          return new window.google.maps.marker.AdvancedMarkerElement({
+            position,
+            content: el,
+          });
+        },
+      },
     });
 
     return () => {
-      markerRefs.current.forEach((marker) => marker.setMap(null));
+      markerRefs.current.forEach(m => m.map = null);
       markerRefs.current.clear();
+      if (clusterRef.current) {
+        clusterRef.current.clearMarkers();
+        clusterRef.current = null;
+      }
     };
   }, [isLoaded, layers.flags, flags, selectedFlagId, onMarkerClick, buildMarkerContent]);
+
+  // Zoom controls that actually work
+  const handleZoomIn = () => {
+    if (internalMapRef.current) {
+      internalMapRef.current.setZoom(internalMapRef.current.getZoom() + 1);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (internalMapRef.current) {
+      internalMapRef.current.setZoom(internalMapRef.current.getZoom() - 1);
+    }
+  };
+
+  const handleCenter = () => {
+    if (internalMapRef.current) {
+      internalMapRef.current.panTo(DEFAULT_MAP_CENTER);
+      internalMapRef.current.setZoom(13);
+    }
+  };
 
   if (loadError) {
     return (
       <div style={styles.mapCanvas}>
-        <div style={styles.mapPlaceholderText}>
+        <div style={styles.mapFallback}>
           <strong>Google Maps failed to load.</strong>
-          <span>Please set `VITE_GOOGLE_MAPS_API_KEY` in your `.env` file and restart the dev server.</span>
+          <span>Set VITE_GOOGLE_MAPS_API_KEY in your .env and restart.</span>
         </div>
       </div>
     );
@@ -266,9 +464,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, layers, flags, selectedF
   if (!isLoaded) {
     return (
       <div style={styles.mapCanvas}>
-        <div style={styles.mapPlaceholderText}>
-          Loading Google Maps...
-        </div>
+        <div style={styles.mapFallback}>Loading Google Maps…</div>
       </div>
     );
   }
@@ -276,163 +472,112 @@ function MapCanvas({ isLoaded, loadError, center, zoom, layers, flags, selectedF
   return (
     <div style={styles.mapCanvas}>
       <GoogleMap
-        mapContainerStyle={styles.mapCanvas}
+        mapContainerStyle={{ width: "100%", height: "100%" }}
         center={center}
         zoom={zoom}
-        mapTypeId={layers.base ? "roadmap" : "satellite"}
-        options={MAP_OPTIONS}
+        options={{
+          disableDefaultUI: true,
+          clickableIcons:   false,
+          zoomControl:      false,
+          mapTypeId:        satellite ? "satellite" : "roadmap",
+          mapId:            satellite ? undefined : "34390388b3abb63aa84876a7",
+        }}
         onLoad={handleMapLoad}
         onUnmount={handleMapUnmount}
       >
         {layers.barangay && (
-          <Data
-            onLoad={handleBarangayLoad}
-            onUnmount={handleBarangayUnmount}
-          />
+          <Data onLoad={handleBarangayLoad} onUnmount={dl => dl.setMap(null)} />
         )}
       </GoogleMap>
 
+      {/* Zoom / Center controls */}
+      <div style={styles.zoomControls}>
+        <button type="button" style={styles.mapBtn} onClick={handleZoomIn}   title="Zoom in">  <Icon.ZoomIn  /></button>
+        <button type="button" style={styles.mapBtn} onClick={handleZoomOut}  title="Zoom out"> <Icon.ZoomOut /></button>
+        <button type="button" style={styles.mapBtn} onClick={handleCenter}   title="Re-center"><Icon.Crosshair /></button>
+      </div>
+
+      {/* Detection overlay */}
       {runDetectionLoading && (
-        <div style={styles.mapActionOverlay}>
-          <div style={styles.mapActionOverlayText}>
-            <strong>Running detection...</strong>
-            <span>Please wait while the latest analytics are processed.</span>
+        <div style={styles.overlay}>
+          <div style={styles.overlayCard}>
+            <strong>Running detection…</strong>
+            <span style={{ fontSize: 12, opacity: 0.7 }}>This may take up to 30 seconds.</span>
           </div>
         </div>
       )}
-
-      {layers.heatmap && (
-        <div style={styles.heatmapLayer} />
-      )}
-
-      <div style={styles.zoomControls}>
-        <button type="button" style={styles.mapBtn} onClick={onZoomIn}><Icon.ZoomIn /></button>
-        <button type="button" style={styles.mapBtn} onClick={onZoomOut}><Icon.ZoomOut /></button>
-        <button type="button" style={styles.mapBtn} onClick={onCenterMap}><Icon.Crosshair /></button>
-      </div>
     </div>
   );
 }
 
-// ── Flag Item in Side Panel ───────────────────────────────────────────────
-function FlagCard({ flag, selected, onClick, onEscalate, canEscalate }) {
-  const risk = RISK_COLOR[flag.risk] || RISK_COLOR.high;
+// ── Side panel flag card ───────────────────────────────────────────────────────
+function FlagCard({ flag, selected, onClick }) {
+  const fc = getFlagColor(flag.color);
   return (
     <div
       onClick={onClick}
       style={{
         ...styles.flagCard,
-        borderColor: selected ? "var(--color-primary)" : "var(--color-border)",
-        background: selected ? "rgba(86,171,47,0.04)" : "rgba(255,255,255,0.6)",
+        borderLeft: `3px solid ${fc.marker}`,
+        borderColor: selected ? fc.marker : "var(--color-border)",
+        background: selected ? `${fc.bg}` : "rgba(255,255,255,0.6)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-        <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ minWidth: 0 }}>
           <p style={styles.flagName}>{flag.name}</p>
-          <p style={styles.flagMeta}>{flag.type || flag.nearestLandmark || flag.barangay}</p>
+          <p style={styles.flagMeta}>{flag.barangay}</p>
         </div>
-        <span style={{ ...styles.riskPill, background: risk.bg, color: risk.text }}>
-          {flag.risk?.toUpperCase() || "HIGH"}
+        <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text, flexShrink: 0, marginLeft: 8 }}>
+          {fc.label}
         </span>
       </div>
-
-      {selected && (
-        <div style={styles.flagRow}>
-          <Icon.MapPin />
-          <span style={styles.flagCoords}>{flag.coords}</span>
-        </div>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-        <StatusBadge variant={flag.status === "unregistered" ? "red" : flag.status === "review" ? "gold" : flag.status === "black" ? "default" : "green"}>
-          {flag.status === "unregistered" ? "Unregistered" : flag.status === "review" ? "Review" : flag.status === "black" ? "Black" : flag.status === "registered" ? "Registered" : "Unknown"}
-        </StatusBadge>
-        <div style={styles.scoreRow}>
-          <span style={styles.scoreLabel}>Priority</span>
-          <span style={{ ...styles.scoreValue, color: flag.priorityScore >= 80 ? "var(--color-danger)" : flag.priorityScore >= 50 ? "var(--color-gold-dark)" : "var(--color-primary)" }}>
-            {flag.priorityScore ?? "—"}
-          </span>
-        </div>
-      </div>
-
-      {selected && (
-        <div style={styles.flagActions}>
-          {canEscalate && (
-            <button
-              className="primary-btn"
-              type="button"
-              style={{ fontSize: 12, padding: "7px 14px" }}
-              onClick={() => onEscalate(flag.logID)}
-            >
-              Escalate to Black
-            </button>
-          )}
-          <button className="ghost-btn" type="button" style={{ fontSize: 12, padding: "7px 12px" }} onClick={() => window.alert("Opening selected establishment profile.")}>
-            View Profile
-          </button>
-        </div>
+      {flag.address && (
+        <p style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {flag.address}
+        </p>
       )}
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function MapPage() {
-  const { token, user } = useAuth();
-  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+  const { token, user }    = useContext(AuthContext);
+  const googleMapsApiKey   = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey,
     libraries: MAP_LIBRARIES,
-    version: "beta"
+    version:   "beta",
   });
-  const [flags, setFlags] = useState([]);
-  const [loadingFlags, setLoadingFlags] = useState(false);
-  const [flagsError, setFlagsError] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [actionLoading, setActionLoading] = useState(false);
-  const [runDetectionLoading, setRunDetectionLoading] = useState(false);
-  const [layers, setLayers] = useState({ base: true, heatmap: false, flags: true, barangay: false });
-  const [selectedFlag, setSelectedFlag] = useState(null);
-  const [filterRisk, setFilterRisk] = useState("all");
-  const [search, setSearch] = useState("");
+
+  const mapRef = useRef(null);
+
+  const [flags,               setFlags]               = useState([]);
+  const [loadingFlags,        setLoadingFlags]         = useState(false);
+  const [flagsError,          setFlagsError]           = useState("");
+  const [actionError,         setActionError]          = useState("");
+  const [actionLoading,       setActionLoading]        = useState(false);
+  const [runDetectionLoading, setRunDetectionLoading]  = useState(false);
+
+  const [layers,       setLayers]       = useState({ base: true, heatmap: false, flags: true, barangay: false });
+  const [selectedFlag, setSelectedFlag] = useState(null);   // logID of selected flag
+  const [modalFlag,    setModalFlag]    = useState(null);   // flag object shown in detail modal
   const [showFullList, setShowFullList] = useState(false);
+  const [filterColor,  setFilterColor]  = useState("all");
+  const [search,       setSearch]       = useState("");
+  const [satellite, setSatellite] = useState(false);
+  const [filterSource, setFilterSource] = useState("all");
 
-  const toggleLayer = (id) => setLayers(prev => ({ ...prev, [id]: !prev[id] }));
+  const isAdmin = user?.role === "Admin" || user?.role === "SUPER_ADMIN";
 
-  const normalizeFlag = (flag) => {
-    const color = (flag.flagColor || "").toLowerCase();
-    const risk = color === "green" ? "low" : color === "yellow" ? "medium" : "high";
-    const status = color === "red" ? "unregistered" : color === "yellow" ? "review" : color === "black" ? "black" : "registered";
-    const coords = flag.latitude != null && flag.longitude != null
-      ? `${Number(flag.latitude).toFixed(4)}°, ${Number(flag.longitude).toFixed(4)}°`
-      : flag.coords || "Unknown location";
-
-    return {
-      ...flag,
-      id: flag.logID ?? flag.id,
-      name: flag.detectedName ?? flag.name ?? "Unknown",
-      type: flag.nearestLandmark ?? flag.type ?? "",
-      barangay: flag.barangayName ?? flag.barangay ?? "",
-      coords,
-      risk,
-      status,
-    };
-  };
-
-  const sourceFlags = token ? flags : FLAGGED;
-  const selectedFlagData = sourceFlags.find((f) => f.id === selectedFlag);
-  const mapCenter = selectedFlagData && selectedFlagData.latitude != null && selectedFlagData.longitude != null
-    ? { lat: Number(selectedFlagData.latitude), lng: Number(selectedFlagData.longitude) }
-    : DEFAULT_MAP_CENTER;
-  const mapZoom = selectedFlagData ? 14 : 12;
-
+  // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchFlags = useCallback(async () => {
     if (!token) return;
     setLoadingFlags(true);
     setFlagsError("");
-
     try {
-      const result = await getFlagsRequest({ limit: 200 }, token);
+      const result = await getFlagsRequest({ limit: 1000 }, token);
       setFlags((result.data ?? []).map(normalizeFlag));
     } catch (err) {
       setFlagsError(err.message || "Unable to load flags.");
@@ -441,78 +586,104 @@ export default function MapPage() {
     }
   }, [token]);
 
-  useEffect(() => {
-    fetchFlags();
-  }, [fetchFlags]);
+  useEffect(() => { fetchFlags(); }, [fetchFlags]);
 
+  // ── Actions ────────────────────────────────────────────────────────────────
   const handleEscalate = async (logId) => {
-    if (!token) return;
     setActionLoading(true);
     setActionError("");
-
     try {
       await escalateFlagToBlackRequest(logId, token);
       await fetchFlags();
-      setSelectedFlag(logId);
+      setModalFlag(null);  // close modal after escalation
     } catch (err) {
-      setActionError(err.message || "Failed to escalate flag.");
+      setActionError(err.message || "Failed to escalate.");
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleRunDetection = async () => {
-    if (!token) return;
     setRunDetectionLoading(true);
     setActionError("");
-
     try {
-      await runDetectionRequest(token);
+      const result = await runDetectionRequest(token);
       await fetchFlags();
+      // Show result summary briefly
+      if (result?.new_flags !== undefined) {
+        setActionError(`Detection complete — ${result.new_flags} new Red Flag${result.new_flags !== 1 ? "s" : ""} found.`);
+        setTimeout(() => setActionError(""), 5000);
+      }
     } catch (err) {
-      setActionError(err.message || "Failed to run detection.");
+      setActionError(err.message || "Detection failed.");
     } finally {
       setRunDetectionLoading(false);
     }
   };
 
+  // ── Marker click → pan map + open detail modal ────────────────────────────
   const handleMarkerClick = useCallback((id) => {
-    setSelectedFlag((prev) => (prev === id ? null : id));
-  }, []);
+    const flag = flags.find(f => f.id === id);
+    if (!flag) return;
 
-  const handleZoomIn = () => {
-    window.alert("Zooming in on the map.");
+    setSelectedFlag(id);
+    setModalFlag(flag);
+
+    // Pan map to marker
+    if (mapRef.current && flag.latitude && flag.longitude) {
+      mapRef.current.panTo({ lat: Number(flag.latitude), lng: Number(flag.longitude) });
+      mapRef.current.setZoom(16);
+    }
+  }, [flags]);
+
+  // ── When user clicks a flag in the side panel ─────────────────────────────
+  const handleSidePanelClick = (flag) => {
+    setSelectedFlag(flag.id);
+    setModalFlag(flag);
+    if (mapRef.current && flag.latitude && flag.longitude) {
+      mapRef.current.panTo({ lat: Number(flag.latitude), lng: Number(flag.longitude) });
+      mapRef.current.setZoom(16);
+    }
   };
 
-  const handleZoomOut = () => {
-    window.alert("Zooming out of the map.");
-  };
-
-  const handleCenterMap = () => {
-    window.alert("Centering map on the selected area.");
-  };
-
-  const visibleFlags = sourceFlags.filter(f => {
-    const matchRisk = filterRisk === "all" || f.risk === filterRisk;
+  // ── Filters ────────────────────────────────────────────────────────────────
+  const visibleFlags = flags.filter(f => {
+    const matchColor  = filterColor === "all" || f.color === filterColor;
     const matchSearch = (f.name || "").toLowerCase().includes(search.toLowerCase()) ||
                         (f.barangay || "").toLowerCase().includes(search.toLowerCase());
-    return matchRisk && matchSearch;
+    const matchSource = filterSource === "all" || f.source === filterSource;
+    return matchColor && matchSearch && matchSource;
   });
 
-  const isAdmin = user?.role === "Admin" || user?.role === "SUPER_ADMIN";
+  const mapCenter = selectedFlag
+    ? (() => {
+        const f = flags.find(x => x.id === selectedFlag);
+        return f?.latitude ? { lat: Number(f.latitude), lng: Number(f.longitude) } : DEFAULT_MAP_CENTER;
+      })()
+    : DEFAULT_MAP_CENTER;
+
+  const mapZoom = selectedFlag ? 16 : 13;
+
+  // Flag counts
+  const counts = {
+    Red:    flags.filter(f => f.color === "Red").length,
+    Yellow: flags.filter(f => f.color === "Yellow").length,
+    Black:  flags.filter(f => f.color === "Black").length,
+    Green:  flags.filter(f => f.color === "Green").length,
+  };
 
   return (
-    <DashboardLayout user={{ initials: "JD", name: "J. Dela Cruz" }}>
+    <DashboardLayout user={{ initials: user?.fullName?.charAt(0) ?? "?", name: user?.fullName ?? "" }}>
 
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Map & Flags</h1>
+          <h1 className="page-title">Map &amp; Flags</h1>
           <p className="page-subtitle">
             Geospatial view of flagged and unregistered establishments in Mataasnakahoy.
           </p>
           {(flagsError || actionError) && (
-            <p style={{ color: "var(--color-danger)", marginTop: 8 }}>
+            <p style={{ fontSize: 13, marginTop: 6, color: actionError && !flagsError ? "var(--color-primary)" : "var(--color-danger)" }}>
               {flagsError || actionError}
             </p>
           )}
@@ -520,23 +691,23 @@ export default function MapPage() {
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={styles.livePill}>
             <span style={styles.liveDot} />
-            {sourceFlags.length} Active Flags
+            {flags.filter(f => f.color !== "Green").length} Active Flags
           </span>
           {isAdmin && (
-            <button className="primary-btn" type="button" onClick={handleRunDetection} disabled={runDetectionLoading || actionLoading}>
-              {runDetectionLoading ? "Running..." : "Run Detection"}
+            <button className="primary-btn" type="button" onClick={handleRunDetection} disabled={runDetectionLoading}>
+              {runDetectionLoading ? "Running…" : "Run Detection"}
             </button>
           )}
         </div>
       </div>
 
-      {/* Main Map Layout: map + side panel */}
+      {/* Map layout */}
       <div style={styles.mapLayout}>
 
-        {/* ── Left: Map + Layer Controls ── */}
+        {/* Left: map + layer controls */}
         <div style={styles.mapColumn}>
 
-          {/* Layer toggle bar */}
+          {/* Layer toggle */}
           <div className="frosted-glass saas-card" style={styles.layerBar}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Icon.Layers />
@@ -546,12 +717,21 @@ export default function MapPage() {
               {LAYER_OPTIONS.map(l => (
                 <button
                   key={l.id}
-                  onClick={() => toggleLayer(l.id)}
+                  onClick={() => {
+                    if (l.id === "base") {
+                      setSatellite(prev => !prev);
+                    } else {
+                      setLayers(prev => ({ ...prev, [l.id]: !prev[l.id] }));
+                    }
+                  }}
                   style={{
                     ...styles.layerToggle,
-                    background: layers[l.id] ? "var(--color-primary)" : "rgba(248,249,250,0.9)",
-                    color: layers[l.id] ? "#fff" : "var(--color-muted)",
-                    borderColor: layers[l.id] ? "var(--color-primary)" : "var(--color-border)",
+                    background:  (l.id === "base" ? satellite : layers[l.id])
+                      ? "var(--color-primary)" : "rgba(248,249,250,0.9)",
+                    color:       (l.id === "base" ? satellite : layers[l.id])
+                      ? "#fff" : "var(--color-muted)",
+                    borderColor: (l.id === "base" ? satellite : layers[l.id])
+                      ? "var(--color-primary)" : "var(--color-border)",
                   }}
                 >
                   {l.label}
@@ -560,105 +740,130 @@ export default function MapPage() {
             </div>
           </div>
 
-          {/* Map canvas */}
+          {/* Map */}
           <div className="frosted-glass" style={styles.mapWrapper}>
             <MapCanvas
               isLoaded={isLoaded}
               loadError={loadError}
               center={mapCenter}
               zoom={mapZoom}
+              mapRef={mapRef}
               layers={layers}
-              flags={sourceFlags}
+              flags={visibleFlags}
               selectedFlagId={selectedFlag}
               onMarkerClick={handleMarkerClick}
-              onZoomIn={handleZoomIn}
-              onZoomOut={handleZoomOut}
-              onCenterMap={handleCenterMap}
               runDetectionLoading={runDetectionLoading}
+              satellite={satellite}
             />
           </div>
 
-          {/* Stats strip below map */}
-          <div style={styles.statsStrip}>
-            {[
-              { label: "Total Flags",    value: sourceFlags.length,                               color: "var(--color-ink)" },
-              { label: "Red Flags",      value: sourceFlags.filter(f => f.flagColor === "Red").length,   color: "var(--color-danger)" },
-              { label: "Yellow Flags",   value: sourceFlags.filter(f => f.flagColor === "Yellow").length, color: "var(--color-gold-dark)" },
-              { label: "Black Flags",    value: sourceFlags.filter(f => f.flagColor === "Black").length,  color: "var(--color-primary)" },
-            ].map(s => (
-              <div key={s.label} className="frosted-glass saas-card" style={styles.statCard}>
-                <span style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</span>
-                <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 500 }}>{s.label}</span>
-              </div>
-            ))}
-          </div>
+          {/* Stats strip */}
+        <div style={styles.statsStrip}>
+          {[
+            { label: "Total Flags",   value: flags.length,  color: "var(--color-ink)" },
+            { label: "Green Flags",   value: counts.Green,  color: "#22c55e"          },
+            { label: "Red Flags",     value: counts.Red,    color: "#ef4444"          },
+            { label: "Yellow Flags",  value: counts.Yellow, color: "#f59e0b"          },
+            { label: "Black Flags",   value: counts.Black,  color: "#1e293b"          },
+          ].map(s => (
+            <div key={s.label} className="frosted-glass saas-card" style={styles.statCard}>
+              <span style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</span>
+              <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 500 }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
         </div>
 
-        {/* ── Right: Flagged Locations Panel ── */}
+        {/* Right: side panel */}
         <div className="frosted-glass saas-card" style={styles.sidePanel}>
-          {/* Panel header */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <Icon.Flag />
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", flex: 1 }}>
                 Flagged Locations
               </h3>
               <button
                 className="ghost-btn"
                 type="button"
-                style={{ fontSize: 12, padding: "6px 12px" }}
+                style={{ fontSize: 11, padding: "5px 10px" }}
                 onClick={() => setShowFullList(true)}
               >
                 See Full List
               </button>
-              <span className="badge badge--red" style={{ marginLeft: "auto" }}>
-                {sourceFlags.length}
-              </span>
+              <span style={styles.countBadge}>{visibleFlags.length}</span>
             </div>
-            <div className="search-bar" style={{ width: "100%", marginBottom: 10 }}>
+
+            {/* Search */}
+            <div className="search-bar" style={{ marginBottom: 10 }}>
               <Icon.Search />
               <input
                 type="text"
-                placeholder="Search name or barangay..."
+                placeholder="Search name or barangay…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
 
-            {/* Risk filter pills */}
-            <div style={{ display: "flex", gap: 6 }}>
-              {["all", "high", "medium", "low"].map(r => (
+            {/* Color filter pills */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {["all", "Red", "Yellow", "Black", "Green"].map(c => (
                 <button
-                  key={r}
-                  onClick={() => setFilterRisk(r)}
+                  key={c}
+                  onClick={() => setFilterColor(c)}
                   style={{
-                    ...styles.riskFilter,
-                    background: filterRisk === r ? "var(--color-ink)" : "rgba(248,249,250,0.9)",
-                    color: filterRisk === r ? "#fff" : "var(--color-muted)",
-                    borderColor: filterRisk === r ? "var(--color-ink)" : "var(--color-border)",
+                    ...styles.filterPill,
+                    background:  filterColor === c ? (c === "all" ? "var(--color-ink)" : FLAG_COLORS[c]?.marker ?? "var(--color-ink)") : "rgba(248,249,250,0.9)",
+                    color:       filterColor === c ? "#fff" : "var(--color-muted)",
+                    borderColor: filterColor === c ? "transparent" : "var(--color-border)",
                   }}
                 >
-                  {r === "all" ? "All" : r.charAt(0).toUpperCase() + r.slice(1)}
+                  {c === "all" ? "All" : c}
                 </button>
               ))}
             </div>
+
+                      {/* Source filter — shows when Green or All is selected */}
+            {(filterColor === "Green" || filterColor === "all") && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                {[
+                  { value: "all",               label: "All Sources"        },
+                  { value: "registry_only",     label: "📋 Registry Only"   },
+                  { value: "registry_and_maps", label: "🗺️ Registry + Maps" },
+                ].map(s => (
+                  <button
+                    key={s.value}
+                    onClick={() => setFilterSource(s.value)}
+                    style={{
+                      ...styles.filterPill,
+                      fontSize: 10,
+                      background:  filterSource === s.value ? "var(--color-ink)" : "rgba(248,249,250,0.9)",
+                      color:       filterSource === s.value ? "#fff" : "var(--color-muted)",
+                      borderColor: filterSource === s.value ? "transparent" : "var(--color-border)",
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Scrollable flag list */}
+          {/* Flag list */}
           <div style={styles.flagList}>
-            {visibleFlags.length === 0 ? (
+            {loadingFlags ? (
+              <div style={styles.emptyPanel}>Loading flags…</div>
+            ) : visibleFlags.length === 0 ? (
               <div style={styles.emptyPanel}>
                 <Icon.AlertTriangle />
-                <p>No flags match this filter.</p>
+                <p>{search || filterColor !== "all" ? "No flags match this filter." : "No flags detected yet."}</p>
               </div>
             ) : visibleFlags.map(f => (
               <FlagCard
                 key={f.id}
                 flag={f}
                 selected={selectedFlag === f.id}
-                onClick={() => setSelectedFlag(prev => prev === f.id ? null : f.id)}
-                canEscalate={isAdmin && (f.flagColor === "Red" || f.flagColor === "Yellow")}
-                onEscalate={handleEscalate}
+                onClick={() => handleSidePanelClick(f)}
               />
             ))}
           </div>
@@ -671,455 +876,85 @@ export default function MapPage() {
         <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
       </footer>
 
-      {showFullList && (
-        <FullFlagListModal visibleFlags={visibleFlags} onClose={() => setShowFullList(false)} />
+      {/* Flag detail modal — opens on marker or side panel click */}
+      {modalFlag && (
+        <FlagDetailModal
+          flag={modalFlag}
+          onClose={() => { setModalFlag(null); setSelectedFlag(null); }}
+          onEscalate={handleEscalate}
+          isAdmin={isAdmin}
+          actionLoading={actionLoading}
+        />
       )}
+
+      {/* Full list modal */}
+      {showFullList && (
+        <FullFlagListModal
+          flags={visibleFlags}
+          onClose={() => setShowFullList(false)}
+          onSelectFlag={(id) => {
+            const flag = flags.find(f => f.id === id);
+            if (flag) handleSidePanelClick(flag);
+          }}
+        />
+      )}
+
     </DashboardLayout>
   );
 }
 
-// ── Full Flag List Modal ───────────────────────────────────────────────────
-function FullFlagListModal({ visibleFlags, onClose }) {
-  return (
-    <div style={styles.modalBackdrop} onClick={onClose}>
-      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <h3 style={styles.modalTitle}>All Visible Flags</h3>
-          <button type="button" style={styles.closeBtn} onClick={onClose}>
-            <Icon.X />
-          </button>
-        </div>
-        <div style={styles.modalBody}>
-          <div style={styles.tableWrapper}>
-            <table style={styles.fullListTable}>
-              <thead>
-                <tr>
-                  <th style={styles.tableHeader}>ID</th>
-                  <th style={styles.tableHeader}>Name</th>
-                  <th style={styles.tableHeader}>Barangay</th>
-                  <th style={styles.tableHeader}>Risk</th>
-                  <th style={styles.tableHeader}>Status</th>
-                  <th style={styles.tableHeader}>Priority</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleFlags.map((flag) => (
-                  <tr key={flag.id}>
-                    <td style={styles.tableCell}>{flag.id}</td>
-                    <td style={styles.tableCell}>{flag.name}</td>
-                    <td style={styles.tableCell}>{flag.barangay}</td>
-                    <td style={styles.tableCell}>{flag.risk}</td>
-                    <td style={styles.tableCell}>{flag.status}</td>
-                    <td style={styles.tableCell}>{flag.priorityScore ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Scoped styles ─────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = {
-  livePill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    background: "var(--color-danger-light)",
-    color: "var(--color-danger)",
-    padding: "6px 14px",
-    borderRadius: 20,
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: "50%",
-    background: "var(--color-danger)",
-    animation: "pulse 1.5s infinite",
-  },
+  livePill: { display: "inline-flex", alignItems: "center", gap: 6, background: "#fee2e2", color: "#b91c1c", padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700 },
+  liveDot:  { width: 7, height: 7, borderRadius: "50%", background: "#ef4444" },
 
-  // Map layout
-  mapLayout: {
-    display: "grid",
-    gridTemplateColumns: "1fr 340px",
-    gap: 20,
-    alignItems: "start",
-  },
-  mapColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-  },
+  mapLayout:  { display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" },
+  mapColumn:  { display: "flex", flexDirection: "column", gap: 14 },
 
-  // Layer bar
-  layerBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 16,
-    padding: "12px 18px",
-    borderRadius: "var(--radius-lg)",
-    flexWrap: "wrap",
-  },
-  layerToggle: {
-    padding: "6px 12px",
-    borderRadius: 20,
-    border: "1px solid",
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-    fontFamily: "var(--font-base)",
-    transition: "all 0.2s",
-  },
+  layerBar:   { display: "flex", alignItems: "center", gap: 16, padding: "12px 18px", borderRadius: "var(--radius-lg)", flexWrap: "wrap" },
+  layerToggle:{ padding: "6px 12px", borderRadius: 20, border: "1px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-base)", transition: "all 0.15s" },
 
-  // Map wrapper
-  mapWrapper: {
-    borderRadius: "var(--radius-lg)",
-    overflow: "hidden",
-    position: "relative",
-    height: 480,
-  },
-  mapActionOverlay: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "rgba(15,23,42,0.6)",
-    zIndex: 20,
-    pointerEvents: "none",
-  },
-  mapActionOverlayText: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 6,
-    color: "#fff",
-    background: "rgba(15,23,42,0.8)",
-    borderRadius: "16px",
-    padding: "14px 20px",
-    fontSize: 14,
-    lineHeight: 1.4,
-    boxShadow: "0 18px 48px rgba(15,23,42,0.24)",
-  },
-  modalBackdrop: {
-    position: "fixed",
-    inset: 0,
-    zIndex: 30,
-    background: "rgba(15,23,42,0.55)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalCard: {
-    width: "min(100%, 960px)",
-    maxHeight: "90vh",
-    overflow: "hidden",
-    borderRadius: "22px",
-    background: "rgba(255,255,255,0.95)",
-    boxShadow: "0 24px 60px rgba(15,23,42,0.16)",
-    border: "1px solid rgba(148,163,184,0.18)",
-  },
-  modalHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    padding: "20px 24px 0",
-  },
-  modalTitle: {
-    margin: 0,
-    fontSize: 18,
-    fontWeight: 700,
-    color: "var(--color-ink)",
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    border: "1px solid var(--color-border)",
-    background: "#fff",
-    display: "grid",
-    placeItems: "center",
-    cursor: "pointer",
-  },
-  modalBody: {
-    padding: "0 24px 24px",
-  },
-  tableWrapper: {
-    overflowX: "auto",
-  },
-  fullListTable: {
-    width: "100%",
-    borderCollapse: "collapse",
-    minWidth: 720,
-  },
-  tableHeader: {
-    textAlign: "left",
-    padding: "12px 16px",
-    color: "var(--color-muted)",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.02em",
-    borderBottom: "1px solid rgba(148,163,184,0.24)",
-  },
-  tableCell: {
-    padding: "14px 16px",
-    borderBottom: "1px solid rgba(148,163,184,0.15)",
-    color: "var(--color-ink)",
-    fontSize: 13,
-  },
-  mapCanvas: {
-    width: "100%",
-    height: "100%",
-    background: "linear-gradient(135deg, #e8f5e2 0%, #d4edda 30%, #c8e6c9 60%, #dcedc8 100%)",
-    position: "relative",
-    overflow: "hidden",
-  },
-  mapPlaceholderText: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    textAlign: "center",
-    color: "#334155",
-    padding: 24,
-  },
-  topoOverlay: {
-    position: "absolute",
-    inset: 0,
-    pointerEvents: "none",
-  },
-  heatmapLayer: {
-    position: "absolute",
-    inset: 0,
-    pointerEvents: "none",
-  },
-  heatBlob: {
-    position: "absolute",
-    borderRadius: "50%",
-    pointerEvents: "none",
-    transform: "translate(-50%, -50%)",
-  },
-  mapPin: {
-    position: "absolute",
-    transform: "translate(-50%, -50%)",
-    zIndex: 5,
-  },
-  pinDot: {
-    width: 12,
-    height: 12,
-    borderRadius: "50%",
-    border: "2px solid #fff",
-    position: "relative",
-    zIndex: 2,
-  },
-  pinPulse: (color) => ({
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    width: 28,
-    height: 28,
-    borderRadius: "50%",
-    background: color,
-    opacity: 0.2,
-    zIndex: 1,
-  }),
-  mapWatermark: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 6,
-    pointerEvents: "none",
-    zIndex: 0,
-  },
-  mapWatermarkText: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: "rgba(86,171,47,0.5)",
-    letterSpacing: "0.5px",
-  },
-  mapWatermarkSub: {
-    fontSize: 11,
-    color: "rgba(100,116,139,0.6)",
-  },
-  zoomControls: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    zIndex: 10,
-  },
-  mapBtn: {
-    width: 36,
-    height: 36,
-    background: "rgba(255,255,255,0.9)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-sm)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    color: "var(--color-muted)",
-    backdropFilter: "blur(8px)",
-  },
-  heatLegend: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    background: "rgba(255,255,255,0.9)",
-    backdropFilter: "blur(8px)",
-    border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-md)",
-    padding: "10px 14px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    zIndex: 10,
-  },
-  legendTitle: {
-    fontSize: 10,
-    fontWeight: 700,
-    color: "var(--color-muted)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    marginBottom: 2,
-  },
-  legendRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    fontSize: 12,
-    color: "var(--color-ink)",
-    fontWeight: 500,
-  },
+  mapWrapper: { borderRadius: "var(--radius-lg)", overflow: "hidden", position: "relative", height: 480 },
+  mapCanvas:  { width: "100%", height: "100%", position: "relative", background: "#e8f5e2" },
+  mapFallback:{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#334155", fontSize: 14, textAlign: "center", padding: 24 },
 
-  // Stats strip
-  statsStrip: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 10,
-  },
-  statCard: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    padding: "14px 18px",
-    borderRadius: "var(--radius-lg)",
-  },
+  zoomControls: { position: "absolute", top: 16, right: 16, display: "flex", flexDirection: "column", gap: 4, zIndex: 10 },
+  mapBtn:       { width: 36, height: 36, background: "rgba(255,255,255,0.95)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-muted)", backdropFilter: "blur(8px)" },
+  overlay:      { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,23,42,0.5)", zIndex: 20 },
+  overlayCard:  { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#fff", background: "rgba(15,23,42,0.8)", borderRadius: 16, padding: "16px 24px", fontSize: 14 },
 
-  // Side panel
-  sidePanel: {
-    borderRadius: "var(--radius-lg)",
-    padding: 18,
-    display: "flex",
-    flexDirection: "column",
-    maxHeight: 680,
-    position: "sticky",
-    top: 20,
-  },
-  flagList: {
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    flex: 1,
-    paddingRight: 2,
-  },
+  statsStrip: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 },
+  statCard:   { display: "flex", flexDirection: "column", gap: 2, padding: "14px 18px", borderRadius: "var(--radius-lg)" },
 
-  // Flag card
-  flagCard: {
-    border: "1px solid",
-    borderRadius: "var(--radius-md)",
-    padding: 14,
-    cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  flagName: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: "var(--color-ink)",
-    marginBottom: 2,
-  },
-  flagMeta: {
-    fontSize: 11,
-    color: "var(--color-muted)",
-  },
-  flagRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    color: "var(--color-muted)",
-    fontSize: 11,
-  },
-  flagCoords: {
-    fontFamily: "monospace",
-    fontSize: 11,
-    color: "var(--color-muted)",
-  },
-  riskPill: {
-    fontSize: 9,
-    fontWeight: 800,
-    padding: "3px 8px",
-    borderRadius: 10,
-    letterSpacing: "0.05em",
-    whiteSpace: "nowrap",
-  },
-  scoreRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-  },
-  scoreLabel: {
-    fontSize: 10,
-    color: "var(--color-muted)",
-    fontWeight: 600,
-    textTransform: "uppercase",
-  },
-  scoreValue: {
-    fontSize: 16,
-    fontWeight: 800,
-  },
-  flagActions: {
-    display: "flex",
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTop: "1px solid var(--color-border-soft)",
-  },
-  emptyPanel: {
-    textAlign: "center",
-    padding: "40px 0",
-    color: "var(--color-muted)",
-    fontSize: 13,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 8,
-  },
-  riskFilter: {
-    padding: "4px 10px",
-    borderRadius: 20,
-    border: "1px solid",
-    fontSize: 11,
-    fontWeight: 600,
-    cursor: "pointer",
-    fontFamily: "var(--font-base)",
-    transition: "all 0.15s",
-  },
+  sidePanel: { borderRadius: "var(--radius-lg)", padding: 16, display: "flex", flexDirection: "column", maxHeight: 680, position: "sticky", top: 20 },
+  flagList:  { overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, flex: 1, paddingRight: 2 },
+  flagCard:  { border: "1px solid", borderRadius: "var(--radius-md)", padding: "12px 14px", cursor: "pointer", transition: "all 0.12s" },
+  flagName:  { fontSize: 13, fontWeight: 700, color: "var(--color-ink)", marginBottom: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  flagMeta:  { fontSize: 11, color: "var(--color-muted)" },
+  flagPill:  { fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, letterSpacing: "0.03em", whiteSpace: "nowrap" },
+
+  countBadge: { background: "#fee2e2", color: "#b91c1c", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 12 },
+  filterPill: { padding: "4px 10px", borderRadius: 20, border: "1px solid", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-base)", transition: "all 0.12s" },
+  emptyPanel: { textAlign: "center", padding: "40px 0", color: "var(--color-muted)", fontSize: 13, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 },
+
+  // Detail modal
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
+  detailModal:   { width: "min(100%, 480px)", borderRadius: 20, background: "#fff", boxShadow: "0 24px 60px rgba(15,23,42,0.18)", overflow: "hidden" },
+  detailHeader:  { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px" },
+  detailBody:    { padding: "20px 24px" },
+  detailName:    { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", marginBottom: 16, lineHeight: 1.3 },
+  detailGrid:    { display: "flex", flexDirection: "column", gap: 10 },
+  detailRow:     { display: "flex", gap: 12, alignItems: "flex-start" },
+  detailLabel:   { minWidth: 110, fontSize: 12, color: "var(--color-muted)", fontWeight: 500, paddingTop: 1 },
+  detailValue:   { fontSize: 13, color: "var(--color-ink)", fontWeight: 400, flex: 1 },
+  detailFooter:  { display: "flex", gap: 10, padding: "16px 24px", borderTop: "1px solid var(--color-border-soft)", flexWrap: "wrap" },
+  closeBtn:      { width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(148,163,184,0.3)", background: "rgba(255,255,255,0.7)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-muted)" },
+
+  // Full list modal
+  fullListModal:  { width: "min(100%, 900px)", maxHeight: "85vh", borderRadius: 20, background: "#fff", boxShadow: "0 24px 60px rgba(15,23,42,0.16)", overflow: "hidden" },
+  fullListHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "24px 24px 16px" },
+  modalTitle:     { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", margin: 0 },
+  fullListTable:  { width: "100%", borderCollapse: "collapse", minWidth: 640, fontSize: 13 },
+  th: { textAlign: "left", padding: "10px 16px", color: "var(--color-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: "1px solid rgba(148,163,184,0.2)", fontWeight: 700, whiteSpace: "nowrap" },
+  td: { padding: "12px 16px", borderBottom: "1px solid rgba(148,163,184,0.12)", color: "var(--color-ink)", verticalAlign: "middle" },
 };

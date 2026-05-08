@@ -94,11 +94,17 @@ def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def _geocode(address: str, barangay: str) -> tuple[float | None, float | None]:
     """Call Google Geocoding API for a business address.
+    Uses the full business address plus barangay for better accuracy.
     Returns (lat, lng) or (None, None) on failure."""
     if not GOOGLE_MAPS_API_KEY:
         return None, None
 
-    full_address = f"{address}, {barangay}, Mataasnakahoy, Batangas, Philippines"
+    address_parts = [
+        part.strip() for part in [address, barangay, "Mataasnakahoy", "Batangas", "Philippines"]
+        if part and str(part).strip()
+    ]
+    full_address = ", ".join(address_parts)
+
     try:
         resp = http.get(
             "https://maps.googleapis.com/maps/api/geocode/json",
@@ -254,8 +260,9 @@ def upload_registry(file, ext: str):
                 """
                 INSERT INTO official_registry
                     (barangayID, businessName, businessType, lineOfBusiness,
-                     businessAddress, latitude, longitude, applicationStatus, lastRenewalDate)
-                SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    businessAddress, latitude, longitude, applicationStatus,
+                    lastRenewalDate, businessSize)
+                SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 FROM DUAL
                 WHERE NOT EXISTS (
                     SELECT 1 FROM official_registry
@@ -273,6 +280,8 @@ def upload_registry(file, ext: str):
                     lng,
                     status,
                     renewal_date,
+                    str(row.get("businessSize") or "").strip(
+                    ) or None,  # Added this line
                     # WHERE NOT EXISTS params
                     str(business_name).strip(),
                     barangay_id,
@@ -287,6 +296,7 @@ def upload_registry(file, ext: str):
                     str(business_name).strip(),
                     lat,
                     lng,
+                    str(address_raw).strip() or None,
                 )
             else:
                 skipped += 1
@@ -347,6 +357,7 @@ def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_p
             SELECT
                 r.businessID,
                 r.businessName,
+                r.businessSize,
                 r.businessType,
                 r.lineOfBusiness,
                 r.businessAddress,
@@ -357,9 +368,20 @@ def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_p
                 b.barangayID,
                 b.barangayName,
                 (
+                    SELECT CASE 
+                        WHEN g.placeID IS NOT NULL THEN 'registry_and_maps' 
+                        ELSE 'registry_only' 
+                    END
+                    FROM geospatial_logs g
+                    WHERE LOWER(g.detectedName) = LOWER(r.businessName)
+                    AND g.barangayID = r.barangayID
+                    ORDER BY g.detectedDate DESC
+                    LIMIT 1
+                ) AS flagSource,
+                (
                     SELECT g.flagColor
                     FROM geospatial_logs g
-                    WHERE g.detectedName = r.businessName
+                    WHERE LOWER(g.detectedName) = LOWER(r.businessName)
                     AND g.barangayID = r.barangayID
                     ORDER BY g.detectedDate DESC
                     LIMIT 1
@@ -403,6 +425,7 @@ def get_business_by_id(business_id: int):
             SELECT
                 r.businessID,
                 r.businessName,
+                r.businessSize,
                 r.businessType,
                 r.lineOfBusiness,
                 r.businessAddress,

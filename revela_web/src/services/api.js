@@ -423,3 +423,23 @@ export async function getInspectorsRequest(token) {
     connectionGuard(err);
   }
 }
+
+export const verify2faRequest = async (tempToken, code) => {
+  const response = await fetch(`${BASE_URL}/auth/verify-2fa-login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${tempToken}`,
+    },
+    body: JSON.stringify({ code }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(
+      errorData.message || errorData.error || "Failed to verify 2FA code.",
+    );
+  }
+
+  return await response.json();
+};

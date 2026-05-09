@@ -5,6 +5,7 @@ import requests
 from api.models.user import find_user_by_email, find_user_by_id, update_last_login, update_password
 from api.models.otp import create_otp, get_valid_otp, delete_otp, invalidate_user_otps
 from flask_jwt_extended import create_access_token
+import pyotp
 
 
 def login_user(email, password):
@@ -197,3 +198,46 @@ def reset_password(identifier, otp_code, new_password):
     delete_otp(otp_record["uprID"])
 
     return True, None
+
+
+# Change password feature in settings
+def update_user_password(user_id, old_password, new_password):
+    # 1. Fetch user
+    user = find_user_by_id(user_id)
+    if not user:
+        return {"error": "User not found", "status": 404}
+
+    # 2. Verify old password
+    if not bcrypt.checkpw(old_password.encode("utf-8"), user["userPassword"].encode("utf-8")):
+        return {"error": "Incorrect current password", "status": 400}
+
+    # 3. Prevent same password reuse (optional)
+    if old_password == new_password:
+        return {"error": "New password cannot be the same as old", "status": 400}
+
+    # 4. Hash and Update
+    hashed = bcrypt.hashpw(new_password.encode(
+        "utf-8"), bcrypt.gensalt()).decode("utf-8")
+    update_password(user_id, hashed)
+
+    return {"message": "Password updated successfully", "status": 200}
+
+
+# 2FA feature in settings
+def generate_2fa_setup(user_email):
+    # Create a random base32 secret
+    secret = pyotp.random_base32()
+
+    # Create an otpauth:// URI for the QR code
+    # 'Project REVELA' can be your app name
+    otp_uri = pyotp.TOTP(secret).provisioning_uri(
+        name=user_email,
+        issuer_name="Project REVELA"
+    )
+
+    return secret, otp_uri
+
+
+def verify_totp_code(secret, code):
+    totp = pyotp.TOTP(secret)
+    return totp.verify(code, valid_window=10)

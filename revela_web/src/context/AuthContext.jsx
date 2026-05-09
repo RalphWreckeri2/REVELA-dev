@@ -6,15 +6,35 @@ const AuthContext = createContext(null);
 export { AuthContext };
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);   // JWT lives in memory only
+  const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
 
   async function login(email, password) {
-    const data = await loginRequest(email, password);  // throws on error
-    setToken(data.access_token);
+    const data = await loginRequest(email, password);
 
+    // If 2FA is required, return early without setting token
+    if (data.status === "2fa_required") {
+      return data;  // ← LoginPage checks this
+    }
+
+    setToken(data.access_token);
     const me = await getMeRequest(data.access_token);
     setUser(me);
+    return data;
+  }
+
+  // Called after 2FA verification succeeds
+  async function completeLogin(accessToken) {
+    setToken(accessToken);
+    const me = await getMeRequest(accessToken);
+    setUser(me);
+  }
+
+  async function refreshUser() {
+    if (token) {
+      const me = await getMeRequest(token);
+      setUser(me);
+    }
   }
 
   function logout() {
@@ -23,7 +43,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout }}>
+    <AuthContext.Provider value={{ token, user, login, completeLogin, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

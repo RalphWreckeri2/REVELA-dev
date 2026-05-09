@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import get_jwt_identity, get_jwt
-from api.auth.service import login_user, request_otp, reset_password
+from flask_jwt_extended import get_jwt_identity, get_jwt, create_access_token
+from api.auth.service import login_user, request_otp, reset_password, update_user_password, generate_2fa_setup, verify_totp_code
 from api.middleware.decorators import jwt_required
-from api.models.user import find_user_by_id
+from api.models.user import find_user_by_id, find_user_by_email, enable_user_2fa, update_user_2fa_secret, get_user_2fa_secret
+from datetime import timedelta
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -19,6 +20,22 @@ def login():
 
     if error:
         return jsonify({"error": error}), 401
+
+    user = find_user_by_email(data["email"])
+
+    if user and user.get("is_2fa_enabled"):
+        # Don't give the real JWT yet
+        # Generate a short-lived 'temp_token' that only works for the 2FA endpoint
+        temp_token = create_access_token(
+            identity=str(user["userID"]),
+            additional_claims={"2fa_pending": True},
+            expires_delta=timedelta(minutes=5)
+        )
+        return jsonify({
+            "status": "2fa_required",
+            "tempToken": temp_token,
+            "userId": user["userID"]
+        }), 200
 
     return jsonify({"access_token": token}), 200
 
@@ -41,6 +58,7 @@ def me():
         "fullName": user["fullName"],
         "email":    user["email"],
         "role":     claims.get("role"),
+        "is_2fa_enabled": bool(user.get("is_2fa_enabled")),
     }), 200
 
 
@@ -76,3 +94,130 @@ def reset_password_route():
         return jsonify({"error": error}), 400
 
     return jsonify({"message": "Password reset successful"}), 200
+
+
+@auth_bp.route('/change-password', methods=['PUT'])
+@jwt_required()
+def change_password():
+    user_id = get_jwt_identity()
+    data = request.json
+
+    old_password = data.get('oldPassword')
+    new_password = data.get('newPassword')
+
+    if not old_password or not new_password:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    # Call the service layer
+    result = update_user_password(user_id, old_password, new_password)
+
+    # Return based on the service response
+    if "error" in result:
+        return jsonify({"error": result["error"]}), result["status"]
+
+    return jsonify({"message": result["message"]}), result["status"]
+
+
+# ── POST /api/auth/setup-2fa ──────────────────────────────────────────────────
+@auth_bp.route('/setup-2fa', methods=['POST'])
+@jwt_required()
+def setup_2fa():
+    user_id = get_jwt_identity()
+    user = find_user_by_id(int(user_id))
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    try:
+        secret, otp_uri = generate_2fa_setup(user["email"])
+
+        # Temporarily save the secret to the DB until verified
+        update_user_2fa_secret(user["userID"], secret)
+
+        return jsonify({
+            "secret": secret,
+            "otpUri": otp_uri
+        }), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to setup 2FA", "details": str(e)}), 500
+
+
+# ── POST /api/auth/verify-2fa-setup ───────────────────────────────────────────
+@auth_bp.route('/verify-2fa-setup', methods=['POST'])
+@jwt_required()
+def verify_2fa_setup():
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    code = data.get('code')
+
+    # Fetch the temporarily saved secret from the database
+    secret = get_user_2fa_secret(int(user_id))
+
+    print(f"DEBUG → user_id: {user_id}, code: {code}, secret: {secret}")
+
+    if not code:
+        return jsonify({"error": "Missing 2FA code"}), 400
+    if not secret:
+        return jsonify({"error": "No 2FA setup found for user"}), 400
+
+    is_valid = verify_totp_code(secret, code)
+    print(
+        f"DEBUG → is_valid: {is_valid}, server_time: {__import__('datetime').datetime.now()}")
+
+    print(f"DEBUG → expected code: {__import__('pyotp').TOTP(secret).now()}")
+    if is_valid:
+        success = enable_user_2fa(int(user_id), True)
+        if success:
+            return jsonify({"message": "2FA enabled successfully"}), 200
+        return jsonify({"error": "Failed to save 2FA settings"}), 500
+
+    return jsonify({"error": "Invalid 2FA code"}), 400
+
+
+# ── POST /api/auth/disable-2fa ────────────────────────────────────────────────
+@auth_bp.route('/disable-2fa', methods=['POST'])
+@jwt_required()
+def disable_2fa():
+    user_id = get_jwt_identity()
+    user = find_user_by_id(int(user_id))
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    success = enable_user_2fa(int(user_id), False)
+    if success:
+        return jsonify({"message": "2FA disabled successfully"}), 200
+
+    return jsonify({"error": "Failed to disable 2FA"}), 500
+
+
+# ── POST /api/auth/verify-2fa-login ───────────────────────────────────────────
+@auth_bp.route('/verify-2fa-login', methods=['POST'])
+@jwt_required()
+def verify_2fa_login():
+    user_id = get_jwt_identity()
+    claims = get_jwt()
+
+    if not claims.get("2fa_pending"):
+        return jsonify({"error": "Invalid token. Not pending 2FA."}), 401
+
+    data = request.get_json()
+    code = data.get('code')
+
+    if not code:
+        return jsonify({"error": "Missing 2FA code"}), 400
+
+    user = find_user_by_id(int(user_id))
+
+    # Get user's enabled 2FA secret
+    secret = get_user_2fa_secret(user["userID"])
+
+    if not secret or not verify_totp_code(secret, code):
+        return jsonify({"error": "Invalid 2FA code or 2FA not enabled"}), 400
+
+    # Code is valid, provide the real access token for the dashboard
+    token = create_access_token(
+        identity=str(user["userID"]),
+        additional_claims={"role": user["userRole"]}
+    )
+    return jsonify({"access_token": token}), 200

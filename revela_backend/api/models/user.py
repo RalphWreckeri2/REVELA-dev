@@ -98,3 +98,33 @@ def delete_user(user_id):
     cur.execute("DELETE FROM USERS WHERE userID = %s", (user_id,))
     mysql.connection.commit()
     cur.close()
+
+
+def enable_user_2fa(user_id, is_enabled):
+    """Enable or disable 2FA for a user."""
+    cur = mysql.connection.cursor()
+    cur.execute(
+        "UPDATE USERS SET is_2fa_enabled = %s, updatedAt = NOW() WHERE userID = %s",  # ← fixed
+        (is_enabled, user_id))
+    mysql.connection.commit()
+    cur.close()
+    return True
+
+
+def update_user_2fa_secret(user_id, secret):
+    """Store the 2FA secret for a user."""
+    cur = mysql.connection.cursor()
+    cur.execute(
+        "UPDATE USERS SET two_factor_secret = %s, updatedAt = NOW() WHERE userID = %s", (secret, user_id))
+    mysql.connection.commit()
+    cur.close()
+
+
+def get_user_2fa_secret(user_id):
+    """Retrieve the 2FA secret for a user."""
+    cur = mysql.connection.cursor()
+    cur.execute(
+        "SELECT two_factor_secret FROM USERS WHERE userID = %s", (user_id,))
+    user = cur.fetchone()
+    cur.close()
+    return user['two_factor_secret'] if user else None

@@ -19,6 +19,10 @@ def login_user(email, password):
     if not user:
         return None, "Invalid email or password"
 
+    # Guard clause: Check if account is active/enabled
+    if not user.get("is_active", True):
+        return None, "Account is disabled. Please contact the administrator."
+
     # bcrypt check — password is the raw string, user["userPassword"] is the hash
     password_matches = bcrypt.checkpw(
         password.encode("utf-8"),
@@ -31,10 +35,13 @@ def login_user(email, password):
     # Stamp last login
     update_last_login(user["userID"])
 
-    # Create JWT — additional_claims carries role into the token
+    # Create JWT — additional_claims carries role and application-specific states
     token = create_access_token(
         identity=str(user["userID"]),
-        additional_claims={"role": user["userRole"]}
+        additional_claims={
+            "role": user["userRole"],
+            "mustChangePassword": bool(user.get("mustChangePassword", False))
+        }
     )
 
     return token, None

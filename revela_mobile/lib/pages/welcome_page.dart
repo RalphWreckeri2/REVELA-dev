@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import 'login_page.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -15,6 +16,10 @@ class _WelcomePageState extends State<WelcomePage>
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
+
+  Future<void> _requestPermissions() async {
+    await [Permission.camera, Permission.location].request();
+  }
 
   final List<_WelcomeSlide> _slides = const [
     _WelcomeSlide(
@@ -69,7 +74,8 @@ class _WelcomePageState extends State<WelcomePage>
         curve: Curves.easeInOut,
       );
     } else {
-      // Mark welcome as seen
+      await _requestPermissions(); // ✅ ask permissions before navigating
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('seen_welcome', true);
       if (mounted) {

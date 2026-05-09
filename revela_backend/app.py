@@ -37,7 +37,7 @@ def create_app():
     # Apply a robust CORS configuration covering all API routes
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
+            "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://10.0.2.2:5000",],
             "allow_headers": ["Content-Type", "Authorization"],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
         }
@@ -56,3 +56,4 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

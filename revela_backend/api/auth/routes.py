@@ -24,8 +24,6 @@ def login():
     user = find_user_by_email(data["email"])
 
     if user and user.get("is_2fa_enabled"):
-        # Don't give the real JWT yet
-        # Generate a short-lived 'temp_token' that only works for the 2FA endpoint
         temp_token = create_access_token(
             identity=str(user["userID"]),
             additional_claims={"2fa_pending": True},
@@ -37,7 +35,13 @@ def login():
             "userId": user["userID"]
         }), 200
 
-    return jsonify({"access_token": token}), 200
+    return jsonify({
+        "access_token": token,
+        "user": {
+            "fullName": user["fullName"],
+            "userRole": user["userRole"],
+        }
+    }), 200
 
 
 # ── GET /api/auth/me ──────────────────────────────────────────────────────────
@@ -59,6 +63,7 @@ def me():
         "email":    user["email"],
         "role":     claims.get("role"),
         "is_2fa_enabled": bool(user.get("is_2fa_enabled")),
+        "mustChangePassword": bool(user.get("mustChangePassword", False)),
     }), 200
 
 
@@ -218,6 +223,9 @@ def verify_2fa_login():
     # Code is valid, provide the real access token for the dashboard
     token = create_access_token(
         identity=str(user["userID"]),
-        additional_claims={"role": user["userRole"]}
+        additional_claims={
+            "role": user["userRole"],
+            "mustChangePassword": bool(user.get("mustChangePassword", False))
+        }
     )
     return jsonify({"access_token": token}), 200

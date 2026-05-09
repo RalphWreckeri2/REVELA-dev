@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_text_field.dart';
+import '../service/auth_service.dart';
+import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,6 +16,7 @@ class _LoginPageState extends State<LoginPage>
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  final AuthService _authService = AuthService();
   bool _isLoading = false;
 
   late AnimationController _animController;
@@ -58,18 +61,35 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
-    // TODO: Replace with real auth logic (e.g. dio call to your backend)
-    await Future.delayed(const Duration(seconds: 2));
+    // Call the authentication service
+    final bool success = await _authService.login(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
-    setState(() => _isLoading = false);
+    if (!mounted) return;
 
-    // TODO: Navigate to home/dashboard after successful login
-    // Navigator.pushReplacement(
-    //   context,
-    //   MaterialPageRoute(builder: (_) => const DashboardPage()),
-    // );
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (success) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomePage()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Login failed. Please check your credentials.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override
@@ -193,30 +213,14 @@ class _LoginPageState extends State<LoginPage>
                               color: AppColors.textLight,
                               size: 20,
                             ),
-                            onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                          ),
-                        ),
-
-                        // Forgot password
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
                             onPressed: () {
-                              // TODO: navigate to forgot password
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
                             },
-                            child: const Text(
-                              'Forgot password?',
-                              style: TextStyle(
-                                color: AppColors.midGreen,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 24),
 
                         // Sign In button
                         SizedBox(

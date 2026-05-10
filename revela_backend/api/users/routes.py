@@ -139,5 +139,37 @@ def delete_user_route(user_id):
     if not user:
         return jsonify({"error": "User not found"}), 404
 
+    from app import mysql
+    cursor = mysql.connection.cursor()
+
+    # 1. Check for ACTIVE inspections (Assigned or In Progress)
+    cursor.execute(
+        "SELECT COUNT(*) AS count FROM inspection_reports WHERE userID = %s AND verificationStatus IN ('Assigned', 'In Progress')",
+        (user_id,)
+    )
+    active_count = cursor.fetchone()["count"]
+
+    if active_count > 0:
+        cursor.close()
+        return jsonify({"error": "You cannot delete an inspector with assigned task - reassign first"}), 409
+
+    # 2. Check for HISTORICAL inspections (Submitted or Verified)
+    cursor.execute(
+        "SELECT COUNT(*) AS count FROM inspection_reports WHERE userID = %s AND verificationStatus IN ('Submitted', 'Verified')",
+        (user_id,)
+    )
+    historical_count = cursor.fetchone()["count"]
+
+    if historical_count > 0:
+        # SOFT DELETE: Keep the history intact, but deactivate the account
+        cursor.execute(
+            "UPDATE users SET isActive = FALSE WHERE userID = %s", (user_id,))
+        mysql.connection.commit()
+        cursor.close()
+        return jsonify({"message": "User deactivated successfully (soft delete) to preserve inspection history."}), 200
+
+    cursor.close()
+
+    # 3. HARD DELETE: Safe to obliterate since they have absolutely zero history
     delete_user(user_id)
     return jsonify({"message": "User deleted successfully"}), 200

@@ -104,9 +104,10 @@ export async function resetPasswordRequest(identifier, otp, newPassword) {
  * Upload a CSV or Excel file to seed the official registry.
  * @param {File} file  - the File object from the input/drop zone
  * @param {string} token - JWT token (pass explicitly from AuthContext)
+ * @param {AbortSignal} signal - Optional cancellation signal
  * @returns {Promise<{total_rows, inserted, geocoded_ok, geocoded_failed, skipped, errors[]}>}
  */
-export async function uploadRegistryFile(file, token) {
+export async function uploadRegistryFile(file, token, signal) {
   try {
     const form = new FormData();
     form.append("file", file);
@@ -116,6 +117,7 @@ export async function uploadRegistryFile(file, token) {
       headers: { Authorization: `Bearer ${token}` },
       // Do NOT set Content-Type manually — browser sets it with boundary for FormData
       body: form,
+      signal,
     });
     return await handleResponse(res);
   } catch (err) {
@@ -443,3 +445,46 @@ export const verify2faRequest = async (tempToken, code) => {
 
   return await response.json();
 };
+
+// ── Analytics & WLC Config ────────────────────────────────────────────────────
+
+export async function getWlcConfigRequest(token) {
+  try {
+    const res = await fetch(`${BASE_URL}/analytics/wlc-config`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function updateWlcConfigRequest(payload, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/analytics/wlc-config`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+// For Dashboard overview cards and charts (flag counts, inspection stats, etc.)
+export async function getAnalyticsOverviewRequest(token) {
+  try {
+    const res = await fetch(`${BASE_URL}/analytics/all`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}

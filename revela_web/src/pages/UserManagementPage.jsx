@@ -13,6 +13,7 @@ function RoleBadge({ role }) {
   const styles = {
     SUPER_ADMIN: { background: "#fef3c7", color: "#92400e" },
     Admin:       { background: "#dcfce7", color: "#15803d" },
+    Inspector:   { background: "#ffc8b6", color: "#cb0a00" },
   };
   const s = styles[role] ?? { background: "#f1f5f9", color: "#64748b" };
   return (
@@ -87,6 +88,7 @@ function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
               style={styles.input}
             >
               <option value="Admin">Admin</option>
+              <option value="Inspector">Inspector</option>
             </select>
           </div>
 
@@ -331,7 +333,11 @@ export default function UserManagementPage() {
                   {u.lastLoginAt ? u.lastLoginAt.slice(0, 10) : "Never"}
                 </td>
                 <td style={{ padding: "14px 20px" }}>
-                  {u.mustChangePassword ? (
+                  {u.isActive === 0 || u.isActive === false ? (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#b91c1c", background: "#fee2e2", padding: "3px 8px", borderRadius: 10 }}>
+                      Deactivated
+                    </span>
+                  ) : u.mustChangePassword ? (
                     <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e", background: "#fef3c7", padding: "3px 8px", borderRadius: 10 }}>
                       Temp Password
                     </span>
@@ -351,7 +357,7 @@ export default function UserManagementPage() {
                     >
                       Edit
                     </button>
-                    {u.userID !== user.userID && (
+                    {u.userID !== user.userID && u.isActive !== 0 && u.isActive !== false && (
                       <button
                         className="ghost-btn"
                         type="button"

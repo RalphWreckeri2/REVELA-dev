@@ -5,6 +5,7 @@ import { AuthContext } from "../context/AuthContext";
 import { changePasswordRequest, setup2faRequest, verify2faSetupRequest } from "../services/authService";
 import Swal from "sweetalert2";
 import { QRCodeSVG } from "qrcode.react";
+import { getWlcConfigRequest, updateWlcConfigRequest } from "../services/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const EyeIcon = () => (
@@ -173,6 +174,10 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
+  const [wlcConfig, setWlcConfig] = useState({ w1_risk: 40, w2_sector: 40, w3_distance: 20, bplo_lat: 13.9667, bplo_lng: 121.1167 });
+  const [sectors, setSectors] = useState([]);
+
+  const SECTOR_OPTIONS = ["Food Service", "Retail", "Manufacturing", "Healthcare", "Education", "Real Estate", "Logistics", "Other"];
 
   // Load initial settings on mount
   useEffect(() => {
@@ -180,7 +185,17 @@ export default function SettingsPage() {
     const savedAutoSync = localStorage.getItem("revela_autoSync");
     if (savedEmailAlerts !== null) setEmailAlerts(savedEmailAlerts === "true");
     if (savedAutoSync !== null) setAutoSync(savedAutoSync === "true");
-  }, []);
+
+    getWlcConfigRequest(token).then(data => {
+      if(data) {
+        setWlcConfig(data);
+        if (data.sectors) {
+          const loadedSectors = Object.entries(data.sectors).map(([name, score]) => ({ name, score }));
+          setSectors(loadedSectors);
+        }
+      }
+    }).catch(console.error);
+  }, [token]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -188,6 +203,16 @@ export default function SettingsPage() {
     localStorage.setItem("revela_emailAlerts", emailAlerts);
     localStorage.setItem("revela_autoSync", autoSync);
     
+    try {
+      const sectorObj = {};
+      sectors.forEach(s => { if (s.name) sectorObj[s.name] = Number(s.score); });
+      
+      await updateWlcConfigRequest({ ...wlcConfig, sectors: sectorObj }, token);
+      Swal.fire({ icon: 'success', title: 'Saved', text: 'Settings updated successfully.', timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire('Error', err.message || "Failed to update WLC config", 'error');
+    }
+
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 600));
     
@@ -207,8 +232,7 @@ export default function SettingsPage() {
       }).then(async (result) => {
         if (result.isConfirmed) {
           try {
-            // Example fetch - you may migrate this request to authService.js
-            const res = await fetch("http://localhost:5000/api/auth/disable-2fa", {
+            const res = await fetch("http://127.0.0.1:5000/api/auth/disable-2fa", {
               method: "POST",
               headers: { "Authorization": `Bearer ${token}` }
             });
@@ -227,6 +251,39 @@ export default function SettingsPage() {
       setShow2FAModal(true);
     }
   };
+
+  const handleWeightChange = (changedKey, newValue) => {
+    let val = Math.min(100, Math.max(0, parseInt(newValue || 0, 10)));
+    const otherKeys = ["w1_risk", "w2_sector", "w3_distance"].filter(k => k !== changedKey);
+    let remaining = 100 - val;
+    
+    let k1 = otherKeys[0];
+    let k2 = otherKeys[1];
+    let sumOthers = wlcConfig[k1] + wlcConfig[k2];
+    
+    let newWlc = { ...wlcConfig, [changedKey]: val };
+    if (sumOthers === 0) {
+      newWlc[k1] = Math.floor(remaining / 2);
+      newWlc[k2] = remaining - newWlc[k1];
+    } else {
+      newWlc[k1] = Math.round((wlcConfig[k1] / sumOthers) * remaining);
+      newWlc[k2] = remaining - newWlc[k1];
+    }
+    setWlcConfig(newWlc);
+  };
+
+  const applyPreset = (preset) => {
+    if (preset === "health") setWlcConfig({ ...wlcConfig, w1_risk: 20, w2_sector: 70, w3_distance: 10 });
+    if (preset === "renewal") setWlcConfig({ ...wlcConfig, w1_risk: 70, w2_sector: 20, w3_distance: 10 });
+  };
+
+  const addSector = () => setSectors([...sectors, { name: "", score: 50 }]);
+  const updateSector = (index, field, value) => {
+    const newSectors = [...sectors];
+    newSectors[index][field] = value;
+    setSectors(newSectors);
+  };
+  const removeSector = (index) => setSectors(sectors.filter((_, i) => i !== index));
 
   return (
     <DashboardLayout>
@@ -257,6 +314,74 @@ export default function SettingsPage() {
               <span>Dark mode</span>
               <input type="checkbox" checked={!!isDark} onChange={() => setTheme(isDark ? "light" : "dark")} />
             </label>
+          </div>
+        </section>
+
+        <section>
+          <h3 style={{ margin: "0 0 10px", color: "var(--color-ink)", fontSize: 16 }}>Policy Configuration (WLC)</h3>
+          <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Set up priority score scenarios, linked weights, and dynamic sector rules.</p>
+          
+          <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
+            {/* Scenario Presets */}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+              <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, background: "rgba(245,158,11,0.1)", color: "#b45309", borderColor: "rgba(245,158,11,0.4)" }} onClick={() => applyPreset("health")}>
+                🚑 Health Crisis Mode (Focus: Sector)
+              </button>
+              <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, background: "rgba(239,68,68,0.1)", color: "#b91c1c", borderColor: "rgba(239,68,68,0.4)" }} onClick={() => applyPreset("renewal")}>
+                📈 Business Renewal Peak (Focus: Risk)
+              </button>
+            </div>
+
+            {/* Linked Sliders */}
+            <div style={{ background: "rgba(248,249,250,0.8)", padding: "16px", borderRadius: 8, border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: 16 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>Linked Priority Weights</label>
+              {[
+                { key: "w1_risk", label: "Risk Volume (W1)", color: "var(--color-danger)" },
+                { key: "w2_sector", label: "Sector Impact (W2)", color: "var(--color-gold)" },
+                { key: "w3_distance", label: "Travel Distance (W3)", color: "var(--color-primary)" }
+              ].map(w => (
+                <div key={w.key} style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <span style={{ width: 140, fontSize: 12, fontWeight: 600, color: "var(--color-muted)" }}>{w.label}</span>
+                  <input type="range" min="0" max="100" value={wlcConfig[w.key]} onChange={e => handleWeightChange(w.key, e.target.value)} style={{ flex: 1, accentColor: w.color }} />
+                  <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>{wlcConfig[w.key]}%</div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Dynamic Sector List */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>Sector Severity Settings</label>
+                <button type="button" className="ghost-btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={addSector}>+ Add Sector</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {sectors.length === 0 && <p style={{ fontSize: 12, color: "var(--color-muted)" }}>No sector policies defined. Click "Add Sector" to set custom severities.</p>}
+                {sectors.map((sec, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.6)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                    <select value={sec.name} onChange={e => updateSector(i, "name", e.target.value)} style={{ padding: "6px", borderRadius: 6, border: "1px solid var(--color-border)", fontSize: 13, width: 160, background: "#fff" }}>
+                      <option value="">Select Sector ▾</option>
+                      {SECTOR_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-muted)" }}>Severity:</span>
+                    <input type="range" min="0" max="100" value={sec.score} onChange={e => updateSector(i, "score", e.target.value)} style={{ flex: 1 }} />
+                    <span style={{ width: 36, fontSize: 12, fontWeight: 700, color: "var(--color-ink)", textAlign: "right" }}>{(sec.score / 100).toFixed(1)}</span>
+                    <button type="button" onClick={() => removeSector(i)} style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer", padding: 4, fontSize: 14, marginLeft: 8 }} title="Remove Sector">✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* BPLO Location */}
+            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 }}>BPLO Latitude</label>
+                <input type="number" step="any" value={wlcConfig.bplo_lat || ""} onChange={e => setWlcConfig({...wlcConfig, bplo_lat: parseFloat(e.target.value)})} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 14 }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 }}>BPLO Longitude</label>
+                <input type="number" step="any" value={wlcConfig.bplo_lng || ""} onChange={e => setWlcConfig({...wlcConfig, bplo_lng: parseFloat(e.target.value)})} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 14 }} />
+              </div>
+            </div>
           </div>
         </section>
 

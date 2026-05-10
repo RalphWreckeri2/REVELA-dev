@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { requestOtpRequest, resetPasswordRequest, verify2faRequest } from "../services/api";
 import "../styles/LoginPage.css";
+import Swal from "sweetalert2";
 import sealImg from "../assets/seal.png";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -102,6 +103,13 @@ export default function LoginPage() {
         setTempToken(response.tempToken);
         setLoginStep("2fa"); // Change the UI to show OTP input
       } else {
+        Swal.fire({
+          icon: 'success',
+          title: 'Welcome!',
+          text: 'Welcome back, BPLO Officer.',
+          timer: 2000,
+          showConfirmButton: false
+        });
         navigate("/home");
       }
     } catch (err) {
@@ -193,6 +201,13 @@ const handleVerify2FA = async () => {
     try {
       const response = await verify2faRequest(tempToken, totpCode);
       await completeLogin(response.access_token);
+      Swal.fire({
+        icon: 'success',
+        title: 'Welcome!',
+        text: 'Welcome back, BPLO Officer.',
+        timer: 2000,
+        showConfirmButton: false
+      });
       navigate("/home");
     } catch (err) {
       setLoginError(err.message || "Invalid code. Please try again.");

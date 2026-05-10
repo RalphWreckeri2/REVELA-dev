@@ -9,6 +9,7 @@ import StatusBadge from "../components/StatusBadge";
 import { UploadModal } from "../components/UploadModal";
 import { AuthContext } from "../context/AuthContext";
 import Papa from "papaparse";
+import Swal from "sweetalert2";
 import {
   getRegistryRequest,
   uploadRegistryFile,
@@ -289,9 +290,22 @@ export default function RegistryPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Registry exported to CSV',
+        timer: 2000,
+        showConfirmButton: false
+      });
     } catch (err) {
       console.error("Export failed:", err);
       setError("Export failed. Please try again.");
+      Swal.fire({
+        icon: 'error',
+        title: 'Export Failed',
+        text: 'An error occurred while exporting the registry.'
+      });
     } finally {
       setLoading(false);
     }

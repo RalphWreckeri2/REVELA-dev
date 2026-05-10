@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../pages/login_page.dart';
 
+enum LoginResult { success, notInspector, failed }
+
 class AuthService {
   // Use 10.0.2.2 to access localhost from an Android emulator.
   // Use 127.0.0.1 for iOS simulator.
@@ -58,7 +60,7 @@ class AuthService {
     );
   }
 
-  Future<bool> login(String email, String password) async {
+  Future<LoginResult> loginWithRole(String email, String password) async {
     try {
       final response = await _dio.post(
         '/api/auth/login',
@@ -66,34 +68,42 @@ class AuthService {
       );
 
       if (response.statusCode == 200 && response.data['access_token'] != null) {
+        final user = response.data['user'];
+
+        // ✅ Check if userRole is Inspector before allowing login
+        final String userRole = user?['userRole']?.toString() ?? '';
+        if (userRole != 'Inspector') {
+          return LoginResult.notInspector; // Block non-inspectors silently
+        }
+
         final String token = response.data['access_token'];
         await _storage.write(key: 'jwt_token', value: token);
 
-        final user = response.data['user'];
         if (user != null && user is Map) {
           await _storage.write(
             key: 'user_fullName',
             value: user['fullName']?.toString() ?? '',
           );
-          await _storage.write(
-            key: 'user_role',
-            value: user['userRole']?.toString() ?? '',
-          );
+          await _storage.write(key: 'user_role', value: userRole);
         }
 
-        return true;
+        return LoginResult.success;
       }
-      return false;
+      return LoginResult.failed;
     } on DioException catch (e) {
       print('Login Error: ${e.response?.data ?? e.message}');
-      return false;
+      return LoginResult.failed;
     }
   }
 
   Future<void> logout() async {
-    await _storage.delete(key: 'jwt_token');
-    await _storage.delete(key: 'user_fullName');
-    await _storage.delete(key: 'user_role');
+    // Clear all stored keys to ensure a complete local session wipe
+    await _storage.deleteAll();
+
+    // Clear Flutter's image cache to free up memory and force a UI refresh on next login
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,

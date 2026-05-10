@@ -68,7 +68,7 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
             cursor.close()
             return None, f"Flag #{log_id} not found"
 
-        # Guard: no duplicate open assignment
+        # Check if there's already an open assignment
         cursor.execute("""
             SELECT reportID FROM inspection_reports
             WHERE targetID = %s
@@ -76,9 +76,6 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
             LIMIT 1
         """, (log_id,))
         existing = cursor.fetchone()
-        if existing:
-            cursor.close()
-            return None, f"Flag #{log_id} already has an open inspection (report #{existing['reportID']})"
 
         # Guard: inspector user exists and has Inspector role
         cursor.execute(
@@ -90,13 +87,24 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
             cursor.close()
             return None, f"Inspector userID {inspector_user_id} not found"
 
-        cursor.execute("""
-            INSERT INTO inspection_reports
-                (userID, targetID, targetType, verificationStatus)
-            VALUES (%s, %s, 'geospatial_log', 'Assigned')
-        """, (inspector_user_id, log_id))
+        if existing:
+            cursor.execute("""
+                UPDATE inspection_reports
+                SET userID = %s, verificationStatus = 'Assigned'
+                WHERE reportID = %s
+            """, (inspector_user_id, existing["reportID"]))
+            report_id = existing["reportID"]
+            assignment_status = "Reassigned"
+        else:
+            cursor.execute("""
+                INSERT INTO inspection_reports
+                    (userID, targetID, targetType, verificationStatus)
+                VALUES (%s, %s, 'geospatial_log', 'Assigned')
+            """, (inspector_user_id, log_id))
+            report_id = cursor.lastrowid
+            assignment_status = "Assigned"
+
         mysql.connection.commit()
-        report_id = cursor.lastrowid
         cursor.close()
 
         return {
@@ -104,7 +112,7 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
             "logID":      log_id,
             "inspectorID": inspector_user_id,
             "inspector":  inspector["fullName"],
-            "status":     "Assigned",
+            "status":     assignment_status,
         }, None
 
     except Exception as e:

@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import jsonify
+from flask import jsonify, request
 from flask_jwt_extended import verify_jwt_in_request, get_jwt
 
 
@@ -11,6 +11,9 @@ def jwt_required():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
+            if request.method == "OPTIONS":
+                return fn(*args, **kwargs)
+
             try:
                 verify_jwt_in_request()  # validates the Bearer token
             except Exception as e:
@@ -35,6 +38,9 @@ def admin_required():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwargs):
+            if request.method == "OPTIONS":
+                return fn(*args, **kwargs)
+
             try:
                 verify_jwt_in_request()
             except Exception as e:

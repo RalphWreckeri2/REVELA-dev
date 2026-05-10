@@ -18,6 +18,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import "../styles/global.css";
+import Swal from "sweetalert2";
 import myLogo from "../assets/logo.png";
 import ProfileModal from "../pages/ProfileModal";
 
@@ -298,15 +299,24 @@ export default function DashboardLayout({ children, onLogout }) {
   const { user: authUser, logout } = useAuth();
 
   const handleLogout = () => {
-    if (!window.confirm("Are you sure you want to log out?")) {
-      return;
-    }
-    if (typeof onLogout === "function") {
-      onLogout();
-    } else if (logout) {
-      logout();
-    }
-    navigate("/");
+    Swal.fire({
+      title: 'Are you sure?',
+      text: "You will be logged out of the system.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, log out'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        if (typeof onLogout === "function") {
+          onLogout();
+        } else if (logout) {
+          logout();
+        }
+        navigate("/");
+      }
+    });
   };
 
   const displayUser = {

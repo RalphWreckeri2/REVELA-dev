@@ -171,6 +171,8 @@ export function UploadModal({ onClose, onSuccess, token }) {
   const [summary,       setSummary]       = useState(null);
   const [error,         setError]         = useState("");
 
+  const abortControllerRef = useRef(null);
+
   // Counter state
   const displayed = useRowCounter({
     total:      fileRowCount,
@@ -206,14 +208,24 @@ export function UploadModal({ onClose, onSuccess, token }) {
     if (!file) return;
     setLoading(true);
     setError("");
+    abortControllerRef.current = new AbortController();
     try {
-      const result = await uploadRegistryFile(file, token);
+      const result = await uploadRegistryFile(file, token, abortControllerRef.current.signal);
       setSummary(result);
     } catch (err) {
+      if (err.name === "AbortError") return;
       setError(err.message || "Upload failed. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setLoading(false);
+    setError("Upload cancelled by user.");
   };
 
   const handleDone = () => {
@@ -333,9 +345,11 @@ export function UploadModal({ onClose, onSuccess, token }) {
               ))}
             </div>
 
-            <p style={s.warningNote}>
-              Do not close this window while processing.
-            </p>
+            <div style={{ marginTop: 16 }}>
+              <button type="button" className="ghost-btn" style={{ color: "var(--color-danger)", borderColor: "var(--color-danger-light)", display: "flex", alignItems: "center", gap: "6px" }} onClick={handleCancelUpload}>
+                <Icon.X /> Cancel Upload
+              </button>
+            </div>
 
             <style>{`
               @keyframes dotBounce {

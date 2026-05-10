@@ -18,6 +18,15 @@ def create_app():
     mysql.init_app(app)
     jwt.init_app(app)
 
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://10.0.2.2:5000"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            "supports_credentials": True
+        }
+    })
+
     # Register blueprints
     from api.auth.routes import auth_bp
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -34,14 +43,8 @@ def create_app():
     from api.inspections.routes import inspections_bp
     app.register_blueprint(inspections_bp, url_prefix="/api/inspections")
 
-    # Apply a robust CORS configuration covering all API routes
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://10.0.2.2:5000",],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-        }
-    })
+    from api.analytics.routes import analytics_bp
+    app.register_blueprint(analytics_bp, url_prefix="/api/analytics")
 
     # Intercept all exceptions to ensure CORS headers are preserved on 500 errors
     @app.errorhandler(Exception)
@@ -55,5 +58,4 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True)
     app.run(debug=True, host='0.0.0.0', port=5000)

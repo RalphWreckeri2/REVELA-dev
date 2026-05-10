@@ -412,6 +412,9 @@ def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_p
         }, None
 
     except Exception as e:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        mysql.connection.rollback()
         return None, str(e)
 
 

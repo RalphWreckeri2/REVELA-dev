@@ -767,7 +767,8 @@ function DispatchModal({ flag, token, onClose, onSuccess }) {
     })
       .then(r => r.json())
       .then(data => {
-        setInspectors(Array.isArray(data) ? data : (data.data ?? []));
+        const list = Array.isArray(data) ? data : (data.data ?? []);
+        setInspectors(list.filter(u => u.isActive !== 0 && u.isActive !== false));
         setFetching(false);
       })
       .catch(() => { setFetching(false); setError("Could not load inspectors."); });

@@ -46,49 +46,95 @@ class _LoginPageState extends State<LoginPage>
     super.dispose();
   }
 
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.gpp_bad_rounded,
+              color: Colors.redAccent,
+              size: 28,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Understood',
+              style: TextStyle(
+                color: AppColors.darkGreen,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _handleLogin() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please fill in all fields.'),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      _showSnackBar('Please fill in all fields.');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
-    // Call the authentication service
-    final bool success = await _authService.login(
+    // ✅ Use loginWithRole instead of login
+    final LoginResult result = await _authService.loginWithRole(
       _emailController.text.trim(),
       _passwordController.text,
     );
 
     if (!mounted) return;
 
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
-    if (success) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Login failed. Please check your credentials.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+    switch (result) {
+      case LoginResult.success:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        break;
+      case LoginResult.notInspector:
+        _showErrorDialog(
+          'Unauthorized Access',
+          'Only registered field inspectors are authorized to use the mobile application. Administrators and other personnel must log in through the web dashboard.',
+        );
+        break;
+      case LoginResult.failed:
+        _showSnackBar('Login failed. Please check your credentials.');
+        break;
     }
   }
 
@@ -124,7 +170,6 @@ class _LoginPageState extends State<LoginPage>
                     ),
                     child: Column(
                       children: [
-                        // Logo — replace Container with Image.asset when ready
                         Container(
                           width: 84,
                           height: 84,

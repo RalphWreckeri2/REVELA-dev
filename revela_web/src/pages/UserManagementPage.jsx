@@ -26,17 +26,36 @@ function RoleBadge({ role }) {
 // ── Create Modal ──────────────────────────────────────────────────────────────
 function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
   const [formData, setFormData] = useState({ fullName: "", email: "", role: "Admin", phone: "" });
+  const [password, setPassword] = useState("");
   const [loading,  setLoading]  = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error,    setError]    = useState("");
+
+  const generatePassword = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("http://127.0.0.1:5000/api/users/generate-password", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) setPassword(data.tempPassword);
+    } catch (err) {
+      console.error("Failed to generate password", err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  useEffect(() => { generatePassword(); }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     try {
-      const result = await createUserRequest(formData, token);
+      const result = await createUserRequest({ ...formData, password }, token);
       onSuccess();
-      onSuccessMsg(`User "${formData.fullName}" created successfully. Temporary password: admin123`);
+      onSuccessMsg(`User "${formData.fullName}" created successfully. Temporary password: ${result.tempPassword || password}`);
       onClose();
     } catch (err) {
       setError(err.message || "Failed to create user.");
@@ -74,7 +93,18 @@ function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
 
           <div>
             <label style={styles.label}>Temporary Password</label>
-            <input disabled value="admin123" style={{ ...styles.input, background: "rgba(240,240,240,0.8)", color: "var(--color-muted)", cursor: "not-allowed" }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                required
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{ ...styles.input, flex: 1 }}
+              />
+              <button type="button" className="ghost-btn" style={{ padding: "0 12px" }} onClick={generatePassword} disabled={generating}>
+                {generating ? "..." : "Random"}
+              </button>
+            </div>
             <span style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, display: "block" }}>
               User will be required to change this on first login.
             </span>
@@ -235,6 +265,65 @@ function DeleteUserModal({ targetUser, onClose, onSuccess, token }) {
   );
 }
 
+// ── Reset Password Modal ──────────────────────────────────────────────────────
+function ResetPasswordModal({ targetUser, onClose, token }) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+  const [newPass, setNewPass] = useState("");
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/api/users/${targetUser.userID}/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reset password.");
+      setNewPass(data.tempPassword);
+    } catch (err) {
+      setError(err.message || "Failed to reset password.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.backdrop} onClick={!newPass ? onClose : undefined}>
+      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+        <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        <h3 style={styles.modalTitle}>Reset Password</h3>
+        {error && <p style={styles.errorBanner}>{error}</p>}
+        {newPass ? (
+          <div>
+            <p style={{ fontSize: 14, color: "var(--color-ink)", marginBottom: 16 }}>Password has been successfully reset for <strong>{targetUser.fullName}</strong>.</p>
+            <div style={{ background: "rgba(248,249,250,0.8)", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--color-border)", marginBottom: 20 }}>
+              <label style={styles.label}>New Temporary Password</label>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-primary)", letterSpacing: "1px", userSelect: "all" }}>{newPass}</div>
+              <p style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 6, margin: 0 }}>Please copy and securely send this to the user. They will be forced to change it on their next login.</p>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" className="primary-btn" onClick={onClose}>Done</button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 14, color: "var(--color-ink)", marginBottom: 24, lineHeight: 1.5 }}>Are you sure you want to reset the password for <strong>{targetUser.fullName}</strong>? This will invalidate their current password immediately.</p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button type="button" className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
+              <button type="button" className="primary-btn" style={{ background: "var(--color-primary)", borderColor: "var(--color-primary)" }} onClick={handleConfirm} disabled={loading}>{loading ? "Resetting…" : "Reset Password"}</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function UserManagementPage() {
   const { token, user } = useAuth();
@@ -244,6 +333,7 @@ export default function UserManagementPage() {
   const [showCreate,     setShowCreate]     = useState(false);
   const [editingUser,    setEditingUser]    = useState(null);
   const [userToDelete,   setUserToDelete]   = useState(null);
+  const [userToReset,    setUserToReset]    = useState(null);
   const [successMsg,     setSuccessMsg]     = useState("");
 
   const fetchUsers = async () => {
@@ -361,6 +451,16 @@ export default function UserManagementPage() {
                       <button
                         className="ghost-btn"
                         type="button"
+                        style={{ padding: "6px 12px", fontSize: 12, color: "var(--color-primary)", borderColor: "var(--color-primary-light)" }}
+                        onClick={() => setUserToReset(u)}
+                      >
+                        Reset Pass
+                      </button>
+                    )}
+                    {u.userID !== user.userID && u.isActive !== 0 && u.isActive !== false && (
+                      <button
+                        className="ghost-btn"
+                        type="button"
                         style={{ padding: "6px 12px", fontSize: 12, color: "var(--color-danger)", borderColor: "var(--color-danger-light)" }}
                         onClick={() => setUserToDelete(u)}
                       >
@@ -410,6 +510,14 @@ export default function UserManagementPage() {
             setSuccessMsg(`User "${userToDelete.fullName}" was removed.`);
             setTimeout(() => setSuccessMsg(""), 6000);
           }}
+        />
+      )}
+
+      {userToReset && (
+        <ResetPasswordModal
+          targetUser={userToReset}
+          token={token}
+          onClose={() => setUserToReset(null)}
         />
       )}
     </DashboardLayout>

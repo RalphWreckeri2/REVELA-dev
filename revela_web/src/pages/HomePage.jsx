@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useLoadScript, GoogleMap } from "@react-google-maps/api";
 import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
+import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { getAnalyticsOverviewRequest, getFlagsRequest } from "../services/api";
 import "../styles/HomePage.css";
@@ -71,6 +72,154 @@ function OnboardingPanel({ onDismiss }) {
         </div>
       </div>
     </section>
+  );
+}
+
+// ── New Features / Widgets ──────────────────────────────────────────────────
+
+function QuickActionsWidget({ navigate }) {
+  return (
+    <div className="dashboard-widget frosted-glass saas-card">
+      <div className="widget-header">
+        <h3>Quick Actions</h3>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <button className="primary-btn" onClick={() => navigate('/inspections')} style={{ justifyContent: 'center' }}>
+          Dispatch Inspector
+        </button>
+        <button className="ghost-btn" onClick={() => navigate('/map')} style={{ justifyContent: 'center' }}>
+          Manually Add Yellow Flag
+        </button>
+        <button className="ghost-btn" onClick={() => navigate('/map')} style={{ justifyContent: 'center' }}>
+          Run Detection Engine
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SystemHealthWidget() {
+  return (
+    <div className="dashboard-widget frosted-glass saas-card">
+      <div className="widget-header">
+        <h3>System Health</h3>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 4 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 13, color: "var(--color-muted)", fontWeight: 500 }}>Detection Engine</span>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12, background: "#dcfce7", color: "#15803d" }}>Idle</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 13, color: "var(--color-muted)", fontWeight: 500 }}>Registry Sync</span>
+          <span style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 600 }}>Up to date</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 13, color: "var(--color-muted)", fontWeight: 500 }}>Places API Polling</span>
+          <span style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 600 }}>2 hrs ago</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActiveInspectionsWidget({ navigate }) {
+  return (
+    <div className="dashboard-widget frosted-glass saas-card">
+      <div className="widget-header">
+        <h3>Active Inspections Tracker</h3>
+        <button className="ghost-btn" onClick={() => navigate('/inspections')} style={{ fontSize: 11, padding: "4px 10px" }}>
+          View Kanban
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, textAlign: "center", marginTop: 8 }}>
+        <div style={{ background: "rgba(239,246,255,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #bfdbfe" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6", lineHeight: 1 }}>4</div>
+          <div style={{ fontSize: 11, color: "#1e3a8a", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>ASSIGNED</div>
+        </div>
+        <div style={{ background: "rgba(254,252,232,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #fef08a" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#ca8a04", lineHeight: 1 }}>2</div>
+          <div style={{ fontSize: 11, color: "#713f12", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>IN PROGRESS</div>
+        </div>
+        <div style={{ background: "rgba(240,253,244,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #bbf7d0" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a", lineHeight: 1 }}>5</div>
+          <div style={{ fontSize: 11, color: "#14532d", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>VERIFIED TODAY</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComplianceTrendWidget() {
+  // Static mock trend for visual representation
+  const trendData = [
+    { day: '1', rate: 75 }, { day: '5', rate: 76 }, { day: '10', rate: 78 },
+    { day: '15', rate: 77 }, { day: '20', rate: 80 }, { day: '25', rate: 82 },
+    { day: '30', rate: 83 }
+  ];
+
+  return (
+    <div className="dashboard-widget frosted-glass saas-card" style={{ display: "flex", flexDirection: "column" }}>
+      <div className="widget-header" style={{ marginBottom: 0 }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Compliance Trend</h3>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-muted)" }}>Trailing 30 Days</p>
+        </div>
+        <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 700, background: "#dcfce7", padding: "4px 10px", borderRadius: 20 }}>
+          +8% ↑
+        </span>
+      </div>
+      <div style={{ flex: 1, minHeight: 140, marginTop: 16 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={trendData}>
+            <YAxis domain={['dataMin - 2', 'dataMax + 2']} hide />
+            <Line type="monotone" dataKey="rate" stroke="#22c55e" strokeWidth={3} dot={{ r: 3, fill: "#22c55e", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function HighPriorityAlertsWidget({ flags, navigate }) {
+  const criticalFlags = flags.filter(f => f.flagColor === 'Black' || f.flagColor === 'Red').slice(0, 2);
+  
+  return (
+    <div className="dashboard-widget frosted-glass saas-card">
+      <div className="widget-header">
+        <h3 style={{ color: "#b91c1c", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          High-Priority Alerts
+        </h3>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
+        {criticalFlags.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "20px 0", color: "var(--color-muted)", fontSize: 13 }}>
+            No critical alerts right now.
+          </div>
+        ) : criticalFlags.map(f => (
+          <div 
+            key={f.logID} 
+            style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 12px", borderRadius: 10, cursor: "pointer", transition: "transform 0.15s" }} 
+            onClick={() => navigate('/map')}
+            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#991b1b", marginBottom: 2 }}>{f.detectedName || "Unknown Establishment"}</div>
+            <div style={{ fontSize: 11, color: "#b91c1c" }}>
+              {f.flagColor === 'Black' ? 'Non-responsive for 7+ days' : 'Unregistered - Escalation needed'}
+            </div>
+          </div>
+        ))}
+        {criticalFlags.length > 0 && (
+          <button className="ghost-btn" style={{ fontSize: 11, padding: "6px", color: "#b91c1c", borderColor: "transparent", marginTop: 4, width: "100%" }} onClick={() => navigate('/map')}>
+            View All Critical Targets →
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -296,6 +445,8 @@ export default function HomePage() {
     {
       value:       kpis ? kpis.total_businesses.toLocaleString() : "—",
       label:       "Total Registered Entities",
+      delta:       kpis?.total_businesses_delta ? `${kpis.total_businesses_delta > 0 ? '+' : ''}${kpis.total_businesses_delta} vs last month` : undefined,
+      trend:       kpis?.total_businesses_delta >= 0 ? "up" : "down",
       iconVariant: "gold",
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -306,6 +457,8 @@ export default function HomePage() {
     {
       value:       kpis ? kpis.total_flagged : "—",
       label:       "Unregistered Flags Detected",
+      delta:       kpis?.total_flagged_delta ? `${kpis.total_flagged_delta > 0 ? '+' : ''}${kpis.total_flagged_delta} vs last month` : undefined,
+      trend:       kpis?.total_flagged_delta > 0 ? "down" : "up", // Red flag: more is bad
       iconVariant: "red",
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -317,6 +470,8 @@ export default function HomePage() {
     {
       value:       kpis ? `${kpis.compliance_rate}%` : "—",
       label:       "Overall Compliance Rate",
+      delta:       kpis?.compliance_rate_delta ? `${kpis.compliance_rate_delta > 0 ? '+' : ''}${kpis.compliance_rate_delta}% vs last month` : undefined,
+      trend:       kpis?.compliance_rate_delta >= 0 ? "up" : "down",
       iconVariant: "green",
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -344,14 +499,6 @@ export default function HomePage() {
           <h1 className="page-title">Overview Dashboard</h1>
           <p className="page-subtitle">Real-time compliance metrics for Mataasnakahoy.</p>
         </div>
-        <button className="ghost-btn" type="button" onClick={() => navigate("/reports")}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Export Report
-        </button>
       </div>
 
       {kpiError && (
@@ -369,8 +516,21 @@ export default function HomePage() {
         {kpiCards.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
       </div>
 
-      {/* Widget row */}
-      <div className="widget-grid">
+      {/* New Widgets: Trends & Inspections */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginTop: 24 }}>
+        <ComplianceTrendWidget />
+        <ActiveInspectionsWidget navigate={navigate} />
+      </div>
+
+      {/* New Widgets: Actions & Alerts */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, marginTop: 24 }}>
+        <QuickActionsWidget navigate={navigate} />
+        <HighPriorityAlertsWidget flags={allFlags} navigate={navigate} />
+        <SystemHealthWidget />
+      </div>
+
+      {/* Original Widget row */}
+      <div className="widget-grid" style={{ marginTop: 24 }}>
         <MiniMapWidget
           flags={allFlags}
           onOpenMap={() => navigate("/map")}

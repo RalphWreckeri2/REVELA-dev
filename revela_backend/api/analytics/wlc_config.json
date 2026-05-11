@@ -1,7 +1,7 @@
 {
-    "w1_risk": 97,
-    "w2_sector": 2,
-    "w3_distance": 1,
+    "w1_risk": 70,
+    "w2_sector": 20,
+    "w3_distance": 10,
     "bplo_lat": 13.9667,
     "bplo_lng": 121.1167,
     "sectors": {}

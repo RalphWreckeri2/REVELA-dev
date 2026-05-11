@@ -1,16 +1,14 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
 from api.middleware.decorators import admin_required
-from api.models.user import (
-    get_all_users, find_user_by_email, find_user_by_id,
-    create_user, update_user, delete_user
-)
+from api.models.user import (get_all_users, find_user_by_email,
+                             find_user_by_id, create_user, update_user,
+                             delete_user, update_password)
 import bcrypt
 import re
+import secrets
 
 users_bp = Blueprint("users", __name__)
-
-DEFAULT_PASSWORD = "admin123"
 
 
 def _normalize_phone(phone):
@@ -50,6 +48,15 @@ def list_users():
     return jsonify(users), 200
 
 
+# ── GET /api/users/generate-password ──────────────────────────────────────────
+@users_bp.route("/generate-password", methods=["GET"])
+@admin_required()
+def generate_password_route():
+    """Generates a new random password for the user creation form."""
+    temp_password = secrets.token_urlsafe(10)
+    return jsonify({"tempPassword": temp_password}), 200
+
+
 # ── POST /api/users/ ──────────────────────────────────────────────────────────
 @users_bp.route("/", methods=["POST"])
 @admin_required()
@@ -69,8 +76,10 @@ def create_user_route():
     if raw_phone and phone is None:
         return jsonify({"error": "Invalid phone number. Use format: 09XXXXXXXXX"}), 400
 
+    # Generate a secure, temporary password
+    temp_password = data.get("password", secrets.token_urlsafe(10))
     hashed = bcrypt.hashpw(
-        DEFAULT_PASSWORD.encode("utf-8"),
+        temp_password.encode("utf-8"),
         bcrypt.gensalt()
     ).decode("utf-8")
 
@@ -80,12 +89,13 @@ def create_user_route():
         hashed_password=hashed,
         role=data["role"],
         phone=phone,
+        must_change_password=True,  # Force change on first login
     )
 
     return jsonify({
         "message":      "User created successfully",
         "userID":       user_id,
-        "tempPassword": DEFAULT_PASSWORD,
+        "tempPassword": temp_password,
     }), 201
 
 
@@ -101,6 +111,11 @@ def update_user_route(user_id):
     user = find_user_by_id(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
+
+    # If email is being changed, ensure it's not already taken
+    if "email" in data and data["email"].lower() != user["email"].lower():
+        if find_user_by_email(data["email"]):
+            return jsonify({"error": "Email already in use by another account"}), 409
 
     if user["userRole"] == "SUPER_ADMIN":
         data.pop("role", None)
@@ -123,6 +138,45 @@ def update_user_route(user_id):
     )
 
     return jsonify({"message": "User updated successfully"}), 200
+
+
+# ── POST /api/users/:id/reset-password ────────────────────────────────────────
+@users_bp.route("/<int:user_id>/reset-password", methods=["POST"])
+@admin_required()
+def reset_user_password_route(user_id):
+    """Admin-initiated password reset for a user."""
+    admin_id = int(get_jwt_identity())
+
+    # Prevent admin from resetting their own password via this route
+    if user_id == admin_id:
+        return jsonify({"error": "Use the 'Change Password' feature in your settings."}), 403
+
+    user_to_reset = find_user_by_id(user_id)
+    if not user_to_reset:
+        return jsonify({"error": "User not found"}), 404
+
+    # Prevent a regular Admin from resetting a SUPER_ADMIN's password
+    admin_user = find_user_by_id(admin_id)
+    if user_to_reset["userRole"] == "SUPER_ADMIN" and admin_user.get("userRole") != "SUPER_ADMIN":
+        return jsonify({"error": "Only a SUPER_ADMIN can reset another SUPER_ADMIN's password."}), 403
+
+    # Generate new random password
+    new_password = secrets.token_urlsafe(10)
+    hashed = bcrypt.hashpw(
+        new_password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
+
+    # Update password and force change on next login
+    # NOTE: These two operations should ideally be in a single transaction
+    # in the model layer to ensure atomicity.
+    update_password(user_id, hashed)
+    update_user(user_id=user_id, mustChangePassword=True)
+
+    return jsonify({
+        "message": f"Password for user {user_to_reset['fullName']} has been reset.",
+        "tempPassword": new_password
+    }), 200
 
 
 # ── DELETE /api/users/:id ─────────────────────────────────────────────────────

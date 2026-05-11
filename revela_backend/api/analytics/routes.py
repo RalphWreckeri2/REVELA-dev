@@ -206,6 +206,125 @@ def _get_all_analytics_inner():
         for row in cur.fetchall()
     ]
 
+    # DBSCAN Hotspot Intelligence
+    dbscan_insight = "Not enough data to pinpoint specific high-risk zones."
+    try:
+        cur.execute("""
+            SELECT g.latitude, g.longitude, COALESCE(b.barangayName, 'Unknown Area') as barangayName
+            FROM geospatial_logs g
+            LEFT JOIN barangays b ON g.barangayID = b.barangayID
+            WHERE g.flagColor IN ('Red', 'Black')
+              AND g.latitude IS NOT NULL
+              AND g.longitude IS NOT NULL
+        """)
+        hotspot_data = cur.fetchall()
+
+        if len(hotspot_data) >= 3:
+            import numpy as np
+            from sklearn.cluster import DBSCAN
+            from collections import Counter
+
+            # Convert coords to radians for Haversine distance
+            coords = np.radians(
+                [[float(r['latitude']), float(r['longitude'])] for r in hotspot_data])
+
+            # 180 meters in radians
+            kms_per_radian = 6371.0088
+            epsilon = 0.18 / kms_per_radian
+
+            db = DBSCAN(eps=epsilon, min_samples=3,
+                        algorithm='ball_tree', metric='haversine').fit(coords)
+            labels = db.labels_
+
+            valid_labels = [lbl for lbl in labels if lbl != -1]  # -1 is noise
+            if valid_labels:
+                # Find largest cluster
+                largest_cluster_label = Counter(
+                    valid_labels).most_common(1)[0][0]
+                cluster_size = Counter(valid_labels).most_common(1)[0][1]
+
+                # Find dominant barangay in this cluster
+                cluster_barangays = [hotspot_data[i]['barangayName'] for i, lbl in enumerate(
+                    labels) if lbl == largest_cluster_label]
+                dominant_barangay = Counter(
+                    cluster_barangays).most_common(1)[0][0]
+
+                dbscan_insight = f"Primary Hotspot: {cluster_size} unregistered/high-risk businesses located closely together near {dominant_barangay}. Immediate inspection recommended."
+            else:
+                dbscan_insight = "No densely packed zones of high-risk businesses detected at this time."
+    except Exception as e:
+        print(f"DBSCAN Error: {e}")
+        dbscan_insight = "Hotspot detection temporarily unavailable."
+
+    # Moran's I Proxy (Spatial Autocorrelation)
+    morans_insight = "Not enough data to determine broader geographic patterns."
+    try:
+        cur.execute("""
+            SELECT 
+                b.barangayName,
+                AVG(g.latitude) as lat,
+                AVG(g.longitude) as lng,
+                SUM(CASE WHEN g.flagColor IN ('Red', 'Black') THEN 1 ELSE 0 END) as severe_count
+            FROM barangays b
+            JOIN geospatial_logs g ON b.barangayID = g.barangayID
+            WHERE g.latitude IS NOT NULL AND g.longitude IS NOT NULL
+            GROUP BY b.barangayID, b.barangayName
+        """)
+        brgy_spatial = cur.fetchall()
+
+        if len(brgy_spatial) >= 4:
+            import numpy as np
+
+            points = [
+                {'name': r['barangayName'], 'lat': float(r['lat']), 'lng': float(
+                    r['lng']), 'risk': float(r['severe_count'])}
+                for r in brgy_spatial if r['lat'] and r['lng']
+            ]
+
+            if len(points) >= 4:
+                risk_values = [p['risk'] for p in points]
+                threshold = np.percentile(risk_values, 75) if sum(
+                    risk_values) > 0 else 0
+                high_risk_points = [
+                    p for p in points if p['risk'] > threshold and p['risk'] > 0]
+
+                if len(high_risk_points) >= 2:
+                    all_lat = np.mean([p['lat'] for p in points])
+                    all_lng = np.mean([p['lng'] for p in points])
+                    hr_lat = np.mean([p['lat'] for p in high_risk_points])
+                    hr_lng = np.mean([p['lng'] for p in high_risk_points])
+
+                    ns = "Northern" if hr_lat > all_lat else "Southern"
+                    ew = "Eastern" if hr_lng > all_lng else "Western"
+
+                    def haversine(lat1, lon1, lat2, lon2):
+                        R = 6371
+                        dLat, dLon = np.radians(
+                            lat2 - lat1), np.radians(lon2 - lon1)
+                        a = np.sin(dLat/2)**2 + np.cos(np.radians(lat1)) * \
+                            np.cos(np.radians(lat2)) * np.sin(dLon/2)**2
+                        return R * 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
+
+                    all_dists = [haversine(points[i]['lat'], points[i]['lng'], points[j]['lat'], points[j]['lng'])
+                                 for i in range(len(points)) for j in range(i+1, len(points))]
+                    hr_dists = [haversine(high_risk_points[i]['lat'], high_risk_points[i]['lng'], high_risk_points[j]['lat'], high_risk_points[j]['lng'])
+                                for i in range(len(high_risk_points)) for j in range(i+1, len(high_risk_points))]
+
+                    avg_all = np.mean(all_dists)
+                    avg_hr = np.mean(hr_dists) if hr_dists else 0
+
+                    if 0 < avg_hr < (avg_all * 0.85):
+                        morans_insight = f"Concentrated Risk: High-risk barangays are heavily grouped together, primarily located in the {ns}-{ew} sector."
+                    elif avg_hr > (avg_all * 1.15):
+                        morans_insight = f"Widespread Risk: High-risk barangays are scattered widely across the municipality."
+                    else:
+                        morans_insight = f"No Obvious Pattern: High-risk areas are distributed randomly without obvious clustering."
+                else:
+                    morans_insight = "Not enough variation in risk to determine regional patterns."
+    except Exception as e:
+        print(f"Moran's I Proxy Error: {e}")
+        morans_insight = "Regional pattern analysis temporarily unavailable."
+
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 3 — PRESCRIPTIVE (WLC / OPS)
     # ══════════════════════════════════════════════════════════════════════════
@@ -227,7 +346,6 @@ def _get_all_analytics_inner():
         GROUP BY b.barangayID, b.barangayName
     """)
     rows = cur.fetchall()
-    cur.close()
 
     max_flagged = max((r["flagged_count"] or 0 for r in rows), default=1) or 1
     rankings = []
@@ -294,6 +412,64 @@ def _get_all_analytics_inner():
     for i, r in enumerate(rankings):
         r["rank"] = i + 1
 
+    dispatch_recommendations = []
+    top_3 = rankings[:3]
+    valid_top_3 = [b for b in top_3 if b["flagged_count"] > 0]
+
+    if valid_top_3:
+        # Count actual active inspectors from the users table
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM users WHERE userRole = 'Inspector' AND isActive = 1")
+        inspector_row = cur.fetchone()
+        total_inspectors = int(
+            inspector_row["n"]) if inspector_row and inspector_row["n"] else 6
+        # Ensure we have at least enough to assign 1 to each top barangay
+        total_inspectors = max(len(valid_top_3), total_inspectors)
+
+        top_3_flags = sum(b["flagged_count"] for b in valid_top_3)
+        available_inspectors = total_inspectors
+
+        for i, brgy in enumerate(valid_top_3):
+            cur.execute("""
+                SELECT COALESCE(o.lineOfBusiness, 'Unclassified') AS category, COUNT(g.logID) as count
+                FROM geospatial_logs g
+                LEFT JOIN official_registry o ON g.detectedName = o.businessName
+                WHERE g.barangayID = %s
+                GROUP BY category
+                ORDER BY count DESC
+                LIMIT 2
+            """, (brgy["barangayID"],))
+
+            top_cats_rows = cur.fetchall()
+            if top_cats_rows:
+                top_cats = [str(row["category"]) for row in top_cats_rows]
+                priority_text = " and ".join(top_cats)
+            else:
+                priority_text = "General Categories"
+
+            # Proportionally distribute actual inspectors across the top 3
+            if i == len(valid_top_3) - 1:
+                inspectors = available_inspectors
+            else:
+                inspectors = max(
+                    1, round((brgy["flagged_count"] / top_3_flags) * total_inspectors))
+                # Ensure we leave at least 1 inspector for the remaining barangays in the list
+                inspectors = min(
+                    inspectors, available_inspectors - (len(valid_top_3) - 1 - i))
+
+            available_inspectors -= inspectors
+
+            rec_text = f"Deploy {inspectors} inspector{'s' if inspectors > 1 else ''} to {brgy['barangayName']} this week. Priority: {priority_text} (Sector Severity: {brgy['sector_score']}). Estimated coverage: {brgy['flagged_count']} flagged entities."
+
+            dispatch_recommendations.append({
+                "barangayID": brgy["barangayID"],
+                "barangayName": brgy["barangayName"],
+                "rank": brgy["rank"],
+                "recommendation": rec_text
+            })
+
+    cur.close()
+
     return jsonify({
         "descriptive": {
             "kpis": {
@@ -317,10 +493,13 @@ def _get_all_analytics_inner():
             "barangay_risk_data":     barangay_risk_data,
             "category_noncompliance": category_noncompliance,
             "flag_trend":             flag_trend,
+            "dbscan_insight":         dbscan_insight,
+            "morans_insight":         morans_insight,
         },
         "prescriptive": {
             "rankings":   rankings,
             "wlc_config": config,
+            "dispatch_recommendations": dispatch_recommendations,
         },
     }), 200
 

@@ -79,7 +79,7 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
 
         # Guard: inspector user exists and has Inspector role
         cursor.execute(
-            "SELECT userID, fullName, userRole FROM users WHERE userID = %s",
+            "SELECT userID, fullName, userRole FROM users WHERE userID = %s AND userRole = 'Inspector'",
             (inspector_user_id,)
         )
         inspector = cursor.fetchone()

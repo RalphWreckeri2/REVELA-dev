@@ -19,6 +19,10 @@ def login_user(email, password):
     if not user:
         return None, "Invalid email or password"
 
+    # Guard clause: Only Admins can log into the web portal
+    if user.get("userRole") not in ("Admin", "SUPER_ADMIN"):
+        return None, "You do not have permission to access this portal."
+
     # Guard clause: Check if account is active/enabled
     if not user.get("is_active", True):
         return None, "Account is disabled. Please contact the administrator."
@@ -63,6 +67,10 @@ def request_otp(identifier):
 
     if not user:
         # Don't reveal if user exists or not — always return success
+        return True
+
+    # Don't reveal if user is not an admin — always return success
+    if user.get("userRole") not in ("Admin", "SUPER_ADMIN"):
         return True
 
     # Invalidate any existing OTPs for this user
@@ -192,6 +200,10 @@ def reset_password(identifier, otp_code, new_password):
         user = find_user_by_phone(identifier)
 
     if not user:
+        return False, "Invalid request"
+
+    # Guard: Only allow password reset for Admins on this portal
+    if user.get("userRole") not in ("Admin", "SUPER_ADMIN"):
         return False, "Invalid request"
 
     otp_record = get_valid_otp(user["userID"], otp_code)

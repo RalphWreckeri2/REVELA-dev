@@ -171,7 +171,8 @@ export default function SettingsPage() {
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [autoSync, setAutoSync] = useState(false);
   const { isDark, setTheme } = useTheme();
-  const [saving, setSaving] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
+  const [savingPolicy, setSavingPolicy] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [wlcConfig, setWlcConfig] = useState({ w1_risk: 40, w2_sector: 40, w3_distance: 20, bplo_lat: 13.9667, bplo_lng: 121.1167 });
@@ -197,11 +198,17 @@ export default function SettingsPage() {
     }).catch(console.error);
   }, [token]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    // Example: Save to local storage (or replace with API call)
+  const handleSavePreferences = async () => {
+    setSavingPreferences(true);
     localStorage.setItem("revela_emailAlerts", emailAlerts);
     localStorage.setItem("revela_autoSync", autoSync);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    Swal.fire({ icon: 'success', title: 'Saved', text: 'Local preferences updated.', timer: 2000, showConfirmButton: false });
+    setSavingPreferences(false);
+  };
+
+  const handleSavePolicy = async () => {
+    setSavingPolicy(true);
     
     try {
       const sectorObj = {};
@@ -212,11 +219,7 @@ export default function SettingsPage() {
     } catch (err) {
       Swal.fire('Error', err.message || "Failed to update WLC config", 'error');
     }
-
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    
-    setSaving(false);
+    setSavingPolicy(false);
   };
 
   const handleToggle2FA = async () => {
@@ -292,16 +295,21 @@ export default function SettingsPage() {
           <h1 className="page-title">Settings</h1>
           <p className="page-subtitle">Configure dashboard preferences and system behavior.</p>
         </div>
-        <button className="primary-btn" type="button" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : "Save Settings"}
-        </button>
       </div>
 
-      <div className="saas-card frosted-glass" style={{ display: "grid", gap: 20 }}>
-        <section>
-          <h3 style={{ margin: "0 0 10px", color: "var(--color-ink)", fontSize: 16 }}>Notifications</h3>
-          <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Control how the system alerts you about new inspections and reports.</p>
-          <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* Local UI Preferences */}
+        <section className="saas-card frosted-glass">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>Local UI Preferences</h3>
+              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Control dashboard alerts, sync behavior, and appearance.</p>
+            </div>
+            <button className="primary-btn" type="button" onClick={handleSavePreferences} disabled={savingPreferences}>
+              {savingPreferences ? "Saving..." : "Save Preferences"}
+            </button>
+          </div>
+          <div style={{ display: "grid", gap: 12 }}>
             <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
               <span>Email notifications</span>
               <input type="checkbox" checked={emailAlerts} onChange={() => setEmailAlerts((prev) => !prev)} />
@@ -317,11 +325,18 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section>
-          <h3 style={{ margin: "0 0 10px", color: "var(--color-ink)", fontSize: 16 }}>Policy Configuration (WLC)</h3>
-          <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Set up priority score scenarios, linked weights, and dynamic sector rules.</p>
-          
-          <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
+        {/* System Policy (OPS WLC) */}
+        <section className="saas-card frosted-glass">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>System Policy (OPS WLC)</h3>
+              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Set up priority score scenarios, linked weights, and dynamic sector rules.</p>
+            </div>
+            <button className="primary-btn" type="button" onClick={handleSavePolicy} disabled={savingPolicy}>
+              {savingPolicy ? "Saving..." : "Save Policy"}
+            </button>
+          </div>
+          <div style={{ display: "grid", gap: 16 }}>
             {/* Scenario Presets */}
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
               <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, background: "rgba(245,158,11,0.1)", color: "#b45309", borderColor: "rgba(245,158,11,0.4)" }} onClick={() => applyPreset("health")}>
@@ -385,10 +400,13 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section>
-          <h3 style={{ margin: "0 0 10px", color: "var(--color-ink)", fontSize: 16 }}>Security</h3>
-          <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Manage sign-in protection and admin access controls.</p>
-          <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+        {/* System Security */}
+        <section className="saas-card frosted-glass">
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>System Security</h3>
+            <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Manage sign-in protection and admin access controls. Changes here are applied immediately.</p>
+          </div>
+          <div style={{ display: "grid", gap: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "var(--color-ink)" }}>Change password</div>

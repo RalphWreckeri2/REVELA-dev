@@ -19,10 +19,6 @@ def login_user(email, password):
     if not user:
         return None, "Invalid email or password"
 
-    # Guard clause: Only Admins can log into the web portal
-    if user.get("userRole") not in ("Admin", "SUPER_ADMIN"):
-        return None, "You do not have permission to access this portal."
-
     # Guard clause: Check if account is active/enabled
     if not user.get("is_active", True):
         return None, "Account is disabled. Please contact the administrator."

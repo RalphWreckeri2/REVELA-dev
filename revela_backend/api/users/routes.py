@@ -7,6 +7,7 @@ from api.models.user import (get_all_users, find_user_by_email,
 import bcrypt
 import re
 import secrets
+import traceback
 
 users_bp = Blueprint("users", __name__)
 
@@ -145,38 +146,41 @@ def update_user_route(user_id):
 @admin_required()
 def reset_user_password_route(user_id):
     """Admin-initiated password reset for a user."""
-    admin_id = int(get_jwt_identity())
+    try:
+        admin_id = int(get_jwt_identity())
 
-    # Prevent admin from resetting their own password via this route
-    if user_id == admin_id:
-        return jsonify({"error": "Use the 'Change Password' feature in your settings."}), 403
+        # Prevent admin from resetting their own password via this route
+        if user_id == admin_id:
+            return jsonify({"error": "Use the 'Change Password' feature in your settings."}), 403
 
-    user_to_reset = find_user_by_id(user_id)
-    if not user_to_reset:
-        return jsonify({"error": "User not found"}), 404
+        user_to_reset = find_user_by_id(user_id)
+        if not user_to_reset:
+            return jsonify({"error": "User not found"}), 404
 
-    # Prevent a regular Admin from resetting a SUPER_ADMIN's password
-    admin_user = find_user_by_id(admin_id)
-    if user_to_reset["userRole"] == "SUPER_ADMIN" and admin_user.get("userRole") != "SUPER_ADMIN":
-        return jsonify({"error": "Only a SUPER_ADMIN can reset another SUPER_ADMIN's password."}), 403
+        # Prevent a regular Admin from resetting a SUPER_ADMIN's password
+        admin_user = find_user_by_id(admin_id)
+        if user_to_reset["userRole"] == "SUPER_ADMIN" and admin_user.get("userRole") != "SUPER_ADMIN":
+            return jsonify({"error": "Only a SUPER_ADMIN can reset another SUPER_ADMIN's password."}), 403
 
-    # Generate new random password
-    new_password = secrets.token_urlsafe(10)
-    hashed = bcrypt.hashpw(
-        new_password.encode("utf-8"),
-        bcrypt.gensalt()
-    ).decode("utf-8")
+        # Generate new random password
+        new_password = secrets.token_urlsafe(10)
+        hashed = bcrypt.hashpw(
+            new_password.encode("utf-8"),
+            bcrypt.gensalt()
+        ).decode("utf-8")
 
-    # Update password and force change on next login
-    # NOTE: These two operations should ideally be in a single transaction
-    # in the model layer to ensure atomicity.
-    update_password(user_id, hashed)
-    update_user(user_id=user_id, mustChangePassword=True)
+        # Update password and force change on next login
+        # NOTE: These two operations should ideally be in a single transaction
+        # in the model layer to ensure atomicity.
+        update_password(user_id, hashed, must_change_password=True)
 
-    return jsonify({
-        "message": f"Password for user {user_to_reset['fullName']} has been reset.",
-        "tempPassword": new_password
-    }), 200
+        return jsonify({
+            "message": f"Password for user {user_to_reset['fullName']} has been reset.",
+            "tempPassword": new_password
+        }), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 
 # ── DELETE /api/users/:id ─────────────────────────────────────────────────────

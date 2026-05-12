@@ -26,12 +26,12 @@ def find_user_by_phone(phone):
     return user
 
 
-def update_password(user_id, hashed_password):
+def update_password(user_id, hashed_password, must_change_password=False):
     cur = mysql.connection.cursor()
     cur.execute("""
-        UPDATE USERS SET userPassword = %s, updatedAt = NOW()
+        UPDATE USERS SET userPassword = %s, mustChangePassword = %s, updatedAt = NOW()
         WHERE userID = %s
-    """, (hashed_password, user_id))
+    """, (hashed_password, must_change_password, user_id))
     mysql.connection.commit()
     cur.close()
 
@@ -66,14 +66,14 @@ def get_all_users():
     return users
 
 
-def create_user(full_name, email, hashed_password, role, phone=None):
-    """Insert a new user with mustChangePassword=TRUE."""
+def create_user(full_name, email, hashed_password, role, phone=None, must_change_password=True):
+    """Insert a new user."""
     cur = mysql.connection.cursor()
     cur.execute("""
         INSERT INTO USERS 
             (fullName, email, userPassword, userRole, phone, mustChangePassword)
-        VALUES (%s, %s, %s, %s, %s, TRUE)
-    """, (full_name, email, hashed_password, role, phone))
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """, (full_name, email, hashed_password, role, phone, must_change_password))
     mysql.connection.commit()
     user_id = cur.lastrowid
     cur.close()

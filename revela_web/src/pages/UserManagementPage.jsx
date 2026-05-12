@@ -266,7 +266,7 @@ function DeleteUserModal({ targetUser, onClose, onSuccess, token }) {
 }
 
 // ── Reset Password Modal ──────────────────────────────────────────────────────
-function ResetPasswordModal({ targetUser, onClose, token }) {
+function ResetPasswordModal({ targetUser, onClose, onSuccess, token }) {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
   const [newPass, setNewPass] = useState("");
@@ -280,11 +280,21 @@ function ResetPasswordModal({ targetUser, onClose, token }) {
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({})
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to reset password.");
+      
+      let data;
+      const text = await res.text();
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error(`Server returned ${res.status}: ${text.slice(0, 60)}...`);
+      }
+
+      if (!res.ok) throw new Error(data?.error || "Failed to reset password.");
       setNewPass(data.tempPassword);
+      if (onSuccess) onSuccess();
     } catch (err) {
       setError(err.message || "Failed to reset password.");
     } finally {
@@ -518,6 +528,7 @@ export default function UserManagementPage() {
           targetUser={userToReset}
           token={token}
           onClose={() => setUserToReset(null)}
+          onSuccess={fetchUsers}
         />
       )}
     </DashboardLayout>

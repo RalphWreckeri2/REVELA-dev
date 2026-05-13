@@ -138,7 +138,7 @@ function ActiveInspectionsWidget({ navigate }) {
         </div>
         <div style={{ background: "rgba(254,252,232,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #fef08a" }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#ca8a04", lineHeight: 1 }}>2</div>
-          <div style={{ fontSize: 11, color: "#713f12", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>IN PROGRESS</div>
+          <div style={{ fontSize: 11, color: "#713f12", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>REASSIGNED</div>
         </div>
         <div style={{ background: "rgba(240,253,244,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #bbf7d0" }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a", lineHeight: 1 }}>5</div>

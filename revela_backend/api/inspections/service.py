@@ -6,7 +6,7 @@ from app import mysql
 def get_inspector_tasks(user_id):
     """
     Return all inspection reports assigned to this inspector
-    where verificationStatus is 'Assigned' or 'In Progress'.
+    where verificationStatus is 'Assigned' or 'Reassigned'.
     Joins geospatial_logs for flag details and barangays for name.
     """
     try:
@@ -31,7 +31,7 @@ def get_inspector_tasks(user_id):
             JOIN geospatial_logs g  ON ir.targetID   = g.logID
             LEFT JOIN barangays b   ON g.barangayID  = b.barangayID
             WHERE ir.userID = %s
-              AND ir.verificationStatus IN ('Assigned', 'In Progress')
+              AND ir.verificationStatus IN ('Assigned', 'Reassigned')
             ORDER BY ir.irTimestamp DESC
         """, (user_id,))
         rows = cursor.fetchall()
@@ -72,7 +72,7 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
         cursor.execute("""
             SELECT reportID FROM inspection_reports
             WHERE targetID = %s
-              AND verificationStatus IN ('Assigned', 'In Progress')
+              AND verificationStatus IN ('Assigned', 'Reassigned')
             LIMIT 1
         """, (log_id,))
         existing = cursor.fetchone()
@@ -87,22 +87,30 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
             cursor.close()
             return None, f"Inspector userID {inspector_user_id} not found"
 
+        # Check if this flag was already verified in a past report
+        cursor.execute("""
+            SELECT reportID FROM inspection_reports
+            WHERE targetID = %s AND verificationStatus = 'Verified'
+            LIMIT 1
+        """, (log_id,))
+        was_verified = cursor.fetchone()
+
+        new_status = 'Reassigned' if was_verified else 'Assigned'
+
         if existing:
             cursor.execute("""
                 UPDATE inspection_reports
-                SET userID = %s, verificationStatus = 'Assigned'
+                SET userID = %s, verificationStatus = %s
                 WHERE reportID = %s
-            """, (inspector_user_id, existing["reportID"]))
+            """, (inspector_user_id, new_status, existing["reportID"]))
             report_id = existing["reportID"]
-            assignment_status = "Reassigned"
         else:
             cursor.execute("""
                 INSERT INTO inspection_reports
                     (userID, targetID, targetType, verificationStatus)
-                VALUES (%s, %s, 'geospatial_log', 'Assigned')
-            """, (inspector_user_id, log_id))
+                VALUES (%s, %s, 'geospatial_log', %s)
+            """, (inspector_user_id, log_id, new_status))
             report_id = cursor.lastrowid
-            assignment_status = "Assigned"
 
         mysql.connection.commit()
         cursor.close()
@@ -112,7 +120,7 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
             "logID":      log_id,
             "inspectorID": inspector_user_id,
             "inspector":  inspector["fullName"],
-            "status":     assignment_status,
+            "status":     new_status,
         }, None
 
     except Exception as e:
@@ -138,7 +146,7 @@ def submit_inspection(log_id, user_id, inspection_result,
             SELECT reportID, irTimestamp FROM inspection_reports
             WHERE targetID = %s
               AND userID   = %s
-              AND verificationStatus IN ('Assigned', 'In Progress')
+              AND verificationStatus IN ('Assigned', 'Reassigned')
             LIMIT 1
         """, (log_id, user_id))
         report = cursor.fetchone()

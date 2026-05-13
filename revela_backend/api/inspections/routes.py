@@ -16,7 +16,7 @@ inspections_bp = Blueprint("inspections", __name__)
 @inspections_bp.route("/tasks", methods=["GET"])
 @jwt_required()
 def get_tasks():
-    """Return flags assigned to the current inspector (Assigned or In Progress)."""
+    """Return flags assigned to the current inspector (Assigned or Reassigned)."""
     user_id = get_jwt_identity()
     result, error = get_inspector_tasks(user_id=user_id)
     if error:

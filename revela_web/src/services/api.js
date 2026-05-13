@@ -125,6 +125,21 @@ export async function uploadRegistryFile(file, token, signal) {
   }
 }
 
+// ── Diagnostics ───────────────────────────────────────────────────────────────
+
+export async function getDiagnosticClustersRequest(token) {
+  try {
+    const res = await fetch(`${BASE_URL}/geospatial/diagnostics/clusters`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await handleResponse(res);
+    return data.clusters ?? data;
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
 /**
  * Fetch the paginated business list.
  * @param {object} params - { page, limit, search, barangayID, status }

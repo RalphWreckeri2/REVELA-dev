@@ -4,7 +4,7 @@
  * modal, working zoom controls, fixed "See Full List" modal.
  */
 
-import { useState, useEffect, useCallback, useRef, useContext } from "react";
+import { useState, useEffect, useCallback, useRef, useContext, useMemo } from "react";
 import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
 import { useLoadScript, GoogleMap, Data } from "@react-google-maps/api";
 import DashboardLayout from "../components/DashboardLayout";
@@ -17,6 +17,8 @@ import {
   createYellowFlagRequest,   
   getBarangaysRequest,
   assignInspectionRequest,
+  getAnalyticsOverviewRequest,
+  getDiagnosticClustersRequest,
 } from "../services/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -95,11 +97,23 @@ const Icon = {
       <line x1="10" y1="14" x2="21" y2="3"/>
     </svg>
   ),
+  Radar: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="2"/>
+      <path d="M12 2a10 10 0 0 1 10 10"/>
+      <path d="M12 6a6 6 0 0 1 6 6"/>
+    </svg>
+  ),
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DEFAULT_MAP_CENTER = { lat: 13.9667, lng: 121.1167 };
 const MAP_LIBRARIES      = ["places", "marker"];
+
+// `public/data/mataasnakahoy.json` is a single outer boundary for the whole
+// municipality. Feature names must be listed here so the heatmap sums all
+// per-barangay Red Flag counts instead of matching barangay names to "Mataasnakahoy".
+const MUNICIPAL_BOUNDARY_NAMES = new Set(["mataasnakahoy", "mataas na kahoy"]);
 // const MAP_OPTIONS        = {
 //  disableDefaultUI: true,
 //  clickableIcons:   false,
@@ -109,10 +123,11 @@ const MAP_LIBRARIES      = ["places", "marker"];
 //};
 
 const LAYER_OPTIONS = [
-  { id: "base",     label: "Base Map" },
-  { id: "heatmap",  label: "Risk Heatmap" },
-  { id: "flags",    label: "Flag Markers" },
-  { id: "barangay", label: "Barangay Boundaries" },
+  { id: "base",        label: "Base Map"             },
+  { id: "heatmap",     label: "Risk Heatmap"         },
+  { id: "flags",       label: "Flag Markers"         },
+  { id: "barangay",    label: "Barangay Boundaries"  },
+  { id: "diagnostics", label: "🔴 Hotspot Clusters"  },
 ];
 
 // Flag color → UI color mapping
@@ -124,6 +139,55 @@ const FLAG_COLORS = {
 };
 
 const defaultColor = { marker: "#94a3b8", bg: "#f1f5f9", text: "#64748b", label: "Unknown" };
+
+/** Discrete barangay risk fills (HRI-style). Keys align with analytics `risk_level` + edge cases. */
+const HEATMAP_RISK_STYLE = {
+  High: {
+    fillColor: "#D32F2F",
+    fillOpacity: 0.72,
+    strokeColor: "#212121",
+    strokeWeight: 1,
+    zIndex: 4,
+  },
+  Medium: {
+    fillColor: "#FFB74D",
+    fillOpacity: 0.72,
+    strokeColor: "#212121",
+    strokeWeight: 1,
+    zIndex: 3,
+  },
+  Low: {
+    fillColor: "#A5D6A7",
+    fillOpacity: 0.72,
+    strokeColor: "#212121",
+    strokeWeight: 1,
+    zIndex: 2,
+  },
+  /** Red flags present but barangay not in prescriptive rankings yet */
+  unranked: {
+    fillColor: "#FFF9C4",
+    fillOpacity: 0.72,
+    strokeColor: "#616161",
+    strokeWeight: 1,
+    zIndex: 2,
+  },
+  /** No red flags (or no data) — “very low” style */
+  none: {
+    fillColor: "#BBDEFB",
+    fillOpacity: 0.72,
+    strokeColor: "#546E7A",
+    strokeWeight: 1,
+    zIndex: 1,
+  },
+};
+
+function heatmapTierKey(riskLevel, redFlagCount) {
+  if (riskLevel === "High") return "High";
+  if (riskLevel === "Medium") return "Medium";
+  if (riskLevel === "Low") return "Low";
+  if (redFlagCount > 0) return "unranked";
+  return "none";
+}
 
 function getFlagColor(flagColor) {
   return FLAG_COLORS[flagColor] ?? defaultColor;
@@ -377,10 +441,101 @@ function FullFlagListModal({ flags, onClose, onSelectFlag }) {
 }
 
 // ── Map Canvas ────────────────────────────────────────────────────────────────
-function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, satellite }) {
+function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, barangayRiskLevels, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, satellite, clusters, barangayRedFlagCounts }) {
   const markerRefs      = useRef(new Map());
   const internalMapRef  = useRef(null);
   const clusterRef      = useRef(null); 
+  const diagnosticCircleRefs = useRef([]);
+  const geoJsonDataRef  = useRef(null);
+
+  // ── Draw / clear DBSCAN cluster circles ─────────────────────────────────
+  useEffect(() => {
+    // Clean up previous circles regardless of whether we're drawing new ones
+    diagnosticCircleRefs.current.forEach(c => c.setMap(null));
+    diagnosticCircleRefs.current = [];
+
+    if (!isLoaded || !internalMapRef.current) return;
+    if (!layers.diagnostics)                  return;
+    if (!clusters || clusters.length === 0)   return;
+
+    clusters.forEach((cl) => {
+      // Visual intensity encoding — recalibrate thresholds to match eps/MinPts tuning:
+      //   size ≥ 10 → deep red    (major hotspot)
+      //   size 4–9  → amber       (moderate cluster)
+      //   size 3    → soft orange (minimum qualifying cluster — MinPts = 3)
+      // Note: noise points (isolated flags) are filtered server-side and never
+      // reach this loop, per the system design's anomaly-discard rule.
+      let fillColor, strokeColor, fillOpacity, strokeOpacity, strokeWeight, zIndex;
+
+      if (cl.size >= 10) {
+        fillColor    = "#ef4444";
+        strokeColor  = "#b91c1c";
+        fillOpacity  = 0.28;
+        strokeOpacity= 0.9;
+        strokeWeight = 2;
+        zIndex       = 4;
+      } else if (cl.size >= 4) {
+        fillColor    = "#f59e0b";
+        strokeColor  = "#b45309";
+        fillOpacity  = 0.22;
+        strokeOpacity= 0.85;
+        strokeWeight = 2;
+        zIndex       = 3;
+      } else {
+        // size === 3 — minimum cluster (MinPts threshold)
+        fillColor    = "#fb923c";
+        strokeColor  = "#c2410c";
+        fillOpacity  = 0.16;
+        strokeOpacity= 0.7;
+        strokeWeight = 1.5;
+        zIndex       = 2;
+      }
+
+      const circle = new window.google.maps.Circle({
+        map:           internalMapRef.current,
+        center:        { lat: cl.centroidLat, lng: cl.centroidLng },
+        // Minimum 30 m so tiny clusters are still visible at town zoom
+        radius:        Math.max(cl.radius_m, 30),
+        fillColor,
+        fillOpacity,
+        strokeColor,
+        strokeOpacity,
+        strokeWeight,
+        zIndex,
+        clickable:     true,
+      });
+
+      // Info window on click showing cluster stats
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div style="font-family:sans-serif;font-size:13px;line-height:1.6;padding:4px 6px;">
+            <strong style="color:#b91c1c;">
+              Hotspot Cluster #${cl.clusterID}
+            </strong><br/>
+            <span style="color:#475569;">
+              ${cl.size} Red Flag${cl.size !== 1 ? "s" : ""} within ${cl.radius_m} m
+            </span><br/>
+            <span style="color:#94a3b8;font-size:11px;">
+              eps = 20 m · MinPts = 3 &nbsp;·&nbsp;
+              IDs: ${cl.logIDs.slice(0, 6).map(id => `#${id}`).join(", ")}${cl.logIDs.length > 6 ? "…" : ""}
+            </span>
+          </div>
+        `,
+      });
+
+      circle.addListener("click", (e) => {
+        infoWindow.setPosition(e.latLng);
+        infoWindow.open(internalMapRef.current);
+      });
+
+      diagnosticCircleRefs.current.push(circle);
+    });
+
+    return () => {
+      diagnosticCircleRefs.current.forEach(c => c.setMap(null));
+      diagnosticCircleRefs.current = [];
+    };
+  }, [isLoaded, layers.diagnostics, clusters]);
 
   const handleMapLoad = useCallback((map) => {
     internalMapRef.current = map;
@@ -397,15 +552,91 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, s
     internalMapRef.current = null;
   }, []);
 
-  const handleBarangayLoad = useCallback((dataLayer) => {
-    dataLayer.loadGeoJson("/data/mataasnakahoy.json");
-    dataLayer.setStyle({
-      fillColor:    "#1f7a1f",
-      strokeColor:  "#166534",
-      strokeWeight: 1,
-      fillOpacity:  0.12,
-    });
-  }, []);
+  // google.maps.Data does not re-apply the react-google-maps <Data> `options`
+  // prop after mount — we keep a ref and call data.setStyle() imperatively.
+  const geoJsonFeatureStyle = useMemo(
+    () => (feature) => {
+      if (!layers.heatmap && !layers.barangay) return { visible: false };
+
+      if (layers.heatmap) {
+        // ── Name resolution (unchanged from original) ────────────────────
+        const rawName = (
+          feature.getProperty('ADM4_EN') ||
+          feature.getProperty('NAME_4')  ||
+          feature.getProperty('name')    ||
+          feature.getProperty('brgy_name') || ""
+        ).toLowerCase();
+        const bName = rawName
+          .replace("barangay ", "").replace("brgy. ", "")
+          .replace("san sebastian", "san seb.").trim();
+
+        const compact = rawName.replace(/\s+/g, "");
+        const isMunicipalBoundary =
+          MUNICIPAL_BOUNDARY_NAMES.has(bName) ||
+          [...MUNICIPAL_BOUNDARY_NAMES].some(
+            (n) => compact === n.replace(/\s+/g, "") || rawName.includes(n),
+          );
+
+        let count;
+        let riskLevel;
+
+        if (isMunicipalBoundary) {
+          count = Object.values(barangayRedFlagCounts || {}).reduce(
+            (sum, n) => sum + Number(n || 0),
+            0,
+          );
+          const levels = Object.values(barangayRiskLevels || {}).map((e) =>
+            typeof e === "object" ? e?.risk_level : e,
+          );
+          riskLevel = levels.includes("High")
+            ? "High"
+            : levels.includes("Medium")
+              ? "Medium"
+              : levels.some(Boolean)
+                ? "Low"
+                : undefined;
+        } else {
+          // ── Red Flag count for this barangay ───────────────────────────
+          count = barangayRedFlagCounts?.[bName] ?? 0;
+          if (count === 0) {
+            const fuzzyKey = Object.keys(barangayRedFlagCounts || {}).find(
+              (k) => rawName.includes(k) || k.includes(rawName),
+            );
+            if (fuzzyKey) count = barangayRedFlagCounts[fuzzyKey];
+          }
+
+          let entry = barangayRiskLevels?.[bName];
+          if (!entry) {
+            const fuzzyKey = Object.keys(barangayRiskLevels || {}).find(
+              (k) => rawName.includes(k) || k.includes(rawName),
+            );
+            if (fuzzyKey) entry = barangayRiskLevels[fuzzyKey];
+          }
+          riskLevel = typeof entry === "object" ? entry?.risk_level : entry;
+        }
+
+        const tier = heatmapTierKey(riskLevel, count);
+        const s = HEATMAP_RISK_STYLE[tier];
+        return { ...s, visible: true };
+      }
+
+      // Base barangay boundaries style
+      return {
+        fillColor:   "#1f7a1f",
+        fillOpacity: 0.12,
+        strokeColor: "#166534",
+        strokeWeight: 1,
+        visible: true,
+      };
+    },
+    [layers.heatmap, layers.barangay, barangayRiskLevels, barangayRedFlagCounts],
+  );
+
+  useEffect(() => {
+    const dl = geoJsonDataRef.current;
+    if (!dl) return;
+    dl.setStyle(geoJsonFeatureStyle);
+  }, [geoJsonFeatureStyle]);
 
   // Build a proper pin-shaped SVG marker element
   const buildMarkerContent = useCallback((flag, selected) => {
@@ -574,8 +805,20 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, s
         onUnmount={handleMapUnmount}
         onClick={onMapClick}
       >
-        {layers.barangay && (
-          <Data onLoad={handleBarangayLoad} onUnmount={dl => dl.setMap(null)} />
+        {(layers.barangay || layers.heatmap) && (
+          <Data
+            onLoad={(dataLayer) => {
+              geoJsonDataRef.current = dataLayer;
+              dataLayer.setStyle(geoJsonFeatureStyle);
+              Promise.resolve(dataLayer.loadGeoJson("/data/mataasnakahoy.json")).then(() => {
+                dataLayer.setStyle(geoJsonFeatureStyle);
+              });
+            }}
+            onUnmount={(dataLayer) => {
+              geoJsonDataRef.current = null;
+              dataLayer.setMap(null);
+            }}
+          />
         )}
       </GoogleMap>
 
@@ -841,13 +1084,14 @@ export default function MapPage() {
   const mapRef = useRef(null);
 
   const [flags,               setFlags]               = useState([]);
+  const [barangayRiskLevels,  setBarangayRiskLevels]  = useState({});
   const [loadingFlags,        setLoadingFlags]         = useState(false);
   const [flagsError,          setFlagsError]           = useState("");
   const [actionError,         setActionError]          = useState("");
   const [actionLoading,       setActionLoading]        = useState(false);
   const [runDetectionLoading, setRunDetectionLoading]  = useState(false);
 
-  const [layers,       setLayers]       = useState({ base: true, heatmap: false, flags: true, barangay: false });
+  const [layers, setLayers] = useState({ base: true, heatmap: false, flags: true, barangay: false, diagnostics: false });
   const [selectedFlag, setSelectedFlag] = useState(null);   // logID of selected flag
   const [modalFlag,    setModalFlag]    = useState(null);   // flag object shown in detail modal
   const [showFullList, setShowFullList] = useState(false);
@@ -863,6 +1107,8 @@ export default function MapPage() {
   const [isPickingYellowLocation, setIsPickingYellowLocation] = useState(false);
   const [yellowDraft, setYellowDraft]         = useState(null);
   const [barangays,       setBarangays]       = useState([]);
+  const [clusters,         setClusters]         = useState([]);
+  const [clustersLoading,  setClustersLoading]  = useState(false);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchFlags = useCallback(async () => {
@@ -872,12 +1118,46 @@ export default function MapPage() {
     try {
       const result = await getFlagsRequest({ limit: 1000 }, token);
       setFlags((result.data ?? []).map(normalizeFlag));
+      
+      // Fetch analytics for border-to-border risk heatmap (current state of the barangay)
+      try {
+        const analytics = await getAnalyticsOverviewRequest(token);
+        const payload = analytics?.data || analytics;
+        const rankings = payload?.prescriptive?.rankings || [];
+        const riskMap = {};
+        rankings.forEach(r => {
+           const bName = (r.barangayName || "").toLowerCase()
+             .replace("barangay ", "").replace("brgy. ", "")
+             .replace("san sebastian", "san seb.").trim();
+           riskMap[bName] = {
+             risk_level:   r.risk_level,             // "High" | "Medium" | "Low"
+             redFlagCount: r.redFlagCount ?? r.red_flag_count ?? 0,
+           };
+        });
+        setBarangayRiskLevels(riskMap);
+      } catch (err) {
+        console.error("Failed to load analytics for map", err);
+      }
     } catch (err) {
       setFlagsError(err.message || "Unable to load flags.");
     } finally {
       setLoadingFlags(false);
     }
   }, [token]);
+
+  // Count Red Flags per barangay from the already-loaded flags array.
+  // Used when prescriptive rankings omit a barangay (unranked tier on the map).
+  const barangayRedFlagCounts = useMemo(() => {
+    const counts = {};
+    flags.forEach(f => {
+      if (f.color !== "Red") return;
+      const bName = (f.barangay || "unknown").toLowerCase()
+        .replace("barangay ", "").replace("brgy. ", "")
+        .replace("san sebastian", "san seb.").trim();
+      counts[bName] = (counts[bName] || 0) + 1;
+    });
+    return counts;
+  }, [flags]);
 
   useEffect(() => { fetchFlags(); }, [fetchFlags]);
 
@@ -887,6 +1167,21 @@ export default function MapPage() {
       .then(data => setBarangays(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, [token, isAdmin]);
+
+  useEffect(() => {
+    if (!layers.diagnostics || !token) return;
+    if (clusters.length > 0) return;           // already fetched this session
+
+    setClustersLoading(true);
+    getDiagnosticClustersRequest(token)
+      .then(data => {
+        setClusters(Array.isArray(data) ? data : (data?.clusters ?? []));
+      })
+      .catch(err => {
+        console.error("[Diagnostics] Failed to load clusters:", err);
+      })
+      .finally(() => setClustersLoading(false));
+  }, [layers.diagnostics, token]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const handleEscalate = async (logId) => {
@@ -909,6 +1204,7 @@ export default function MapPage() {
     try {
       const result = await runDetectionRequest(token);
       await fetchFlags();
+      setClusters([]);
       // Show result summary briefly
       if (result?.new_flags !== undefined) {
         setActionError(`Detection complete — ${result.new_flags} new Red Flag${result.new_flags !== 1 ? "s" : ""} found.`);
@@ -1057,6 +1353,11 @@ export default function MapPage() {
                   }}
                 >
                   {l.label}
+                  {l.id === "diagnostics" && layers.diagnostics && clustersLoading && (
+                    <span style={{ fontSize: 11, color: "var(--color-muted)", marginLeft: 4 }}>
+                      loading…
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -1072,13 +1373,62 @@ export default function MapPage() {
               mapRef={mapRef}
               layers={layers}
               flags={visibleFlags}
+              barangayRiskLevels={barangayRiskLevels}
               selectedFlagId={selectedFlag}
               onMarkerClick={handleMarkerClick}
               onMapClick={handleMapClick}
               isPickingLocation={isPickingYellowLocation}
               runDetectionLoading={runDetectionLoading}
               satellite={satellite}
+              clusters={clusters}
+              barangayRedFlagCounts={barangayRedFlagCounts}
             />
+            {/* Discrete risk legend — matches HEATMAP_RISK_STYLE on the Data layer */}
+            {layers.heatmap && (
+              <div style={{
+                position:       "absolute",
+                bottom:         14,
+                left:           14,
+                zIndex:         10,
+                background:     "rgba(255,255,255,0.93)",
+                backdropFilter: "blur(6px)",
+                borderRadius:   10,
+                padding:        "10px 14px",
+                boxShadow:      "0 2px 12px rgba(0,0,0,0.15)",
+                minWidth:       168,
+              }}>
+                <p style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                  Barangay risk index
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {[
+                    { tier: "High",     label: "High risk" },
+                    { tier: "Medium",   label: "Moderate risk" },
+                    { tier: "Low",      label: "Low risk" },
+                    { tier: "unranked", label: "Red flags (unranked)" },
+                    { tier: "none",     label: "No red flags" },
+                  ].map(({ tier, label }) => {
+                    const row = HEATMAP_RISK_STYLE[tier];
+                    return (
+                      <div key={tier} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span
+                          style={{
+                            width: 22,
+                            height: 14,
+                            borderRadius: 2,
+                            background: row.fillColor,
+                            border: `1px solid ${row.strokeColor}`,
+                            flexShrink: 0,
+                            opacity: 0.92,
+                          }}
+                        />
+                        <span style={{ fontSize: 11, color: "#334155", fontWeight: 500 }}>{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Stats strip */}

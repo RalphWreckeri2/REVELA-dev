@@ -63,10 +63,15 @@ const Icon = {
       <line x1="4" y1="22" x2="4" y2="15"/>
     </svg>
   ),
+  Search: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+  ),
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const STATUS_COLS = ["Assigned", "In Progress", "Submitted", "Verified"];
+const STATUS_COLS = ["Assigned", "Reassigned", "Submitted", "Verified"];
 
 const FLAG_COLOR = {
   Red:    { bg: "var(--color-danger-light)",  text: "var(--color-danger)" },
@@ -77,7 +82,7 @@ const FLAG_COLOR = {
 
 const STATUS_COLOR = {
   Assigned:   { bg: "#eff6ff", text: "#3b82f6" },
-  "In Progress": { bg: "#fefce8", text: "#ca8a04" },
+  Reassigned: { bg: "#fefce8", text: "#ca8a04" },
   Submitted:  { bg: "#f0fdf4", text: "#16a34a" },
   Verified:   { bg: "#f8fafc", text: "#64748b" },
 };
@@ -375,6 +380,7 @@ export default function InspectionPage() {
 
   // Filter state (admin only)
   const [filterStatus, setFilterStatus] = useState("");
+  const [search, setSearch] = useState("");
 
   // ── Fetch ────────────────────────────────────────────────────────────────────
   const fetchReports = useCallback(async () => {
@@ -407,10 +413,10 @@ export default function InspectionPage() {
   // ── Derived ──────────────────────────────────────────────────────────────────
   const byStatus = (status) => reports.filter(r => r.verificationStatus === status);
 
-  // Admin sees all 4 columns; inspectors only see Assigned + In Progress
+  // Admin sees all 4 columns; inspectors only see Assigned + Reassigned
   const visibleCols = isAdmin
     ? STATUS_COLS
-    : ["Assigned", "In Progress"];
+    : ["Assigned", "Reassigned"];
 
   return (
     <DashboardLayout user={{ initials: user?.fullName?.charAt(0) ?? "?", name: user?.fullName ?? "" }}>
@@ -446,6 +452,17 @@ export default function InspectionPage() {
               ))}
             </select>
           )}
+
+          {/* Live Search Bar */}
+          <div className="search-bar" style={{ width: 240 }}>
+            <Icon.Search />
+            <input
+              type="text"
+              placeholder="Search name, ID, or area..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
 
           <button className="ghost-btn" onClick={fetchReports} style={{ fontSize: 13 }}>
             <Icon.RefreshCw /> Refresh
@@ -534,6 +551,8 @@ const s = {
   columnBody: {
     padding: 12, display: "flex", flexDirection: "column", gap: 10,
     minHeight: 120,
+    maxHeight: "calc(100vh - 240px)",
+    overflowY: "auto",
   },
   emptyCol: {
     textAlign: "center", padding: "24px 0",

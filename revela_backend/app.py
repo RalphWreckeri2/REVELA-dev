@@ -46,6 +46,9 @@ def create_app():
     from api.analytics.routes import analytics_bp
     app.register_blueprint(analytics_bp, url_prefix="/api/analytics")
 
+    from api.geospatial.routes import geospatial_bp
+    app.register_blueprint(geospatial_bp, url_prefix="/api/geospatial")
+
     # Intercept all exceptions to ensure CORS headers are preserved on 500 errors
     @app.errorhandler(Exception)
     def handle_exception(e):

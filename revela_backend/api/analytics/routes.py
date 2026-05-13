@@ -145,7 +145,7 @@ def _get_all_analytics_inner():
         SELECT
             b.barangayID,
             b.barangayName,
-            COUNT(g.logID)                                           AS flagged_count,
+            COUNT(CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
             SUM(CASE WHEN g.flagColor = 'Red'    THEN 1 ELSE 0 END) AS red_count,
             SUM(CASE WHEN g.flagColor = 'Yellow' THEN 1 ELSE 0 END) AS yellow_count,
             SUM(CASE WHEN g.flagColor = 'Black'  THEN 1 ELSE 0 END) AS black_count
@@ -228,9 +228,9 @@ def _get_all_analytics_inner():
             coords = np.radians(
                 [[float(r['latitude']), float(r['longitude'])] for r in hotspot_data])
 
-            # 180 meters in radians
+            # 20 meters in radians (10m is often too strict due to GPS drift, 20m provides a better result)
             kms_per_radian = 6371.0088
-            epsilon = 0.18 / kms_per_radian
+            epsilon = 0.02 / kms_per_radian
 
             db = DBSCAN(eps=epsilon, min_samples=3,
                         algorithm='ball_tree', metric='haversine').fit(coords)
@@ -333,7 +333,7 @@ def _get_all_analytics_inner():
         SELECT
             b.barangayID,
             b.barangayName,
-            COUNT(DISTINCT g.logID)                                  AS flagged_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
             SUM(CASE WHEN g.flagColor = 'Red'    THEN 1 ELSE 0 END) AS red_count,
             SUM(CASE WHEN g.flagColor = 'Yellow' THEN 1 ELSE 0 END) AS yellow_count,
             SUM(CASE WHEN g.flagColor = 'Black'  THEN 1 ELSE 0 END) AS black_count,
@@ -380,16 +380,17 @@ def _get_all_analytics_inner():
         else:
             distance_score = 50
 
+        # Convert distance penalty to a normalized addition so OPS scales 0-100 properly
         ops_score = round(w1 * risk_score + w2 *
-                          sector_score - w3 * distance_score, 1)
+                          sector_score + w3 * (100 - distance_score), 1)
         ops_score = max(0.0, min(100.0, ops_score))
 
         non_compliance_rate = round(
             (flagged / total_reg * 100), 1) if total_reg else 0
 
         risk_level = (
-            "High" if ops_score >= 65 else
-            "Medium" if ops_score >= 35 else
+            "High" if ops_score >= 60 else
+            "Medium" if ops_score >= 30 else
             "Low"
         )
 

@@ -125,6 +125,28 @@ export async function uploadRegistryFile(file, token, signal) {
   }
 }
 
+/**
+ * Merge a CSV or Excel file into the registry (updates matching businesses by
+ * name + barangay, inserts new rows). Any authenticated user may call this.
+ * @returns {Promise<{total_rows, inserted, updated, geocoded_ok, geocoded_failed, skipped, errors[]}>}
+ */
+export async function syncRegistryFile(file, token, signal) {
+  try {
+    const form = new FormData();
+    form.append("file", file);
+
+    const res = await fetch(`${BASE_URL}/registry/sync`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+      signal,
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
 // ── Diagnostics ───────────────────────────────────────────────────────────────
 
 export async function getDiagnosticClustersRequest(token) {

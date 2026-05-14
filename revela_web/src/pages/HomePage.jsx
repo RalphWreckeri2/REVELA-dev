@@ -12,7 +12,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { useAuth } from "../context/AuthContext";
-import { getAnalyticsOverviewRequest, getFlagsRequest } from "../services/api";
+import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest } from "../services/api";
 import "../styles/HomePage.css";
 
 const MAP_LIBRARIES = ["places", "marker"];
@@ -122,7 +122,7 @@ function SystemHealthWidget() {
   );
 }
 
-function ActiveInspectionsWidget({ navigate }) {
+function ActiveInspectionsWidget({ navigate, stats }) {
   return (
     <div className="dashboard-widget frosted-glass saas-card">
       <div className="widget-header">
@@ -133,16 +133,16 @@ function ActiveInspectionsWidget({ navigate }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, textAlign: "center", marginTop: 8 }}>
         <div style={{ background: "rgba(239,246,255,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #bfdbfe" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6", lineHeight: 1 }}>4</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6", lineHeight: 1 }}>{stats.assigned}</div>
           <div style={{ fontSize: 11, color: "#1e3a8a", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>ASSIGNED</div>
         </div>
         <div style={{ background: "rgba(254,252,232,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #fef08a" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#ca8a04", lineHeight: 1 }}>2</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#ca8a04", lineHeight: 1 }}>{stats.reassigned}</div>
           <div style={{ fontSize: 11, color: "#713f12", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>REASSIGNED</div>
         </div>
         <div style={{ background: "rgba(240,253,244,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #bbf7d0" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a", lineHeight: 1 }}>5</div>
-          <div style={{ fontSize: 11, color: "#14532d", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>VERIFIED TODAY</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a", lineHeight: 1 }}>{stats.verified}</div>
+          <div style={{ fontSize: 11, color: "#14532d", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>VERIFIED</div>
         </div>
       </div>
     </div>
@@ -416,6 +416,8 @@ export default function HomePage() {
   const [allFlags,      setAllFlags]      = useState([]);
   const [flagsLoading,  setFlagsLoading]  = useState(true);
 
+  const [inspectionStats, setInspectionStats] = useState({ assigned: 0, reassigned: 0, verified: 0 });
+
   useEffect(() => {
     if (!token) return;
 
@@ -439,6 +441,20 @@ export default function HomePage() {
       })
       .catch(() => {})
       .finally(() => setFlagsLoading(false));
+
+    // Fetch inspection tracker counts
+    getInspectionsRequest({ limit: 1000 }, token)
+      .then(res => {
+        const data = res?.data ?? [];
+        let assigned = 0, reassigned = 0, verified = 0;
+        data.forEach(r => {
+          if (r.verificationStatus === "Assigned") assigned++;
+          else if (r.verificationStatus === "Reassigned") reassigned++;
+          else if (r.verificationStatus === "Verified") verified++;
+        });
+        setInspectionStats({ assigned, reassigned, verified });
+      })
+      .catch(() => {});
   }, [token]);
 
   const kpiCards = [
@@ -519,7 +535,7 @@ export default function HomePage() {
       {/* New Widgets: Trends & Inspections */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginTop: 24 }}>
         <ComplianceTrendWidget />
-        <ActiveInspectionsWidget navigate={navigate} />
+        <ActiveInspectionsWidget navigate={navigate} stats={inspectionStats} />
       </div>
 
       {/* New Widgets: Actions & Alerts */}

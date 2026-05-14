@@ -193,9 +193,41 @@ function getFlagColor(flagColor) {
   return FLAG_COLORS[flagColor] ?? defaultColor;
 }
 
+/** Higher = more severe — used so mixed clusters show the worst color, not green. */
+const FLAG_SEVERITY_RANK = { Green: 1, Yellow: 2, Red: 3, Black: 4 };
+
+function flagSeverityRank(flagColor) {
+  return FLAG_SEVERITY_RANK[flagColor] ?? 0;
+}
+
+/** Dominant flag color among clustered markers (see `_revelaFlagColor` on each marker). */
+function getDominantFlagColorFromMarkers(markers) {
+  let dominant = "Green";
+  let best = 0;
+  for (const m of markers) {
+    const raw = m?._revelaFlagColor;
+    if (raw == null || raw === "") continue;
+    const c = canonicalFlagColor(raw);
+    const r = flagSeverityRank(c);
+    if (r > best) {
+      best = r;
+      dominant = c;
+    }
+  }
+  return dominant;
+}
+
+/** Map API `flagColor` to a canonical key in FLAG_COLORS (handles casing / unknown). */
+function canonicalFlagColor(raw) {
+  if (raw == null || raw === "") return "Red";
+  const s = String(raw).trim();
+  const cap = s.length ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "Red";
+  return FLAG_COLORS[cap] ? cap : "Red";
+}
+
 // ── Normalise flag from API → UI shape ────────────────────────────────────────
 function normalizeFlag(flag) {
-  const color  = flag.flagColor ?? "Red";
+  const color  = canonicalFlagColor(flag.flagColor);
   const coords =
     flag.latitude != null && flag.longitude != null
       ? `${Number(flag.latitude).toFixed(6)}°N, ${Number(flag.longitude).toFixed(6)}°E`
@@ -689,6 +721,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
       });
 
       marker.addListener("gmp-click", () => onMarkerClick(flag.id));
+      marker._revelaFlagColor = flag.color;
       markerRefs.current.set(flag.id, marker);
       markers.push(marker);
     });
@@ -703,30 +736,38 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
         minPoints: 2,      // only cluster if 2+ pins overlap
       }),
       renderer: {
-        render: ({ count, position }) => {
+        render: (cluster /* , stats, map */) => {
+          const { count, position, markers: clusterMarkers } = cluster;
+          const dominant = getDominantFlagColorFromMarkers(clusterMarkers);
+          const fc = getFlagColor(dominant);
+          const sev = flagSeverityRank(dominant);
+          const countColor = dominant === "Yellow" ? "#422006" : "#ffffff";
           const size = count > 100 ? 56 : count > 50 ? 48 : count > 10 ? 42 : 36;
           const el = document.createElement("div");
           el.style.cssText = `
             width: ${size}px;
             height: ${size}px;
-            background: #22c55e;
-            border: 3px solid #16a34a;
+            background: ${fc.marker};
+            border: 3px solid ${fc.text};
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            color: ${countColor};
             font-weight: 800;
             font-size: ${count > 99 ? 11 : 13}px;
             font-family: sans-serif;
             cursor: pointer;
             box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            text-shadow: ${dominant === "Yellow" ? "none" : "0 1px 2px rgba(0,0,0,0.35)"};
           `;
           el.textContent = count;
+          el.title = `${count} flags (${fc.label})`;
 
           return new window.google.maps.marker.AdvancedMarkerElement({
             position,
             content: el,
+            zIndex: 800 + sev * 50 + Math.min(count, 99),
           });
         },
       },

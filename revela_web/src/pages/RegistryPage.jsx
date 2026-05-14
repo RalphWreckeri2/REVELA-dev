@@ -12,7 +12,6 @@ import Papa from "papaparse";
 import Swal from "sweetalert2";
 import {
   getRegistryRequest,
-  uploadRegistryFile,
   getBusinessByIdRequest,
   getBarangaysRequest,
 } from "../services/api";
@@ -100,12 +99,31 @@ function getStatusVariant(status) {
   return { Active: "green", Expired: "gold", Revoked: "red", Pending: "default" }[status] ?? "default";
 }
 
+function getFlagVariant(flag) {
+  if (!flag) return "default";
+  const f = String(flag);
+  if (f === "Green") return "green";
+  if (f === "Yellow") return "gold";
+  if (f === "Orange") return "orange";
+  if (f === "Black" || f === "Red") return "red";
+  return "default";
+}
+
+function formatCoord(v) {
+  if (v == null || v === "") return "—";
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(6) : String(v);
+}
+
+/** Must match table header count (including actions column). */
+const REGISTRY_TABLE_COL_COUNT = 11;
+
 // ── Empty State ───────────────────────────────────────────────────────────────
 function EmptyState({ hasFilters, onUpload }) {
   if (hasFilters) {
     return (
       <tr>
-        <td colSpan={9} style={styles.emptyCell}>
+        <td colSpan={REGISTRY_TABLE_COL_COUNT} style={styles.emptyCell}>
           <div style={styles.emptyContent}>
             <span style={{ color: "var(--color-muted)", fontSize: 13 }}>
               No businesses match your current filters.
@@ -117,7 +135,7 @@ function EmptyState({ hasFilters, onUpload }) {
   }
   return (
     <tr>
-      <td colSpan={9} style={{ ...styles.emptyCell, paddingTop: 64, paddingBottom: 64 }}>
+      <td colSpan={REGISTRY_TABLE_COL_COUNT} style={{ ...styles.emptyCell, paddingTop: 64, paddingBottom: 64 }}>
         <div style={styles.emptyContent}>
           <div style={{ color: "var(--color-muted)", marginBottom: 16, opacity: 0.4 }}>
             <Icon.Database />
@@ -161,7 +179,7 @@ function BusinessDetailModal({ businessId, onClose, token }) {
 
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
-      <div style={{ ...styles.modalCard, width: 520 }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...styles.modalCard, width: 560 }} onClick={e => e.stopPropagation()}>
         <div style={styles.modalHeader}>
           <h3 style={styles.modalTitle}>Business Details</h3>
           <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
@@ -173,23 +191,34 @@ function BusinessDetailModal({ businessId, onClose, token }) {
         {business && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              ["Business Name",    business.businessName],
-              ["Business Type",    business.businessType    || "—"],
-              ["Line of Business", business.lineOfBusiness  || "—"],
-              ["Address",          business.businessAddress || "—"],
-              ["Barangay",         business.barangayName    || "—"],
-              ["Status",           business.applicationStatus],
-              ["Last Renewal",     business.lastRenewalDate ? business.lastRenewalDate.slice(0, 10) : "—"],
-              ["Coordinates",      business.latitude ? `${business.latitude}, ${business.longitude}` : "Not geocoded"],
-            ].map(([label, value]) => (
+              ["Business Name", business.businessName, "title"],
+              ["Business Type", business.businessType || "—", "plain"],
+              ["Line of Business", business.lineOfBusiness || "—", "plain"],
+              ["Business size", business.businessSize || "—", "plain"],
+              ["Address", business.businessAddress || "—", "plain"],
+              ["Barangay", business.barangayName || "—", "plain"],
+              ["Latitude", formatCoord(business.latitude), "plain"],
+              ["Longitude", formatCoord(business.longitude), "plain"],
+              ["Permit status", business.applicationStatus, "permit"],
+              ["Last renewal", business.lastRenewalDate ? business.lastRenewalDate.slice(0, 10) : "—", "plain"],
+              ["Latest geospatial flag", business.flagColor || "—", "flag"],
+            ].map(([label, value, kind]) => (
               <div key={label} style={{ display: "flex", gap: 12 }}>
-                <span style={{ minWidth: 140, fontSize: 12, color: "var(--color-muted)", fontWeight: 500 }}>
+                <span style={{ minWidth: 150, fontSize: 12, color: "var(--color-muted)", fontWeight: 500 }}>
                   {label}
                 </span>
-                <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: label === "Business Name" ? 600 : 400 }}>
-                  {label === "Status"
+                <span style={{
+                  fontSize: 13,
+                  color: "var(--color-ink)",
+                  fontWeight: kind === "title" ? 600 : 400,
+                  wordBreak: kind === "plain" && String(value).length > 48 ? "break-word" : undefined,
+                }}
+                >
+                  {kind === "permit"
                     ? <StatusBadge variant={getStatusVariant(value)}>{value}</StatusBadge>
-                    : value}
+                    : kind === "flag" && value !== "—"
+                      ? <StatusBadge variant={getFlagVariant(value)}>{value}</StatusBadge>
+                      : value}
                 </span>
               </div>
             ))}
@@ -221,6 +250,7 @@ export default function RegistryPage() {
   const [pageSize,      setPageSize]      = useState(DEFAULT_PAGE_SIZE);
 
   const [showUpload,    setShowUpload]    = useState(false);
+  const [showImport,    setShowImport]    = useState(false);
   const [detailId,      setDetailId]      = useState(null);
 
   // Dynamic barangay list loaded from API
@@ -311,9 +341,13 @@ export default function RegistryPage() {
     }
   };
 
-  // ── Import / Sync Handler ────────────────────────────────────────────────
+  // ── Import / sync (merge file into existing registry) ───────────────────
   const handleImport = () => {
-    window.alert("Permit renewal synchronization import is under development.");
+    if (!token) {
+      Swal.fire({ icon: "warning", title: "Sign in required", text: "Please sign in to import the registry." });
+      return;
+    }
+    setShowImport(true);
   };
 
   // Reset page to 1 whenever filters change (search, barangay, status, pageSize)
@@ -447,15 +481,27 @@ export default function RegistryPage() {
           <table style={styles.table}>
             <thead>
               <tr style={styles.thead}>
-                {["ID", "Business Name", "Type", "Barangay", "Address", "Last Renewal", "Status", ""].map(h => (
-                  <th key={h} style={styles.th}>{h}</th>
+                {[
+                  "ID",
+                  "Business Name",
+                  "Type",
+                  "Line of Business",
+                  "Barangay",
+                  "Address",
+                  "Size",
+                  "Last Renewal",
+                  "Permit",
+                  "Flag",
+                  "",
+                ].map(h => (
+                  <th key={h || "actions"} style={styles.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={styles.emptyCell}>
+                  <td colSpan={REGISTRY_TABLE_COL_COUNT} style={styles.emptyCell}>
                     <div style={styles.emptyContent}>
                       <span style={{ color: "var(--color-muted)", fontSize: 13 }}>Loading registry…</span>
                     </div>
@@ -476,10 +522,14 @@ export default function RegistryPage() {
                       {b.businessName}
                     </td>
                     <td style={styles.td}>{b.businessType || "—"}</td>
+                    <td style={{ ...styles.td, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {b.lineOfBusiness || "—"}
+                    </td>
                     <td style={styles.td}>{b.barangayName || "—"}</td>
-                    <td style={{ ...styles.td, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <td style={{ ...styles.td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
                       {b.businessAddress || "—"}
                     </td>
+                    <td style={styles.td}>{b.businessSize || "—"}</td>
                     <td style={{ ...styles.td, fontSize: 12 }}>
                       {b.lastRenewalDate ? b.lastRenewalDate.slice(0, 10) : "—"}
                     </td>
@@ -487,6 +537,11 @@ export default function RegistryPage() {
                       <StatusBadge variant={getStatusVariant(b.applicationStatus)}>
                         {b.applicationStatus}
                       </StatusBadge>
+                    </td>
+                    <td style={styles.td}>
+                      {b.flagColor
+                        ? <StatusBadge variant={getFlagVariant(b.flagColor)}>{b.flagColor}</StatusBadge>
+                        : "—"}
                     </td>
                     <td style={styles.td}>
                       <button
@@ -564,6 +619,15 @@ export default function RegistryPage() {
           token={token}
           onClose={() => setShowUpload(false)}
           onSuccess={() => { fetchBusinesses(); setShowUpload(false); }}
+        />
+      )}
+
+      {showImport && (
+        <UploadModal
+          variant="sync"
+          token={token}
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { fetchBusinesses(); setShowImport(false); }}
         />
       )}
 

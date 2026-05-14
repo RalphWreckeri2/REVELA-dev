@@ -19,6 +19,7 @@ COLUMN_MAP = {
     "tradename":           "businessName",
 
     # business type
+    "business_type":              "businessType",
     "type_of_business":         "businessType",
     "typeofbusiness":           "businessType",
 
@@ -40,7 +41,9 @@ COLUMN_MAP = {
     "barangay_name":       "barangay",
     "brgy_name":           "barangay",
 
-    # application status
+    # application / permit status
+    "status":                     "applicationStatus",
+    "application_status":         "applicationStatus",
     "status_of_application":    "applicationStatus",
     "statusofapplication":      "applicationStatus",
     "status_of_registration":   "registrationStatus",
@@ -241,8 +244,12 @@ def upload_registry(file, ext: str):
             else:
                 geocoded_failed += 1
 
-            # Status
-            status_raw = row.get("applicationStatus") or "Active"
+            # Status (BPLO files may use application or registration status columns)
+            status_raw = (
+                row.get("applicationStatus")
+                or row.get("registrationStatus")
+                or "Active"
+            )
             status = _normalise_status(status_raw)
 
             # Renewal date
@@ -311,6 +318,171 @@ def upload_registry(file, ext: str):
             "geocoded_failed":  geocoded_failed,
             "skipped":          skipped,
             # cap at 20 so response stays small
+            "errors":           errors[:20],
+        }, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+def sync_registry(file, ext: str):
+    """Parse CSV/Excel → geocode → upsert OFFICIAL_REGISTRY.
+    Existing rows match on LOWER(businessName) + barangayID and are overwritten
+    with file values; new rows are inserted (same rules as upload).
+    Returns (summary_dict, error_string)."""
+    try:
+        raw = file.read()
+
+        if ext == ".csv":
+            df = pd.read_csv(io.BytesIO(raw), encoding="utf-8", dtype=str)
+        else:
+            df = pd.read_excel(io.BytesIO(raw), dtype=str)
+
+        df = df.dropna(how="all")
+        df = _normalise_columns(df)
+        df = df.where(pd.notna(df), None)
+
+        total_rows = len(df)
+        inserted = 0
+        updated = 0
+        geocoded_ok = 0
+        geocoded_failed = 0
+        skipped = 0
+        errors = []
+
+        cursor = mysql.connection.cursor()
+
+        for idx, row in df.iterrows():
+            business_name = row.get("businessName")
+
+            if not business_name or str(business_name).strip() == "":
+                skipped += 1
+                errors.append(f"Row {idx + 2}: missing businessName — skipped")
+                continue
+
+            barangay_raw = row.get("barangay") or ""
+            barangay_id = _get_barangay_id(
+                barangay_raw) if barangay_raw else None
+
+            if barangay_id is None:
+                skipped += 1
+                errors.append(
+                    f"Row {idx + 2}: barangay '{barangay_raw}' not found — skipped")
+                continue
+
+            address_raw = row.get("businessAddress") or ""
+            lat, lng = None, None
+
+            if address_raw:
+                lat, lng = _geocode(address_raw, barangay_raw)
+                if lat is not None:
+                    geocoded_ok += 1
+                else:
+                    geocoded_failed += 1
+            else:
+                geocoded_failed += 1
+
+            status_raw = (
+                row.get("applicationStatus")
+                or row.get("registrationStatus")
+                or "Active"
+            )
+            status = _normalise_status(status_raw)
+
+            renewal_raw = row.get("lastRenewalDate")
+            renewal_date = None
+            if renewal_raw:
+                try:
+                    renewal_date = pd.to_datetime(
+                        renewal_raw).strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    renewal_date = None
+
+            name_key = str(business_name).strip()
+            btype = str(row.get("businessType") or "").strip() or None
+            lob = str(row.get("lineOfBusiness") or "").strip() or None
+            addr = str(address_raw).strip() or None
+            bsize = str(row.get("businessSize") or "").strip() or None
+
+            cursor.execute(
+                """
+                SELECT businessID FROM official_registry
+                WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
+                LIMIT 1
+                """,
+                (name_key, barangay_id),
+            )
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute(
+                    """
+                    UPDATE official_registry SET
+                        businessType = %s,
+                        lineOfBusiness = %s,
+                        businessAddress = %s,
+                        latitude = %s,
+                        longitude = %s,
+                        applicationStatus = %s,
+                        lastRenewalDate = %s,
+                        businessSize = %s
+                    WHERE businessID = %s
+                    """,
+                    (
+                        btype,
+                        lob,
+                        addr,
+                        lat,
+                        lng,
+                        status,
+                        renewal_date,
+                        bsize,
+                        existing["businessID"],
+                    ),
+                )
+                updated += 1
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO official_registry
+                        (barangayID, businessName, businessType, lineOfBusiness,
+                        businessAddress, latitude, longitude, applicationStatus,
+                        lastRenewalDate, businessSize)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        barangay_id,
+                        name_key,
+                        btype,
+                        lob,
+                        addr,
+                        lat,
+                        lng,
+                        status,
+                        renewal_date,
+                        bsize,
+                    ),
+                )
+                if cursor.rowcount > 0:
+                    inserted += 1
+                    insert_green_flag(
+                        barangay_id,
+                        name_key,
+                        lat,
+                        lng,
+                        addr,
+                    )
+
+        mysql.connection.commit()
+        cursor.close()
+
+        return {
+            "total_rows":       total_rows,
+            "inserted":         inserted,
+            "updated":          updated,
+            "geocoded_ok":      geocoded_ok,
+            "geocoded_failed":  geocoded_failed,
+            "skipped":          skipped,
             "errors":           errors[:20],
         }, None
 
@@ -440,9 +612,21 @@ def get_business_by_id(business_id: int):
                 b.barangayID,
                 b.barangayName,
                 (
+                    SELECT CASE 
+                        WHEN g.placeID IS NOT NULL THEN 'registry_and_maps' 
+                        ELSE 'registry_only' 
+                    END
+                    FROM geospatial_logs g
+                    WHERE LOWER(g.detectedName) = LOWER(r.businessName)
+                    AND g.barangayID = r.barangayID
+                    AND g.flagColor = 'Green'
+                    ORDER BY g.detectedDate DESC
+                    LIMIT 1
+                ) AS flagSource,
+                (
                     SELECT g.flagColor
                     FROM geospatial_logs g
-                    WHERE g.detectedName = r.businessName
+                    WHERE LOWER(g.detectedName) = LOWER(r.businessName)
                       AND g.barangayID = r.barangayID
                     ORDER BY g.detectedDate DESC
                     LIMIT 1

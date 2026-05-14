@@ -20,7 +20,7 @@
 
 import Papa from "papaparse";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { uploadRegistryFile } from "../services/api";
+import { uploadRegistryFile, syncRegistryFile } from "../services/api";
 
 // ── Icons (self-contained so this file is independently droppable) ─────────────
 const Icon = {
@@ -163,7 +163,8 @@ function phaseLabel(displayed, total) {
 }
 
 // ── Main UploadModal ───────────────────────────────────────────────────────────
-export function UploadModal({ onClose, onSuccess, token }) {
+export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
+  const isSync = variant === "sync";
   const [dragging,      setDragging]      = useState(false);
   const [file,          setFile]          = useState(null);
   const [fileRowCount,  setFileRowCount]  = useState(null);
@@ -178,7 +179,9 @@ export function UploadModal({ onClose, onSuccess, token }) {
     total:      fileRowCount,
     active:     loading,
     done:       !!summary,
-    finalCount: summary?.inserted,
+    finalCount: summary
+      ? (isSync ? (summary.inserted ?? 0) + (summary.updated ?? 0) : summary.inserted)
+      : undefined,
   });
 
   const handleFile = (f) => {
@@ -210,7 +213,8 @@ export function UploadModal({ onClose, onSuccess, token }) {
     setError("");
     abortControllerRef.current = new AbortController();
     try {
-      const result = await uploadRegistryFile(file, token, abortControllerRef.current.signal);
+      const uploadFn = isSync ? syncRegistryFile : uploadRegistryFile;
+      const result = await uploadFn(file, token, abortControllerRef.current.signal);
       setSummary(result);
     } catch (err) {
       if (err.name === "AbortError") return;
@@ -241,7 +245,11 @@ export function UploadModal({ onClose, onSuccess, token }) {
         {/* Header */}
         <div style={s.header}>
           <h3 style={s.title}>
-            {summary ? "Upload Complete" : loading ? "Processing Registry…" : "Upload BPLO Registry"}
+            {summary
+              ? (isSync ? "Import Complete" : "Upload Complete")
+              : loading
+                ? (isSync ? "Synchronizing Registry…" : "Processing Registry…")
+                : (isSync ? "Import BPLO Registry" : "Upload BPLO Registry")}
           </h3>
           {!loading && (
             <button style={s.closeBtn} onClick={handleDone}>
@@ -258,7 +266,9 @@ export function UploadModal({ onClose, onSuccess, token }) {
               <div style={s.completionIcon}><Icon.Check /></div>
               <div>
                 <p style={s.completionMain}>
-                  {summary.inserted} of {summary.total_rows} rows inserted
+                  {isSync
+                    ? `${(summary.inserted ?? 0) + (summary.updated ?? 0)} of ${summary.total_rows} rows applied (${summary.updated ?? 0} updated, ${summary.inserted ?? 0} new)`
+                    : `${summary.inserted} of ${summary.total_rows} rows inserted`}
                 </p>
                 <p style={s.completionSub}>
                   {summary.geocoded_ok} geocoded &nbsp;·&nbsp; {summary.skipped} skipped
@@ -269,10 +279,15 @@ export function UploadModal({ onClose, onSuccess, token }) {
             <div style={s.summaryResult}>
               {[
                 ["Total rows in file",             summary.total_rows,       "var(--color-muted)"],
-                ["Successfully inserted",          summary.inserted,          "var(--color-primary)"],
+                ...(isSync
+                  ? [
+                      ["Existing records updated",   summary.updated ?? 0,     "var(--color-primary)"],
+                      ["New businesses added",       summary.inserted ?? 0,    "var(--color-primary)"],
+                    ]
+                  : [["Successfully inserted",       summary.inserted,         "var(--color-primary)"]]),
                 ["Geocoded successfully",          summary.geocoded_ok,       "var(--color-muted)"],
                 ["Geocoding failed",               summary.geocoded_failed,   "var(--color-gold-dark)"],
-                ["Skipped (duplicate / no name)",  summary.skipped,           "var(--color-muted)"],
+                ["Skipped (invalid / no name)",    summary.skipped,           "var(--color-muted)"],
               ].map(([label, value, color]) => (
                 <div key={label} style={s.summaryRow}>
                   <span style={{ color: "var(--color-muted)" }}>{label}</span>
@@ -366,8 +381,9 @@ export function UploadModal({ onClose, onSuccess, token }) {
         ) : (
           <>
             <p style={s.sub}>
-              Upload the official BPLO registry CSV or Excel file. The system
-              will geocode each business address and seed the registry table.
+              {isSync
+                ? "Choose an updated BPLO export. Matching businesses (same name and barangay) are overwritten with the file data; new rows are added. Initial seeding should use Upload File (Admin)."
+                : "Upload the official BPLO registry CSV or Excel file. The system will geocode each business address and seed the registry table."}
             </p>
 
             {/* Drop zone */}
@@ -409,8 +425,8 @@ export function UploadModal({ onClose, onSuccess, token }) {
             {/* Column hint */}
             <div style={s.hint}>
               <strong>Expected columns (flexible naming):</strong>
-              &nbsp; business_name, barangay, business_type, line_of_business,
-              business_address, status, last_renewal_date
+              &nbsp; business_name, barangay, business_type, line_of_business, size_of_business,
+              business_address, status / status_of_registration, last_renewal_date
             </div>
 
             {error && (
@@ -427,7 +443,7 @@ export function UploadModal({ onClose, onSuccess, token }) {
                 style={!file ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                 onClick={handleSubmit}
               >
-                <Icon.Upload /> Process File
+                <Icon.Upload /> {isSync ? "Import & sync" : "Process File"}
               </button>
             </div>
           </>

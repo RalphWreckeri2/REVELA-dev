@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import mysql
 from api.registry.service import (
     upload_registry,
+    sync_registry,
     get_all_businesses,
     get_business_by_id,
 )
@@ -37,6 +38,35 @@ def upload():
         return jsonify({"error": error}), 500
 
     return jsonify(summary), 201
+
+
+# ── POST /api/registry/sync ───────────────────────────────────────────────────
+@registry_bp.route("/sync", methods=["POST"])
+@jwt_required()
+def sync():
+    """Merge a CSV/Excel file into OFFICIAL_REGISTRY (update matches, insert new)."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    allowed = {".csv", ".xlsx", ".xls"}
+    ext = "." + \
+        file.filename.rsplit(
+            ".", 1)[-1].lower() if "." in file.filename else ""
+
+    if ext not in allowed:
+        return jsonify({"error": "Only CSV and Excel files are accepted (.csv, .xlsx, .xls)"}), 400
+
+    summary, error = sync_registry(file, ext)
+
+    if error:
+        return jsonify({"error": error}), 500
+
+    return jsonify(summary), 200
 
 
 # ── GET /api/registry ─────────────────────────────────────────────────────────

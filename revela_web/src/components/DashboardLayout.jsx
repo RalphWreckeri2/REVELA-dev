@@ -14,9 +14,15 @@
  *   logo      — imported logo asset (optional)
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  getNotificationsRequest,
+  getNotificationsUnreadCountRequest,
+  markNotificationsReadRequest,
+  getNotificationStreamUrl,
+} from "../services/api";
 import "../styles/global.css";
 import Swal from "sweetalert2";
 import myLogo from "../assets/logo.png";
@@ -200,17 +206,87 @@ function Sidebar({ onLogout }) {
   );
 }
 
+function formatTimeAgo(iso) {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const s = Math.floor((Date.now() - t) / 1000);
+  if (s < 45) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlaceholder = "Search businesses, barangays...", onProfileClick }) {
+  const { token, user: authUser } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationButtonRef = useRef(null);
   const notificationPopoverRef = useRef(null);
   const navigate = useNavigate();
 
-  const notifications = [
-    { id: 1, title: "New inspection assigned", body: "Inspector assigned to F-001 in Poblacion I.", time: "2m ago" },
-    { id: 2, title: "Flag status updated", body: "F-003 risk now marked as high priority.", time: "12m ago" },
-    { id: 3, title: "Report ready", body: "Your weekly compliance summary is available.", time: "1h ago" },
-  ];
+  const isAdmin = authUser?.role === "Admin" || authUser?.role === "SUPER_ADMIN" || authUser?.role === "System Administrator";
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!token || !isAdmin) return;
+    try {
+      const [listRes, countRes] = await Promise.all([
+        getNotificationsRequest(token),
+        getNotificationsUnreadCountRequest(token),
+      ]);
+      setNotifications(listRes?.data ?? []);
+      setUnreadCount(countRes?.count ?? 0);
+    } catch {
+      /* ignore */
+    }
+  }, [token, isAdmin]);
+
+  useEffect(() => {
+    if (!token || !isAdmin) return undefined;
+    refreshNotifications();
+
+    let es;
+    try {
+      es = new EventSource(getNotificationStreamUrl(token));
+      es.onmessage = (event) => {
+        let data;
+        try {
+          data = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (data.type === "heartbeat" || data.type === "connected") return;
+        refreshNotifications();
+        if (data.type === "inspection_submitted") {
+          window.dispatchEvent(
+            new CustomEvent("revela:inspection-update", { detail: data }),
+          );
+        }
+      };
+      es.onerror = () => {
+        try {
+          es.close();
+        } catch {
+          /* ignore */
+        }
+      };
+    } catch {
+      /* EventSource unsupported */
+    }
+
+    const poll = window.setInterval(refreshNotifications, 45000);
+    return () => {
+      window.clearInterval(poll);
+      if (es) {
+        try {
+          es.close();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, [token, isAdmin, refreshNotifications]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -229,8 +305,37 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showNotifications]);
 
+  const toggleNotifications = async () => {
+    const next = !showNotifications;
+    setShowNotifications(next);
+    if (next && isAdmin && token) {
+      await refreshNotifications();
+      try {
+        await markNotificationsReadRequest(token);
+        setUnreadCount(0);
+        setNotifications((prev) =>
+          prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() })),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
   return (
     <header className="top-navbar frosted-glass">
+      <style>{`
+        @keyframes snippetBounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+        @keyframes snippetPulse {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(0.9); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+
       {/*<div className="search-bar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
@@ -240,32 +345,110 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
       </div>*/}
 
       <div className="top-nav-right">
-        <div className="notification-wrapper">
+        <div className="notification-wrapper" style={{ position: "relative" }}>
           <button
             ref={notificationButtonRef}
             className="icon-btn"
+            type="button"
             aria-label="Notifications"
             aria-expanded={showNotifications}
-            onClick={() => setShowNotifications((prev) => !prev)}
+            onClick={toggleNotifications}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <span className="nav-badge" />
+            {isAdmin && unreadCount > 0 ? (
+              <span className="nav-badge" title={`${unreadCount} unread`} />
+            ) : null}
           </button>
+
+          {isAdmin && unreadCount > 0 && !showNotifications && notifications.length > 0 && (
+            <div 
+              onClick={toggleNotifications}
+              style={{
+                position: "absolute",
+                top: "calc(100% + 14px)",
+                right: "-6px",
+                background: "var(--color-primary)",
+                color: "#fff",
+                padding: "10px 14px",
+                borderRadius: "var(--radius-md)",
+                boxShadow: "0 10px 25px rgba(86,171,47,0.35)",
+                cursor: "pointer",
+                zIndex: 90,
+                animation: "snippetBounce 3s ease-in-out infinite",
+                border: "1px solid rgba(255,255,255,0.2)",
+                minWidth: "max-content",
+                maxWidth: "280px"
+              }}
+            >
+              {/* Pointer triangle */}
+              <div style={{
+                position: "absolute",
+                top: "-6px",
+                right: "18px",
+                width: 0,
+                height: 0,
+                borderLeft: "6px solid transparent",
+                borderRight: "6px solid transparent",
+                borderBottom: "6px solid var(--color-primary)"
+              }}></div>
+              
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.9, marginBottom: 4, fontWeight: 700 }}>
+                {unreadCount} New Alert{unreadCount > 1 ? 's' : ''}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff", display: "inline-block", animation: "snippetPulse 2s infinite", flexShrink: 0 }}></span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {notifications[0].title}
+                </span>
+              </div>
+            </div>
+          )}
 
           {showNotifications && (
             <div className="notification-popover" ref={notificationPopoverRef}>
               <div className="notification-popover__header">Notifications</div>
-              <div className="notification-list">
-                {notifications.map((note) => (
-                  <div key={note.id} className="notification-item">
-                    <strong>{note.title}</strong>
-                    <p>{note.body}</p>
-                    <span>{note.time}</span>
+              <div className="notification-list" style={{ maxHeight: "360px", overflowY: "auto", overscrollBehavior: "contain" }}>
+                {!isAdmin && (
+                  <div className="notification-item">
+                    <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>
+                      In-app alerts are available for administrators.
+                    </p>
                   </div>
-                ))}
+                )}
+                {isAdmin && notifications.length === 0 && (
+                  <div className="notification-item">
+                    <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>
+                      No notifications yet. You will be alerted when an inspector submits evidence for review.
+                    </p>
+                  </div>
+                )}
+                {isAdmin &&
+                  notifications.map((note) => (
+                    <div
+                      key={note.id}
+                      className="notification-item"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        if (note.link) navigate(note.link);
+                        setShowNotifications(false);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          if (note.link) navigate(note.link);
+                          setShowNotifications(false);
+                        }
+                      }}
+                      style={{ cursor: note.link ? "pointer" : "default" }}
+                    >
+                      <strong>{note.title}</strong>
+                      <p>{note.body}</p>
+                      <span>{formatTimeAgo(note.createdAt)}</span>
+                    </div>
+                  ))}
               </div>
             </div>
           )}

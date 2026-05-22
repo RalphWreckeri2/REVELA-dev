@@ -19,9 +19,9 @@ COLUMN_MAP = {
     "tradename":           "businessName",
 
     # business type
-    "business_type":              "businessType",
-    "type_of_business":         "businessType",
-    "typeofbusiness":           "businessType",
+    "business_type":       "businessType",
+    "type_of_business":    "businessType",
+    "typeofbusiness":      "businessType",
 
     # line of business
     "line_of_business":    "lineOfBusiness",
@@ -42,8 +42,8 @@ COLUMN_MAP = {
     "brgy_name":           "barangay",
 
     # application / permit status
-    "status":                     "applicationStatus",
-    "application_status":         "applicationStatus",
+    "status":                   "applicationStatus",
+    "application_status":       "applicationStatus",
     "status_of_application":    "applicationStatus",
     "statusofapplication":      "applicationStatus",
     "status_of_registration":   "registrationStatus",
@@ -488,6 +488,107 @@ def sync_registry(file, ext: str):
 
     except Exception as e:
         return None, str(e)
+
+
+def update_business(business_id: int, data: dict):
+    """Manually update business information in the registry."""
+    try:
+        cursor = mysql.connection.cursor()
+
+        # Check if business exists
+        cursor.execute(
+            "SELECT businessID, businessName, barangayID FROM official_registry WHERE businessID = %s", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            return False, "Business not found"
+
+        old_name = row["businessName"]
+        barangay_id = row["barangayID"]
+
+        # Build dynamic query to only update provided fields
+        update_fields = []
+        params = []
+
+        if "businessName" in data:
+            update_fields.append("businessName = %s")
+            params.append(str(data["businessName"]).strip())
+        if "businessType" in data:
+            update_fields.append("businessType = %s")
+            params.append(str(data["businessType"]).strip()
+                          if data["businessType"] else None)
+        if "lineOfBusiness" in data:
+            update_fields.append("lineOfBusiness = %s")
+            params.append(str(data["lineOfBusiness"]).strip()
+                          if data["lineOfBusiness"] else None)
+        if "businessAddress" in data:
+            update_fields.append("businessAddress = %s")
+            params.append(str(data["businessAddress"]).strip()
+                          if data["businessAddress"] else None)
+        if "applicationStatus" in data:
+            update_fields.append("applicationStatus = %s")
+            params.append(_normalise_status(data["applicationStatus"]))
+        if "businessSize" in data:
+            update_fields.append("businessSize = %s")
+            params.append(str(data["businessSize"]).strip()
+                          if data["businessSize"] else None)
+
+        if update_fields:
+            query = f"UPDATE official_registry SET {', '.join(update_fields)} WHERE businessID = %s"
+            params.append(business_id)
+            cursor.execute(query, tuple(params))
+
+            # If the business name changed, update geospatial_logs to maintain the linkage
+            if "businessName" in data:
+                new_name = str(data["businessName"]).strip()
+                if new_name.lower() != old_name.lower():
+                    cursor.execute("""
+                        UPDATE geospatial_logs
+                        SET detectedName = %s
+                        WHERE LOWER(detectedName) = LOWER(%s) AND barangayID = %s
+                    """, (new_name, old_name, barangay_id))
+
+            mysql.connection.commit()
+
+        cursor.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def delete_business(business_id: int):
+    """Delete a business from the registry."""
+    try:
+        cursor = mysql.connection.cursor()
+
+        cursor.execute(
+            "SELECT businessID, businessName, barangayID FROM official_registry WHERE businessID = %s", (business_id,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            return False, "Business not found"
+
+        # Find associated geospatial logs mapped to this business
+        cursor.execute(
+            "SELECT logID FROM geospatial_logs WHERE LOWER(detectedName) = LOWER(%s) AND barangayID = %s",
+            (row["businessName"], row["barangayID"])
+        )
+        logs = cursor.fetchall()
+
+        for log in logs:
+            cursor.execute(
+                "DELETE FROM inspection_reports WHERE targetID = %s", (log["logID"],))
+            cursor.execute(
+                "DELETE FROM geospatial_logs WHERE logID = %s", (log["logID"],))
+
+        cursor.execute(
+            "DELETE FROM official_registry WHERE businessID = %s", (business_id,))
+        mysql.connection.commit()
+        cursor.close()
+
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 
 def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_page=10):

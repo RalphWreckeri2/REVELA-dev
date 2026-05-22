@@ -4,6 +4,15 @@ import traceback
 from flask import Blueprint, jsonify, request
 from api.middleware.decorators import jwt_required, admin_required
 from api.analytics.service import get_wlc_config, update_wlc_config
+from api.analytics.filters import (
+    parse_analytics_filters,
+    registry_sql,
+    geo_sql,
+    geo_on_extra,
+    barangay_b_sql,
+    inspection_sql,
+    filters_without,
+)
 
 analytics_bp = Blueprint("analytics", __name__)
 
@@ -12,15 +21,28 @@ analytics_bp = Blueprint("analytics", __name__)
 @jwt_required()
 def get_all_analytics():
     try:
-        return _get_all_analytics_inner()
+        F = parse_analytics_filters(request.args)
+        return _get_all_analytics_inner(F)
     except Exception as e:
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 
-def _get_all_analytics_inner():
+def _get_all_analytics_inner(F=None):
+    if F is None:
+        F = {}
     from app import mysql
 
     cur = mysql.connection.cursor()
+
+    Fx = F or {}
+    reg_all, reg_all_p = registry_sql("official_registry", Fx)
+    reg_no_status, reg_no_status_p = registry_sql(
+        "official_registry", filters_without(Fx, "application_status"))
+    reg_o, reg_o_p = registry_sql("o", Fx)
+    geo_g, geo_g_p = geo_sql("g", Fx)
+    geo_on_g, geo_on_g_p = geo_on_extra("g", Fx)
+    brgy_b, brgy_b_p = barangay_b_sql(Fx)
+    insp_ir, insp_ir_p = inspection_sql("ir", Fx)
 
     # ── WLC config ────────────────────────────────────────────────────────────
     config = get_wlc_config()
@@ -35,40 +57,51 @@ def _get_all_analytics_inner():
     # TIER 1 — DESCRIPTIVE
     # ══════════════════════════════════════════════════════════════════════════
 
-    cur.execute("SELECT COUNT(*) AS n FROM official_registry")
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM official_registry WHERE 1=1" + reg_all,
+        reg_all_p,
+    )
     total_businesses = cur.fetchone()["n"]
 
     cur.execute(
-        "SELECT COUNT(*) AS n FROM official_registry WHERE applicationStatus = 'Active'")
+        "SELECT COUNT(*) AS n FROM official_registry WHERE applicationStatus = 'Active'"
+        + reg_no_status,
+        reg_no_status_p,
+    )
     active_count = cur.fetchone()["n"]
 
     cur.execute(
-        "SELECT COUNT(*) AS n FROM official_registry WHERE applicationStatus = 'Expired'")
+        "SELECT COUNT(*) AS n FROM official_registry WHERE applicationStatus = 'Expired'"
+        + reg_no_status,
+        reg_no_status_p,
+    )
     expired_count = cur.fetchone()["n"]
 
-    cur.execute("SELECT COUNT(*) AS n FROM geospatial_logs")
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM geospatial_logs g WHERE g.flagColor != 'Green'" + geo_g,
+        geo_g_p,
+    )
     total_flagged = cur.fetchone()["n"]
 
     compliance_rate = round(
         (active_count / total_businesses * 100), 1) if total_businesses else 0
 
     # Enforcement progress
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             b.barangayName,
-            SUM(CASE WHEN g.flagColor = 'Green'  THEN 1 ELSE 0 END) AS green_count,
-            SUM(CASE WHEN g.flagColor = 'Red'    THEN 1 ELSE 0 END) AS red_count,
-            SUM(CASE WHEN g.flagColor = 'Yellow' THEN 1 ELSE 0 END) AS yellow_count,
-            SUM(CASE WHEN g.flagColor = 'Black'  THEN 1 ELSE 0 END) AS black_count
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count
         FROM barangays b
-        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID
+        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
+        WHERE 1=1 {brgy_b}
         GROUP BY b.barangayID, b.barangayName
         ORDER BY b.barangayName
-    """)
+    """, geo_on_g_p + brgy_b_p)
     enforcement_progress = [
         {
             "barangayName": row["barangayName"],
-            "green_count":  row["green_count"] or 0,
             "red_count":    row["red_count"] or 0,
             "yellow_count": row["yellow_count"] or 0,
             "black_count":  row["black_count"] or 0,
@@ -77,41 +110,44 @@ def _get_all_analytics_inner():
     ]
 
     # Sectoral distribution
-    cur.execute("""
+    cur.execute(f"""
         SELECT COALESCE(lineOfBusiness, 'Unclassified') AS sector, COUNT(*) AS count
         FROM official_registry
+        WHERE 1=1 {reg_all}
         GROUP BY lineOfBusiness
         ORDER BY count DESC
         LIMIT 10
-    """)
+    """, reg_all_p)
     sectoral_distribution = [
         {"sector": row["sector"], "count": row["count"]}
         for row in cur.fetchall()
     ]
 
     # Business size
-    cur.execute("""
+    cur.execute(f"""
         SELECT COALESCE(businessSize, 'Unknown') AS size_label, COUNT(*) AS count
         FROM official_registry
+        WHERE 1=1 {reg_all}
         GROUP BY businessSize
         ORDER BY count DESC
-    """)
+    """, reg_all_p)
     business_size_dist = [
         {"size_label": row["size_label"], "count": row["count"]}
         for row in cur.fetchall()
     ]
 
     # Compliance timeline
-    cur.execute("""
+    cur.execute(f"""
         SELECT
-            DATE_FORMAT(lastRenewalDate, '%Y-%m') AS month,
+            DATE_FORMAT(lastRenewalDate, '%%Y-%%m') AS month,
             SUM(CASE WHEN applicationStatus = 'Active'  THEN 1 ELSE 0 END) AS active_count,
             SUM(CASE WHEN applicationStatus != 'Active' THEN 1 ELSE 0 END) AS non_active_count
         FROM official_registry
         WHERE lastRenewalDate >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+        {reg_no_status}
         GROUP BY month
         ORDER BY month
-    """)
+    """, reg_no_status_p)
     compliance_timeline = [
         {
             "month":            row["month"],
@@ -122,15 +158,20 @@ def _get_all_analytics_inner():
     ]
 
     # Audit summary
-    cur.execute("SELECT COUNT(*) AS n FROM inspection_reports")
+    cur.execute(f"""
+        SELECT COUNT(*) AS n FROM inspection_reports ir
+        JOIN geospatial_logs g ON ir.targetID = g.logID
+        WHERE 1=1 {insp_ir} {geo_g}
+    """, insp_ir_p + geo_g_p)
     total_inspections = cur.fetchone()["n"]
 
-    cur.execute("""
-        SELECT inspectionResult, COUNT(*) AS count
-        FROM inspection_reports
-        WHERE inspectionResult IS NOT NULL
-        GROUP BY inspectionResult
-    """)
+    cur.execute(f"""
+        SELECT ir.inspectionResult, COUNT(*) AS count
+        FROM inspection_reports ir
+        JOIN geospatial_logs g ON ir.targetID = g.logID
+        WHERE ir.inspectionResult IS NOT NULL {insp_ir} {geo_g}
+        GROUP BY ir.inspectionResult
+    """, insp_ir_p + geo_g_p)
     result_breakdown = [
         {"inspectionResult": row["inspectionResult"], "count": row["count"]}
         for row in cur.fetchall()
@@ -141,19 +182,20 @@ def _get_all_analytics_inner():
     # ══════════════════════════════════════════════════════════════════════════
 
     # Barangay risk heatmap
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             b.barangayID,
             b.barangayName,
-            COUNT(CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
-            SUM(CASE WHEN g.flagColor = 'Red'    THEN 1 ELSE 0 END) AS red_count,
-            SUM(CASE WHEN g.flagColor = 'Yellow' THEN 1 ELSE 0 END) AS yellow_count,
-            SUM(CASE WHEN g.flagColor = 'Black'  THEN 1 ELSE 0 END) AS black_count
+            COUNT(DISTINCT CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count
         FROM barangays b
-        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID
+        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
+        WHERE 1=1 {brgy_b}
         GROUP BY b.barangayID, b.barangayName
         ORDER BY flagged_count DESC
-    """)
+    """, geo_on_g_p + brgy_b_p)
     barangay_risk_data = [
         {
             "barangayID":    row["barangayID"],
@@ -172,34 +214,36 @@ def _get_all_analytics_inner():
     )
 
     # Category non-compliance
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             COALESCE(o.lineOfBusiness, 'Unclassified') AS category,
-            COUNT(g.logID) AS flagged_count
+            COUNT(DISTINCT g.logID) AS flagged_count
         FROM geospatial_logs g
         LEFT JOIN official_registry o ON g.detectedName = o.businessName
+            AND g.barangayID = o.barangayID{reg_o}
+        WHERE 1=1 {geo_g}
         GROUP BY category
         ORDER BY flagged_count DESC
         LIMIT 10
-    """)
+    """, reg_o_p + geo_g_p)
     category_noncompliance = [
         {"category": row["category"], "flagged_count": row["flagged_count"]}
         for row in cur.fetchall()
     ]
 
     # Weekly red-flag trend
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             DATE_FORMAT(
-                DATE_SUB(detectedDate, INTERVAL WEEKDAY(detectedDate) DAY),
-                '%Y-%m-%d'
+                DATE_SUB(g.detectedDate, INTERVAL WEEKDAY(g.detectedDate) DAY),
+                '%%Y-%%m-%%d'
             ) AS week_start,
-            SUM(CASE WHEN flagColor = 'Red' THEN 1 ELSE 0 END) AS new_red_flags
-        FROM geospatial_logs
-        WHERE detectedDate >= DATE_SUB(NOW(), INTERVAL 8 WEEK)
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Red' THEN g.logID END) AS new_red_flags
+        FROM geospatial_logs g
+        WHERE g.detectedDate >= DATE_SUB(NOW(), INTERVAL 8 WEEK) {geo_g}
         GROUP BY week_start
         ORDER BY week_start
-    """)
+    """, geo_g_p)
     flag_trend = [
         {"week_start": str(row["week_start"]),
          "new_red_flags": row["new_red_flags"] or 0}
@@ -209,14 +253,14 @@ def _get_all_analytics_inner():
     # DBSCAN Hotspot Intelligence
     dbscan_insight = "Not enough data to pinpoint specific high-risk zones."
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT g.latitude, g.longitude, COALESCE(b.barangayName, 'Unknown Area') as barangayName
             FROM geospatial_logs g
             LEFT JOIN barangays b ON g.barangayID = b.barangayID
             WHERE g.flagColor IN ('Red', 'Black')
               AND g.latitude IS NOT NULL
-              AND g.longitude IS NOT NULL
-        """)
+              AND g.longitude IS NOT NULL {geo_g}
+        """, geo_g_p)
         hotspot_data = cur.fetchall()
 
         if len(hotspot_data) >= 3:
@@ -259,17 +303,17 @@ def _get_all_analytics_inner():
     # Moran's I Proxy (Spatial Autocorrelation)
     morans_insight = "Not enough data to determine broader geographic patterns."
     try:
-        cur.execute("""
+        cur.execute(f"""
             SELECT 
                 b.barangayName,
                 AVG(g.latitude) as lat,
                 AVG(g.longitude) as lng,
-                SUM(CASE WHEN g.flagColor IN ('Red', 'Black') THEN 1 ELSE 0 END) as severe_count
+                COUNT(DISTINCT CASE WHEN g.flagColor IN ('Red', 'Black') THEN g.logID END) as severe_count
             FROM barangays b
-            JOIN geospatial_logs g ON b.barangayID = g.barangayID
-            WHERE g.latitude IS NOT NULL AND g.longitude IS NOT NULL
+            JOIN geospatial_logs g ON b.barangayID = g.barangayID{geo_on_g}
+            WHERE g.latitude IS NOT NULL AND g.longitude IS NOT NULL {brgy_b}
             GROUP BY b.barangayID, b.barangayName
-        """)
+        """, geo_on_g_p + brgy_b_p)
         brgy_spatial = cur.fetchall()
 
         if len(brgy_spatial) >= 4:
@@ -329,22 +373,23 @@ def _get_all_analytics_inner():
     # TIER 3 — PRESCRIPTIVE (WLC / OPS)
     # ══════════════════════════════════════════════════════════════════════════
 
-    cur.execute("""
+    cur.execute(f"""
         SELECT
             b.barangayID,
             b.barangayName,
             COUNT(DISTINCT CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
-            SUM(CASE WHEN g.flagColor = 'Red'    THEN 1 ELSE 0 END) AS red_count,
-            SUM(CASE WHEN g.flagColor = 'Yellow' THEN 1 ELSE 0 END) AS yellow_count,
-            SUM(CASE WHEN g.flagColor = 'Black'  THEN 1 ELSE 0 END) AS black_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,
             AVG(g.latitude)                                          AS avg_lat,
             AVG(g.longitude)                                         AS avg_lng,
             COUNT(DISTINCT o.businessID)                             AS total_registered
         FROM barangays b
-        LEFT JOIN geospatial_logs   g ON g.barangayID = b.barangayID
-        LEFT JOIN official_registry o ON o.barangayID = b.barangayID
+        LEFT JOIN geospatial_logs   g ON g.barangayID = b.barangayID{geo_on_g}
+        LEFT JOIN official_registry o ON o.barangayID = b.barangayID{reg_o}
+        WHERE 1=1 {brgy_b}
         GROUP BY b.barangayID, b.barangayName
-    """)
+    """, geo_on_g_p + reg_o_p + brgy_b_p)
     rows = cur.fetchall()
 
     max_flagged = max((r["flagged_count"] or 0 for r in rows), default=1) or 1
@@ -417,6 +462,9 @@ def _get_all_analytics_inner():
     top_3 = rankings[:3]
     valid_top_3 = [b for b in top_3 if b["flagged_count"] > 0]
 
+    geo_dispatch, geo_dispatch_p = geo_sql(
+        "g", filters_without(Fx, "barangay_ids"))
+
     if valid_top_3:
         # Count actual active inspectors from the users table
         cur.execute(
@@ -431,15 +479,16 @@ def _get_all_analytics_inner():
         available_inspectors = total_inspectors
 
         for i, brgy in enumerate(valid_top_3):
-            cur.execute("""
+            cur.execute(f"""
                 SELECT COALESCE(o.lineOfBusiness, 'Unclassified') AS category, COUNT(g.logID) as count
                 FROM geospatial_logs g
                 LEFT JOIN official_registry o ON g.detectedName = o.businessName
-                WHERE g.barangayID = %s
+                    AND g.barangayID = o.barangayID{reg_o}
+                WHERE g.barangayID = %s {geo_dispatch}
                 GROUP BY category
                 ORDER BY count DESC
                 LIMIT 2
-            """, (brgy["barangayID"],))
+            """, [brgy["barangayID"]] + reg_o_p + geo_dispatch_p)
 
             top_cats_rows = cur.fetchall()
             if top_cats_rows:
@@ -472,6 +521,7 @@ def _get_all_analytics_inner():
     cur.close()
 
     return jsonify({
+        "applied_filters": Fx,
         "descriptive": {
             "kpis": {
                 "total_businesses":    total_businesses,
@@ -503,6 +553,158 @@ def _get_all_analytics_inner():
             "dispatch_recommendations": dispatch_recommendations,
         },
     }), 200
+
+
+@analytics_bp.route("/filter-metadata", methods=["GET"])
+@jwt_required()
+def analytics_filter_metadata():
+    """Distinct values for analytics filter controls (registry, flags, inspections)."""
+    from app import mysql
+
+    cur = mysql.connection.cursor()
+    cur.execute(
+        """
+        SELECT DISTINCT applicationStatus AS v FROM official_registry
+        WHERE applicationStatus IS NOT NULL AND TRIM(applicationStatus) <> ''
+        ORDER BY applicationStatus
+        """
+    )
+    application_statuses = [r["v"] for r in cur.fetchall()]
+
+    cur.execute(
+        """
+        SELECT DISTINCT lineOfBusiness AS v FROM official_registry
+        WHERE lineOfBusiness IS NOT NULL AND TRIM(lineOfBusiness) <> ''
+        ORDER BY lineOfBusiness
+        LIMIT 500
+        """
+    )
+    lines_of_business = [r["v"] for r in cur.fetchall()]
+
+    cur.execute(
+        """
+        SELECT DISTINCT businessType AS v FROM official_registry
+        WHERE businessType IS NOT NULL AND TRIM(businessType) <> ''
+        ORDER BY businessType
+        LIMIT 500
+        """
+    )
+    business_types = [r["v"] for r in cur.fetchall()]
+
+    cur.execute(
+        """
+        SELECT DISTINCT businessSize AS v FROM official_registry
+        WHERE businessSize IS NOT NULL AND TRIM(businessSize) <> ''
+        ORDER BY businessSize
+        """
+    )
+    business_sizes = [r["v"] for r in cur.fetchall()]
+
+    cur.execute(
+        """
+        SELECT DISTINCT inspectionResult AS v FROM inspection_reports
+        WHERE inspectionResult IS NOT NULL AND TRIM(inspectionResult) <> ''
+        ORDER BY inspectionResult
+        """
+    )
+    inspection_results = [r["v"] for r in cur.fetchall()]
+
+    cur.execute(
+        """
+        SELECT DISTINCT verificationStatus AS v FROM inspection_reports
+        WHERE verificationStatus IS NOT NULL AND TRIM(verificationStatus) <> ''
+        ORDER BY verificationStatus
+        """
+    )
+    verification_statuses = [r["v"] for r in cur.fetchall()]
+
+    cur.close()
+
+    return jsonify({
+        "flag_colors": ["Green", "Yellow", "Red", "Black"],
+        "application_statuses": application_statuses,
+        "lines_of_business": lines_of_business,
+        "business_types": business_types,
+        "business_sizes": business_sizes,
+        "inspection_results": inspection_results,
+        "verification_statuses": verification_statuses,
+    }), 200
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+@analytics_bp.route("/ops-rankings", methods=["GET"])
+@jwt_required()
+def get_ops_rankings_only():
+    """Lightweight endpoint to fetch real-time OPS priority rankings for the Maps/Dispatch UI."""
+    try:
+        from app import mysql
+        cur = mysql.connection.cursor()
+
+        config = get_wlc_config()
+        w1 = config.get("w1_risk", 40) / 100
+        w2 = config.get("w2_sector", 40) / 100
+        w3 = config.get("w3_distance", 20) / 100
+        bplo_lat = config.get("bplo_lat", 13.9667)
+        bplo_lng = config.get("bplo_lng", 121.1167)
+        sector_scores = config.get("sectors", {})
+
+        cur.execute("""
+            SELECT
+                b.barangayID,
+                b.barangayName,
+                COUNT(DISTINCT CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
+                COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
+                COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
+                COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,
+                AVG(g.latitude)                                          AS avg_lat,
+                AVG(g.longitude)                                         AS avg_lng
+            FROM barangays b
+            LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID
+            GROUP BY b.barangayID, b.barangayName
+        """)
+        rows = cur.fetchall()
+
+        max_flagged = max(
+            (r["flagged_count"] or 0 for r in rows), default=1) or 1
+        rankings = []
+
+        for row in rows:
+            flagged = int(row["flagged_count"] or 0)
+            risk_score = min(
+                (((int(row["red_count"] or 0) * 3 + int(row["yellow_count"] or 0) * 2 + int(row["black_count"] or 0) * 4) / max(flagged, 1))
+                 * (flagged / max_flagged) * 100), 100
+            )
+            sector_score = float(sector_scores.get(row["barangayName"], 50))
+
+            if row["avg_lat"] and row["avg_lng"]:
+                R = 6371
+                a = (math.sin(math.radians(float(row["avg_lat"]) - bplo_lat) / 2) ** 2
+                     + math.cos(math.radians(bplo_lat)) *
+                     math.cos(math.radians(float(row["avg_lat"])))
+                     * math.sin(math.radians(float(row["avg_lng"]) - bplo_lng) / 2) ** 2)
+                distance_score = min(
+                    (R * 2 * math.asin(math.sqrt(a))) / 20 * 100, 100)
+            else:
+                distance_score = 50
+
+            ops_score = max(0.0, min(100.0, round(
+                w1 * risk_score + w2 * sector_score + w3 * (100 - distance_score), 1)))
+
+            rankings.append({
+                "barangayID": row["barangayID"],
+                "barangayName": row["barangayName"],
+                "ops_score": ops_score,
+                "flagged_count": flagged,
+                "risk_level": "High" if ops_score >= 60 else "Medium" if ops_score >= 30 else "Low"
+            })
+
+        rankings.sort(key=lambda x: x["ops_score"], reverse=True)
+        for i, r in enumerate(rankings):
+            r["rank"] = i + 1
+        cur.close()
+        return jsonify({"data": rankings}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ─────────────────────────────────────────────────────────────────────────────

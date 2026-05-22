@@ -6,9 +6,15 @@ import 'pages/welcome_page.dart';
 import 'pages/login_page.dart';
 import 'pages/home_page.dart';
 import 'service/auth_service.dart';
+import 'service/api_config.dart';
+import 'service/assignment_notifications.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ApiConfig.initialize();
+  AuthService().syncBaseUrl();
+  await AssignmentNotifications.init();
+
   final prefs = await SharedPreferences.getInstance();
   final bool seenWelcome = prefs.getBool('seen_welcome') ?? false;
 

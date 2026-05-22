@@ -7,9 +7,13 @@ import {
 import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
 import { useAuth } from "../context/AuthContext";
-import { getWlcConfigRequest, updateWlcConfigRequest } from "../services/api";
-
-const BASE_URL = "http://127.0.0.1:5000/api";
+import {
+  getWlcConfigRequest,
+  updateWlcConfigRequest,
+  getAnalyticsOverviewRequest,
+  getAnalyticsFilterMetadataRequest,
+  getBarangaysRequest,
+} from "../services/api";
 
 // ── Palette — matches REVELA's green/red/amber brand ─────────────────────────
 const COLOR = {
@@ -92,6 +96,52 @@ const Skeleton = ({ h = 200 }) => (
   }} />
 );
 
+const createEmptyFilters = () => ({
+  barangay_ids: [],
+  application_status: "",
+  line_of_business: "",
+  business_type: "",
+  business_size: "",
+  renewal_from: "",
+  renewal_to: "",
+  flag_color: "",
+  detected_from: "",
+  detected_to: "",
+  inspection_result: "",
+  verification_status: "",
+  inspection_from: "",
+  inspection_to: "",
+});
+
+const filterInputStyle = {
+  width: "100%",
+  padding: "9px 12px",
+  borderRadius: "var(--radius-sm, 8px)",
+  border: "1px solid #cbd5e1",
+  fontSize: 13,
+  background: "#f8fafc",
+  color: "#0f172a",
+  outline: "none",
+  fontFamily: "var(--font-base)",
+  transition: "border-color 0.15s ease",
+};
+
+const filterLabelStyle = { 
+  display: "block", fontSize: 11, fontWeight: 700, color: "#475569", 
+  marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" 
+};
+
+function countActiveBackendFilters(applied) {
+  if (!applied || typeof applied !== "object") return 0;
+  let n = 0;
+  if (applied.barangay_ids?.length) n += 1;
+  for (const k of Object.keys(createEmptyFilters())) {
+    if (k === "barangay_ids") continue;
+    if (applied[k]) n += 1;
+  }
+  return n;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const { token } = useAuth();
@@ -102,6 +152,11 @@ export default function AnalyticsPage() {
   const [wlcConfig, setWlcConfig] = useState({ w1_risk: 40, w2_sector: 25, w3_distance: 15 });
   const [showWlcConfig, setShowWlcConfig] = useState(false);
   const [savingWlc, setSavingWlc] = useState(false);
+  const [draftFilters, setDraftFilters] = useState(createEmptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState(createEmptyFilters);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterMeta, setFilterMeta] = useState(null);
+  const [barangaysList, setBarangaysList] = useState([]);
 
   const fetchAnalytics = useCallback(async () => {
     if (!token) return;
@@ -109,21 +164,14 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BASE_URL}/analytics/all`, {
-        headers: { 
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-      });
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const json = await res.json();
+      const json = await getAnalyticsOverviewRequest(token, appliedFilters);
       setData(json);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, appliedFilters]);
 
   const fetchWlcConfig = useCallback(async () => {
     if (!token) return;
@@ -157,6 +205,26 @@ export default function AnalyticsPage() {
   };
 
   useEffect(() => { fetchAnalytics(); fetchWlcConfig(); }, [fetchAnalytics, fetchWlcConfig]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [meta, brgy] = await Promise.all([
+          getAnalyticsFilterMetadataRequest(token),
+          getBarangaysRequest(token),
+        ]);
+        if (!cancelled) {
+          setFilterMeta(meta);
+          setBarangaysList(Array.isArray(brgy) ? brgy : []);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
 
   // ── Derived shorthand references ──────────────────────────────────────────
   const desc  = data?.descriptive;
@@ -259,6 +327,31 @@ export default function AnalyticsPage() {
   const ahp_w3 = Math.max(1, wlcConfig.w3_distance);
   const ahpVal = (num, den) => (num / den).toFixed(2);
 
+  const activeFilterCount = countActiveBackendFilters(data?.applied_filters);
+
+  const handleApplyFilters = () => {
+    setAppliedFilters({
+      ...draftFilters,
+      barangay_ids: [...draftFilters.barangay_ids],
+    });
+  };
+
+  const handleClearFilters = () => {
+    const empty = createEmptyFilters();
+    setDraftFilters(empty);
+    setAppliedFilters(empty);
+  };
+
+  const fm = filterMeta || {};
+  const sel = (value, onChange, options, placeholder) => (
+    <select value={value} onChange={onChange} style={filterInputStyle}>
+      <option value="">{placeholder}</option>
+      {(options || []).map((opt) => (
+        <option key={String(opt)} value={String(opt)}>{String(opt)}</option>
+      ))}
+    </select>
+  );
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
@@ -317,6 +410,174 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* ANALYTICS FILTERS — query params mirror backend GET /analytics/all */}
+      <div className="saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px 22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14, marginBottom: showFilters ? 16 : 0 }}>
+          <div 
+            style={{ cursor: "pointer", display: "flex", flexDirection: "column", flex: 1 }} 
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#1a202c", display: "flex", alignItems: "center", gap: 8 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              Data filters
+              <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: 4 }}>
+                {showFilters ? "▲" : "▼"}
+              </span>
+              {!showFilters && activeFilterCount > 0 && (
+                <span style={{ fontSize: 11, background: COLOR.greenLight, color: COLOR.green, padding: "2px 8px", borderRadius: 12, marginLeft: 8 }}>
+                  {activeFilterCount} active
+                </span>
+              )}
+            </h3>
+            {showFilters ? (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", maxWidth: 720 }}>
+                Registry (status, sector, type, size, renewal window), geospatial flags (color, detection window),
+                and inspections (result, verification, timestamp window). Barangay selection limits spatial and joined aggregates.
+              </p>
+            ) : (
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
+                Click to expand and filter analytics data.
+              </p>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {showFilters && activeFilterCount > 0 && (
+              <span style={{ fontSize: 12, fontWeight: 700, color: COLOR.green, marginRight: 4 }}>
+                {activeFilterCount} active
+              </span>
+            )}
+            {showFilters && (
+              <>
+                <button className="primary-btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleApplyFilters}>
+                  Apply filters
+                </button>
+                <button className="ghost-btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleClearFilters}>
+                  Clear all
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {showFilters && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
+            
+            {/* Location Group */}
+            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                Location & Zoning
+              </h4>
+              <div>
+                <label style={filterLabelStyle}>Barangays (Ctrl+click multi)</label>
+                <select
+                  multiple
+                  size={5}
+                  value={draftFilters.barangay_ids.map(String)}
+                  onChange={(e) => {
+                    const next = [...e.target.selectedOptions].map((o) => parseInt(o.value, 10));
+                    setDraftFilters((d) => ({ ...d, barangay_ids: next }));
+                  }}
+                  style={{ ...filterInputStyle, minHeight: 140 }}
+                >
+                  {barangaysList.map((b) => (
+                    <option key={b.barangayID} value={b.barangayID}>{b.barangayName}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Business Registry Group */}
+            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                Business Registry
+              </h4>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 12 }}>
+                <div>
+                  <label style={filterLabelStyle}>Status</label>
+                  {sel(draftFilters.application_status, (e) => setDraftFilters((d) => ({ ...d, application_status: e.target.value })), fm.application_statuses, "All statuses")}
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Sector</label>
+                  {sel(draftFilters.line_of_business, (e) => setDraftFilters((d) => ({ ...d, line_of_business: e.target.value })), fm.lines_of_business, "All sectors")}
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Type</label>
+                  {sel(draftFilters.business_type, (e) => setDraftFilters((d) => ({ ...d, business_type: e.target.value })), fm.business_types, "All types")}
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Size</label>
+                  {sel(draftFilters.business_size, (e) => setDraftFilters((d) => ({ ...d, business_size: e.target.value })), fm.business_sizes, "All sizes")}
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Renewal From</label>
+                  <input type="date" value={draftFilters.renewal_from} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_from: e.target.value }))} style={filterInputStyle} />
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Renewal To</label>
+                  <input type="date" value={draftFilters.renewal_to} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_to: e.target.value }))} style={filterInputStyle} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
+            {/* Geospatial Group */}
+            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+                Geospatial Flags
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <label style={filterLabelStyle}>Flag Color</label>
+                  {sel(draftFilters.flag_color, (e) => setDraftFilters((d) => ({ ...d, flag_color: e.target.value })), fm.flag_colors, "All colors")}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 12 }}>
+                  <div>
+                    <label style={filterLabelStyle}>Detected From</label>
+                    <input type="date" value={draftFilters.detected_from} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_from: e.target.value }))} style={filterInputStyle} />
+                  </div>
+                  <div>
+                    <label style={filterLabelStyle}>Detected To</label>
+                    <input type="date" value={draftFilters.detected_to} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_to: e.target.value }))} style={filterInputStyle} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Inspections Group */}
+            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Inspections
+              </h4>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 12 }}>
+                <div>
+                  <label style={filterLabelStyle}>Result</label>
+                  {sel(draftFilters.inspection_result, (e) => setDraftFilters((d) => ({ ...d, inspection_result: e.target.value })), fm.inspection_results, "All results")}
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Verification</label>
+                  {sel(draftFilters.verification_status, (e) => setDraftFilters((d) => ({ ...d, verification_status: e.target.value })), fm.verification_statuses, "All verification")}
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Inspected From</label>
+                  <input type="datetime-local" value={draftFilters.inspection_from} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_from: e.target.value }))} style={filterInputStyle} />
+                </div>
+                <div>
+                  <label style={filterLabelStyle}>Inspected To</label>
+                  <input type="datetime-local" value={draftFilters.inspection_to} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_to: e.target.value }))} style={filterInputStyle} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        )}
+      </div>
+
       {/* TAB FILTER */}
       <div style={{ display: "flex", gap: 8, marginBottom: 32, flexWrap: "wrap" }}>
         {["all", "descriptive", "diagnostic", "prescriptive"].map(tab => (
@@ -351,7 +612,7 @@ export default function AnalyticsPage() {
           />
 
           {/* KPI CARDS */}
-          <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20, marginBottom: 24 }}>
+          <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 20, marginBottom: 24 }}>
             {loading ? (
               Array(3).fill(0).map((_, i) => <Skeleton key={i} h={90} />)
             ) : (
@@ -443,9 +704,9 @@ export default function AnalyticsPage() {
           </div>
 
           {/* ENFORCEMENT PROGRESS TRACKER + SECTORAL DISTRIBUTION */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, marginBottom: 24 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
             {/* Stacked Bar — Enforcement Progress */}
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column" }}>
+            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "2 1 400px", minWidth: 0 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
                 Enforcement Progress Tracker
                 <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
@@ -470,7 +731,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Pie — Sectoral Distribution */}
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column" }}>
+            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 300px", minWidth: 0 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
                 Sectoral Distribution
               </h3>
@@ -503,9 +764,9 @@ export default function AnalyticsPage() {
           </div>
 
           {/* COMPLIANCE CONVERSION TIMELINE + BUSINESS SIZE + AUDIT SUMMARY */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24, marginBottom: 0 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 0 }}>
             {/* Line — Compliance Conversion Timeline */}
-            <div className="saas-card frosted-glass">
+            <div className="saas-card frosted-glass" style={{ flex: "2 1 400px", minWidth: 0 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
                 Compliance Conversion Timeline
                 <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
@@ -532,7 +793,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Right column: Business Size + Audit Summary */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20, flex: "1 1 300px", minWidth: 0 }}>
               {/* Business Size */}
               <div className="saas-card frosted-glass" style={{ flex: 1 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1a202c", margin: "0 0 14px 0" }}>Business Size Profile</h3>
@@ -585,11 +846,11 @@ export default function AnalyticsPage() {
           <SectionHeader
             tier="diagnostic"
             title="Diagnostic Analytics"
-            subtitle="Barangay risk heatmap via flag severity stacking, sector-level non-compliance patterns, and weekly emergence trend"
+            subtitle="Barangay priority map via flag severity stacking, sector-level non-compliance patterns, and weekly emergence trend"
           />
 
           {/* ADVANCED GEOSPATIAL INSIGHTS */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 24, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 24, marginBottom: 24 }}>
             
             {/* DBSCAN NARRATIVE */}
             <div className="saas-card frosted-glass" style={{ margin: 0, borderLeft: `4px solid ${COLOR.red}`, background: "rgba(254,242,242,0.6)" }}>
@@ -637,11 +898,11 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Risk Heatmap bar + Category non-compliance */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 24, marginBottom: 24 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
             {/* Stacked bar — Barangay Risk Heatmap */}
-            <div className="saas-card frosted-glass">
+            <div className="saas-card frosted-glass" style={{ flex: "1.4 1 400px", minWidth: 0 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 8px 0" }}>
-                Barangay Risk Heatmap
+                Barangay Priority Map
               </h3>
               <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 16px 0" }}>
                 Stacked flag severity per barangay — sorted by total flagged count
@@ -667,7 +928,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Horizontal bar — Category Non-Compliance */}
-            <div className="saas-card frosted-glass">
+            <div className="saas-card frosted-glass" style={{ flex: "1 1 300px", minWidth: 0 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 8px 0" }}>
                 Category Non-Compliance
               </h3>
@@ -742,7 +1003,7 @@ export default function AnalyticsPage() {
               
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 {/* Sliders */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 24 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 24 }}>
                   <div>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>
                       Risk Severity (W1): <span style={{ color: COLOR.red }}>{wlcConfig.w1_risk}%</span>
@@ -764,7 +1025,7 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* AHP Matrix Panel */}
-                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 16 }}>
+                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 16, overflowX: "auto" }}>
                   <h5 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 10px 0", color: "#1a202c" }}>AHP Pairwise Comparison Matrix</h5>
                   <table style={{ width: "100%", fontSize: 11, textAlign: "center", borderCollapse: "collapse", marginBottom: 12 }}>
                     <thead>
@@ -843,9 +1104,9 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 24 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
             {/* Radar chart — top 8 */}
-            <div className="saas-card frosted-glass">
+            <div className="saas-card frosted-glass" style={{ flex: "1 1 300px", minWidth: 0 }}>
               <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1a202c", margin: "0 0 16px 0" }}>
                 OPS Radar — Top 8 Barangays
               </h3>
@@ -869,7 +1130,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Full WLC Rankings Table */}
-            <div className="saas-card frosted-glass">
+            <div className="saas-card frosted-glass" style={{ flex: "1.6 1 400px", minWidth: 0 }}>
               <div style={{ marginBottom: 16 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1a202c", margin: "0 0 4px 0" }}>
                   Inspector Deployment Priority Table

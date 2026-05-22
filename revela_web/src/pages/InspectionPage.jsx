@@ -11,7 +11,10 @@ import {
   getInspectionsRequest,
   getInspectorTasksRequest,
   assignInspectionRequest,
+  reassignSubmittedInspectionRequest,
   verifyInspectionRequest,
+  getInspectorsRequest,
+  inspectionEvidenceUrl,
 } from "../services/api";
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
@@ -89,24 +92,33 @@ const STATUS_COLOR = {
 
 // ── Assign Modal ───────────────────────────────────────────────────────────────
 function AssignModal({ report, token, onClose, onSuccess }) {
+  const isRedo = report.verificationStatus === "Submitted";
   const [inspectors, setInspectors] = useState([]);
-  const [selectedUID, setSelectedUID] = useState("");
+  const [selectedUID, setSelectedUID] = useState(
+    () => (report.inspectorID != null ? String(report.inspectorID) : ""),
+  );
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // Fetch inspectors from users endpoint
-    fetch(`http://127.0.0.1:5000/api/users/?role=Inspector`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(data => {
+    getInspectorsRequest(token)
+      .then((data) => {
         const list = Array.isArray(data) ? data : (data.data ?? []);
-        setInspectors(list.filter(u => u.isActive !== 0 && u.isActive !== false && u.userRole === 'Inspector'));
+        setInspectors(
+          list.filter(
+            (u) =>
+              u.isActive !== 0 &&
+              u.isActive !== false &&
+              u.userRole === "Inspector",
+          ),
+        );
         setFetching(false);
       })
-      .catch(() => { setFetching(false); setError("Could not load inspectors."); });
+      .catch(() => {
+        setFetching(false);
+        setError("Could not load inspectors.");
+      });
   }, [token]);
 
   const handleAssign = async () => {
@@ -114,14 +126,16 @@ function AssignModal({ report, token, onClose, onSuccess }) {
     setLoading(true);
     setError("");
     try {
-      await assignInspectionRequest(
-        { logID: report.logID, userID: parseInt(selectedUID, 10) },
-        token
-      );
+      const userID = parseInt(selectedUID, 10);
+      if (isRedo) {
+        await reassignSubmittedInspectionRequest(report.reportID, userID, token);
+      } else {
+        await assignInspectionRequest({ logID: report.logID, userID }, token);
+      }
       onSuccess();
       onClose();
     } catch (err) {
-      setError(err.message || "Assignment failed.");
+      setError(err.message || (isRedo ? "Reassign failed." : "Assignment failed."));
     } finally {
       setLoading(false);
     }
@@ -131,7 +145,9 @@ function AssignModal({ report, token, onClose, onSuccess }) {
     <div style={s.backdrop} onClick={!loading ? onClose : undefined}>
       <div style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
-          <h3 style={s.modalTitle}>Assign Inspector</h3>
+          <h3 style={s.modalTitle}>
+            {isRedo ? "Send Back for Redo" : "Assign Inspector"}
+          </h3>
           {!loading && <button style={s.closeBtn} onClick={onClose}><Icon.X /></button>}
         </div>
 
@@ -146,10 +162,17 @@ function AssignModal({ report, token, onClose, onSuccess }) {
               {report.detectedName}
             </p>
             <p style={{ fontSize: 12, color: "var(--color-muted)" }}>
-              {report.barangayName} · Log #{report.logID}
+              {report.barangayName} · Report #{report.reportID}
             </p>
           </div>
         </div>
+
+        {isRedo && (
+          <p style={{ fontSize: 13, color: "var(--color-muted)", marginBottom: 16, lineHeight: 1.5 }}>
+            Clears the previous submission and moves the report to{" "}
+            <strong>Reassigned</strong>. The inspector must submit new evidence and remarks on mobile.
+          </p>
+        )}
 
         {error && (
           <div style={s.errorBanner}><Icon.AlertCircle /> &nbsp;{error}</div>
@@ -174,7 +197,13 @@ function AssignModal({ report, token, onClose, onSuccess }) {
         <div style={s.modalFooter}>
           <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
           <button className="primary-btn" onClick={handleAssign} disabled={loading || fetching}>
-            {loading ? "Assigning…" : <><Icon.Send /> Dispatch</>}
+            {loading
+              ? isRedo
+                ? "Reassigning…"
+                : "Assigning…"
+              : isRedo
+                ? <><Icon.Send /> Reassign for redo</>
+                : <><Icon.Send /> Dispatch</>}
           </button>
         </div>
       </div>
@@ -234,6 +263,25 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
           </div>
         )}
 
+        {inspectionEvidenceUrl(report.photoPath) && (
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8, textTransform: "uppercase" }}>
+              Evidence photo
+            </p>
+            <img
+              src={inspectionEvidenceUrl(report.photoPath)}
+              alt="Inspection evidence"
+              style={{
+                width: "100%",
+                maxHeight: 220,
+                objectFit: "cover",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--color-border)",
+              }}
+            />
+          </div>
+        )}
+
         {report.resolutionTime && (
           <p style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 16, display: "flex", alignItems: "center", gap: 5 }}>
             <Icon.Clock /> Resolved in {report.resolutionTime} min
@@ -245,7 +293,7 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
         )}
 
         <p style={{ fontSize: 13, color: "var(--color-ink)", marginBottom: 20, lineHeight: 1.6 }}>
-          Confirming will update the flag color to&nbsp;
+          Review the evidence and notes above. Confirming will update the flag color to&nbsp;
           <strong>{report.inspectionResult}</strong> on the map.
           This action cannot be undone.
         </p>
@@ -261,13 +309,94 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
   );
 }
 
-// ── Inspection Card ────────────────────────────────────────────────────────────
-function InspectionCard({ report, isAdmin, onAssign, onVerify }) {
+// ── Detail Modal ───────────────────────────────────────────────────────────────
+function InspectionDetailModal({ report, onClose }) {
   const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
   const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
 
   return (
-    <div style={s.card}>
+    <div style={s.backdrop} onClick={onClose}>
+      <div style={{ ...s.modal, width: 520, maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+        <div style={s.modalHeader}>
+          <h3 style={s.modalTitle}>Inspection Details</h3>
+          <button style={s.closeBtn} onClick={onClose}><Icon.X /></button>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>{report.detectedName}</h2>
+            <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>#{report.reportID ?? report.logID}</span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 5, margin: 0 }}>
+            <Icon.MapPin /> {report.barangayName ?? "Unknown barangay"}
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+          <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text, fontSize: 12, padding: "4px 10px" }}>
+            <Icon.Flag /> Flag: {report.flagColor}
+          </span>
+          <span style={{ ...s.statusPill, background: statusMeta.bg, color: statusMeta.text, fontSize: 12, padding: "4px 10px" }}>
+            Status: {report.verificationStatus}
+          </span>
+          {report.inspectionResult && (
+            <span style={{ ...s.statusPill, background: "var(--color-ink)", color: "#fff", fontSize: 12, padding: "4px 10px" }}>
+              Result: {report.inspectionResult}
+            </span>
+          )}
+        </div>
+
+        <div style={{ background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "16px", marginBottom: 20 }}>
+          <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12, marginTop: 0 }}>Assignment Info</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Inspector</span>
+              <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600 }}>{report.inspectorName ?? "Unassigned"}</span>
+            </div>
+            {report.resolutionTime && (
+              <div>
+                <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Resolution Time</span>
+                <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock /> {report.resolutionTime} min</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {report.remarks && (
+          <div style={{ marginBottom: 20 }}>
+            <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, marginTop: 0 }}>Inspector Remarks</h4>
+            <p style={{ fontSize: 14, color: "var(--color-ink)", lineHeight: 1.6, background: "rgba(248,249,250,0.5)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--color-border-soft)", margin: 0 }}>
+              {report.remarks}
+            </p>
+          </div>
+        )}
+
+        {inspectionEvidenceUrl(report.photoPath) && (
+          <div style={{ marginBottom: 8 }}>
+            <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, marginTop: 0 }}>Evidence Photo</h4>
+            <img
+              src={inspectionEvidenceUrl(report.photoPath)}
+              alt="Evidence"
+              style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 8, border: "1px solid var(--color-border)" }}
+            />
+          </div>
+        )}
+
+        <div style={{ ...s.modalFooter, marginTop: "auto", paddingTop: 20 }}>
+          <button className="ghost-btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inspection Card ────────────────────────────────────────────────────────────
+function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
+  const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
+  const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
+
+  return (
+    <div style={s.card} onClick={() => onViewDetail(report)}>
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text }}>
@@ -300,6 +429,27 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify }) {
         </span>
       </div>
 
+      {report.verificationStatus === "Submitted" && report.inspectionResult && (
+        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--color-ink)", marginTop: 4 }}>
+          Result: {report.inspectionResult}
+        </p>
+      )}
+
+      {inspectionEvidenceUrl(report.photoPath) && (
+        <img
+          src={inspectionEvidenceUrl(report.photoPath)}
+          alt="Evidence"
+          style={{
+            width: "100%",
+            height: 72,
+            objectFit: "cover",
+            borderRadius: 8,
+            marginTop: 8,
+            border: "1px solid var(--color-border)",
+          }}
+        />
+      )}
+
       {/* Remarks preview */}
       {report.remarks && (
         <p style={s.remarksPreview}>"{report.remarks}"</p>
@@ -315,17 +465,30 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify }) {
       {/* Actions */}
       {isAdmin && (
         <div style={s.cardActions}>
-          {report.verificationStatus === "Assigned" && (
+          {(report.verificationStatus === "Assigned" ||
+            report.verificationStatus === "Reassigned") && (
             <button className="ghost-btn" style={{ fontSize: 12, padding: "7px 12px" }}
-              onClick={() => onAssign(report)}>
+              onClick={(e) => { e.stopPropagation(); onAssign(report); }}>
               Reassign
             </button>
           )}
           {report.verificationStatus === "Submitted" && (
-            <button className="primary-btn" style={{ fontSize: 12, padding: "7px 14px" }}
-              onClick={() => onVerify(report)}>
-              <Icon.Check /> Verify
-            </button>
+            <>
+              <button
+                className="ghost-btn"
+                style={{ fontSize: 12, padding: "7px 12px" }}
+                onClick={(e) => { e.stopPropagation(); onAssign(report); }}
+              >
+                Reassign for redo
+              </button>
+              <button
+                className="primary-btn"
+                style={{ fontSize: 12, padding: "7px 14px" }}
+                onClick={(e) => { e.stopPropagation(); onVerify(report); }}
+              >
+                <Icon.Check /> Verify
+              </button>
+            </>
           )}
         </div>
       )}
@@ -334,7 +497,7 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify }) {
 }
 
 // ── Column ─────────────────────────────────────────────────────────────────────
-function KanbanColumn({ status, reports, isAdmin, onAssign, onVerify }) {
+function KanbanColumn({ status, reports, isAdmin, onAssign, onVerify, onViewDetail }) {
   const statusMeta = STATUS_COLOR[status] ?? STATUS_COLOR.Assigned;
   return (
     <div style={s.column}>
@@ -357,6 +520,7 @@ function KanbanColumn({ status, reports, isAdmin, onAssign, onVerify }) {
             isAdmin={isAdmin}
             onAssign={onAssign}
             onVerify={onVerify}
+            onViewDetail={onViewDetail}
           />
         ))}
       </div>
@@ -377,6 +541,7 @@ export default function InspectionPage() {
   // Modal state
   const [assignTarget, setAssignTarget] = useState(null);
   const [verifyTarget, setVerifyTarget] = useState(null);
+  const [detailTarget, setDetailTarget] = useState(null);
 
   // Filter state (admin only)
   const [filterStatus, setFilterStatus] = useState("");
@@ -410,8 +575,35 @@ export default function InspectionPage() {
 
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
+  useEffect(() => {
+    const onInspectionUpdate = () => fetchReports();
+    window.addEventListener("revela:inspection-update", onInspectionUpdate);
+    return () =>
+      window.removeEventListener("revela:inspection-update", onInspectionUpdate);
+  }, [fetchReports]);
+
   // ── Derived ──────────────────────────────────────────────────────────────────
-  const byStatus = (status) => reports.filter(r => r.verificationStatus === status);
+  const q = search.trim().toLowerCase();
+  const filteredReports = q
+    ? reports.filter((r) => {
+        const hay = [
+          r.detectedName,
+          r.barangayName,
+          r.inspectorName,
+          r.verificationStatus,
+          r.inspectionResult,
+          r.reportID,
+          r.logID,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      })
+    : reports;
+
+  const byStatus = (status) =>
+    filteredReports.filter((r) => r.verificationStatus === status);
 
   // Admin sees all 4 columns; inspectors only see Assigned + Reassigned
   const visibleCols = isAdmin
@@ -490,6 +682,7 @@ export default function InspectionPage() {
               isAdmin={isAdmin}
               onAssign={setAssignTarget}
               onVerify={setVerifyTarget}
+              onViewDetail={setDetailTarget}
             />
           ))}
         </div>
@@ -518,6 +711,14 @@ export default function InspectionPage() {
           token={token}
           onClose={() => setVerifyTarget(null)}
           onSuccess={fetchReports}
+        />
+      )}
+
+      {/* Detail Modal */}
+      {detailTarget && (
+        <InspectionDetailModal
+          report={detailTarget}
+          onClose={() => setDetailTarget(null)}
         />
       )}
 
@@ -566,6 +767,8 @@ const s = {
     borderRadius: "var(--radius-md)",
     padding: 14,
     backdropFilter: "blur(8px)",
+    cursor: "pointer",
+    transition: "transform 0.15s ease, box-shadow 0.15s ease",
   },
   cardName: {
     fontSize: 14, fontWeight: 700, color: "var(--color-ink)",

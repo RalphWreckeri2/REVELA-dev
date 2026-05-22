@@ -3,6 +3,7 @@ venv/
 __pycache__/
 *.pyc
 .env
+revela_backend/instance/
 
 # Node
 node_modules/

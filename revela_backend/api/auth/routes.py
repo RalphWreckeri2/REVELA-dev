@@ -3,6 +3,7 @@ from flask_jwt_extended import get_jwt_identity, get_jwt, create_access_token
 from api.auth.service import login_user, request_otp, reset_password, update_user_password, generate_2fa_setup, verify_totp_code
 from api.middleware.decorators import jwt_required
 from api.models.user import find_user_by_id, find_user_by_email, enable_user_2fa, update_user_2fa_secret, get_user_2fa_secret
+from api.notifications.service import get_email_inspection_alerts, set_email_inspection_alerts
 from datetime import timedelta
 
 auth_bp = Blueprint("auth", __name__)
@@ -65,6 +66,21 @@ def me():
         "role":     claims.get("role"),
         "is_2fa_enabled": bool(user.get("is_2fa_enabled")),
         "mustChangePassword": bool(user.get("mustChangePassword", False)),
+        "emailInspectionAlerts": get_email_inspection_alerts(int(user_id)),
+    }), 200
+
+
+# ── PATCH /api/auth/me/preferences ────────────────────────────────────────────
+@auth_bp.route("/me/preferences", methods=["PATCH"])
+@jwt_required()
+def patch_me_preferences():
+    """Persist notification preferences (e.g. inspection alert emails)."""
+    uid = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    if "emailInspectionAlerts" in data:
+        set_email_inspection_alerts(uid, bool(data["emailInspectionAlerts"]))
+    return jsonify({
+        "emailInspectionAlerts": get_email_inspection_alerts(uid),
     }), 200
 
 

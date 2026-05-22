@@ -14,6 +14,7 @@ import {
   getRegistryRequest,
   getBusinessByIdRequest,
   getBarangaysRequest,
+  updateBusinessRequest,
 } from "../services/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -87,6 +88,12 @@ const Icon = {
       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   ),
+  Edit: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+    </svg>
+  ),
 };
 
 
@@ -158,16 +165,27 @@ function EmptyState({ hasFilters, onUpload }) {
 
 
 // ── Business Detail Modal ─────────────────────────────────────────────────────
-function BusinessDetailModal({ businessId, onClose, token }) {
+function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess }) {
   const [business, setBusiness] = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({});
 
   useEffect(() => {
     async function fetch() {
       try {
         const data = await getBusinessByIdRequest(businessId, token);
         setBusiness(data);
+        setFormData({
+          businessName: data.businessName || "",
+          businessType: data.businessType || "",
+          lineOfBusiness: data.lineOfBusiness || "",
+          businessSize: data.businessSize || "",
+          businessAddress: data.businessAddress || "",
+          applicationStatus: data.applicationStatus || "Pending",
+        });
       } catch (err) {
         setError(err.message);
       } finally {
@@ -176,6 +194,63 @@ function BusinessDetailModal({ businessId, onClose, token }) {
     }
     fetch();
   }, [businessId, token]);
+
+  const handleSave = async () => {
+    if (!formData.businessName) {
+      setError("Business Name is required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await updateBusinessRequest(businessId, formData, token);
+      Swal.fire({ icon: 'success', title: 'Saved', text: 'Business details updated.', timer: 1500, showConfirmButton: false });
+      setIsEditing(false);
+      if (onSuccess) onSuccess();
+      
+      // Re-fetch to update local modal view
+      const updated = await getBusinessByIdRequest(businessId, token);
+      setBusiness(updated);
+    } catch (err) {
+      setError(err.message || "Failed to update business.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "This business will be permanently removed from the registry.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it'
+    });
+
+    if (result.isConfirmed) {
+      setSaving(true);
+      setError("");
+      try {
+        const baseUrl = (import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : "http://localhost:5000/api";
+        const res = await fetch(`${baseUrl}/registry/${businessId}`, {
+          method: 'DELETE',
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to delete business");
+        }
+        Swal.fire({ icon: 'success', title: 'Deleted', text: 'Business deleted successfully.', timer: 1500, showConfirmButton: false });
+        if (onSuccess) onSuccess();
+        onClose();
+      } catch (err) {
+        setError(err.message || "Failed to delete business.");
+        setSaving(false);
+      }
+    }
+  };
 
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
@@ -191,42 +266,110 @@ function BusinessDetailModal({ businessId, onClose, token }) {
         {business && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              ["Business Name", business.businessName, "title"],
-              ["Business Type", business.businessType || "—", "plain"],
-              ["Line of Business", business.lineOfBusiness || "—", "plain"],
-              ["Business size", business.businessSize || "—", "plain"],
-              ["Address", business.businessAddress || "—", "plain"],
-              ["Barangay", business.barangayName || "—", "plain"],
-              ["Latitude", formatCoord(business.latitude), "plain"],
-              ["Longitude", formatCoord(business.longitude), "plain"],
-              ["Permit status", business.applicationStatus, "permit"],
-              ["Last renewal", business.lastRenewalDate ? business.lastRenewalDate.slice(0, 10) : "—", "plain"],
+              ["Business Name", business.businessName, "title", "businessName"],
+              ["Business Type", business.businessType || "—", "plain", "businessType"],
+              ["Line of Business", business.lineOfBusiness || "—", "plain", "lineOfBusiness"],
+              ["Business size", business.businessSize || "—", "plain", "businessSize"],
+              ["Address", business.businessAddress || "—", "plain", "businessAddress"],
+              ["Barangay", business.barangayName || "—", "readonly"],
+              ["Latitude", formatCoord(business.latitude), "readonly"],
+              ["Longitude", formatCoord(business.longitude), "readonly"],
+              ["Permit status", business.applicationStatus, "permit", "applicationStatus"],
+              ["Last renewal", business.lastRenewalDate ? business.lastRenewalDate.slice(0, 10) : "—", "readonly"],
               ["Latest geospatial flag", business.flagColor || "—", "flag"],
-            ].map(([label, value, kind]) => (
-              <div key={label} style={{ display: "flex", gap: 12 }}>
-                <span style={{ minWidth: 150, fontSize: 12, color: "var(--color-muted)", fontWeight: 500 }}>
+            ].map(([label, value, kind, field]) => (
+              <div key={label} style={{ display: "flex", gap: 12, alignItems: isEditing && field ? "center" : "flex-start", minHeight: isEditing && field ? 36 : "auto" }}>
+                <span style={{ minWidth: 150, fontSize: 12, color: "var(--color-muted)", fontWeight: 500, paddingTop: isEditing && field ? 0 : 3 }}>
                   {label}
+                  {isEditing && field === "businessName" && <span style={{color: "var(--color-danger)"}}> *</span>}
                 </span>
-                <span style={{
-                  fontSize: 13,
-                  color: "var(--color-ink)",
-                  fontWeight: kind === "title" ? 600 : 400,
-                  wordBreak: kind === "plain" && String(value).length > 48 ? "break-word" : undefined,
-                }}
-                >
-                  {kind === "permit"
-                    ? <StatusBadge variant={getStatusVariant(value)}>{value}</StatusBadge>
-                    : kind === "flag" && value !== "—"
-                      ? <StatusBadge variant={getFlagVariant(value)}>{value}</StatusBadge>
-                      : value}
-                </span>
+                
+                {isEditing && field ? (
+                  field === "applicationStatus" ? (
+                    <select 
+                      value={formData[field]} 
+                      onChange={(e) => setFormData({...formData, [field]: e.target.value})} 
+                      style={styles.editInput}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Active">Active</option>
+                      <option value="Expired">Expired</option>
+                      <option value="Revoked">Revoked</option>
+                    </select>
+                  ) : field === "businessSize" ? (
+                    <select 
+                      value={formData[field]} 
+                      onChange={(e) => setFormData({...formData, [field]: e.target.value})} 
+                      style={styles.editInput}
+                    >
+                      <option value="">Select size...</option>
+                      <option value="Micro">Micro</option>
+                      <option value="Small">Small</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Large">Large</option>
+                    </select>
+                  ) : (
+                    <input 
+                      value={formData[field]} 
+                      onChange={(e) => setFormData({...formData, [field]: e.target.value})} 
+                      style={styles.editInput} 
+                      placeholder={`Enter ${label.toLowerCase()}`}
+                    />
+                  )
+                ) : (
+                  <span style={{
+                    fontSize: 13,
+                    color: "var(--color-ink)",
+                    fontWeight: kind === "title" ? 600 : 400,
+                    wordBreak: kind === "plain" && String(value).length > 48 ? "break-word" : undefined,
+                  }}
+                  >
+                    {kind === "permit"
+                      ? <StatusBadge variant={getStatusVariant(value)}>{value}</StatusBadge>
+                      : kind === "flag" && value !== "—"
+                        ? <StatusBadge variant={getFlagVariant(value)}>{value}</StatusBadge>
+                        : value}
+                  </span>
+                )}
               </div>
             ))}
           </div>
         )}
 
         <div style={{ ...styles.modalFooter, marginTop: 24 }}>
-          <button className="ghost-btn" onClick={onClose}>Close</button>
+          {isEditing ? (
+            <>
+              <button className="ghost-btn" onClick={() => {
+                setIsEditing(false);
+                setFormData({
+                  businessName: business.businessName || "",
+                  businessType: business.businessType || "",
+                  lineOfBusiness: business.lineOfBusiness || "",
+                  businessSize: business.businessSize || "",
+                  businessAddress: business.businessAddress || "",
+                  applicationStatus: business.applicationStatus || "Pending",
+                });
+                setError("");
+              }} disabled={saving}>Cancel</button>
+              <button className="primary-btn" onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </>
+          ) : (
+            <>
+              {isAdmin && (
+                <button className="ghost-btn" style={{ color: "var(--color-danger)", marginRight: "auto" }} onClick={handleDelete} disabled={saving}>
+                  Delete
+                </button>
+              )}
+              <button className="ghost-btn" onClick={onClose}>Close</button>
+              {isAdmin && (
+                <button className="primary-btn" onClick={() => setIsEditing(true)}>
+                  <Icon.Edit /> Edit Details
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -236,6 +379,7 @@ function BusinessDetailModal({ businessId, onClose, token }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function RegistryPage() {
   const { token, user } = useContext(AuthContext);
+  const isAdmin = user?.role === "Admin" || user?.role === "SUPER_ADMIN";
 
   const [businesses,    setBusinesses]    = useState([]);
   const [total,         setTotal]         = useState(0);
@@ -636,6 +780,8 @@ export default function RegistryPage() {
         <BusinessDetailModal
           businessId={detailId}
           token={token}
+          isAdmin={isAdmin}
+          onSuccess={fetchBusinesses}
           onClose={() => setDetailId(null)}
         />
       )}
@@ -686,4 +832,5 @@ const styles = {
   modalTitle:    { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", margin: 0 },
   closeBtn:      { background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 },
   modalFooter:   { display: "flex", justifyContent: "flex-end", gap: 10 },
+  editInput:     { flex: 1, padding: "8px 12px", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: 13, color: "var(--color-ink)", fontFamily: "var(--font-base)", outline: "none", boxSizing: "border-box" },
 };

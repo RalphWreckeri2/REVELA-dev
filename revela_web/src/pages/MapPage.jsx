@@ -17,9 +17,12 @@ import {
   createYellowFlagRequest,   
   getBarangaysRequest,
   assignInspectionRequest,
-  getAnalyticsOverviewRequest,
+  getOpsRankingsRequest,
   getDiagnosticClustersRequest,
+  updateFlagLocationRequest,
+  deleteFlagRequest,
 } from "../services/api";
+import Swal from "sweetalert2";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const Icon = {
@@ -124,10 +127,10 @@ const MUNICIPAL_BOUNDARY_NAMES = new Set(["mataasnakahoy", "mataas na kahoy"]);
 
 const LAYER_OPTIONS = [
   { id: "base",        label: "Base Map"             },
-  { id: "heatmap",     label: "Risk Heatmap"         },
+  { id: "heatmap",     label: "Priority Map"         },
   { id: "flags",       label: "Flag Markers"         },
   { id: "barangay",    label: "Barangay Boundaries"  },
-  { id: "diagnostics", label: "🔴 Hotspot Clusters"  },
+  { id: "diagnostics", label: "Risk Heatmap"         },
 ];
 
 // Flag color → UI color mapping
@@ -247,7 +250,7 @@ function normalizeFlag(flag) {
 }
 
 // ── Flag Detail Modal ─────────────────────────────────────────────────────────
-function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, isAdmin, actionLoading }) {
+function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocation, onDelete, isAdmin, actionLoading }) {
   const fc = getFlagColor(flag.color);
 
   return (
@@ -299,39 +302,64 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, isAdmin, actio
         </div>
 
         {/* Footer actions */}
-        <div style={styles.detailFooter}>
-          <button className="ghost-btn" onClick={onClose}>Close</button>
-          {isAdmin && (flag.color === "Red" || flag.color === "Yellow") && (
-            <>
+        <div style={{ ...styles.detailFooter, flexDirection: "column", alignItems: "stretch", gap: 16 }}>
+          {/* Primary Actions */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+            <button className="ghost-btn" onClick={onClose}>Close</button>
+            {isAdmin && (flag.color === "Red" || flag.color === "Yellow") && (
+              <>
+                <button
+                  className="ghost-btn"
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  disabled={actionLoading}
+                  onClick={() => onAdjustLocation(flag)}
+                >
+                  <Icon.Crosshair /> Adjust
+                </button>
+                <button
+                  className="primary-btn"
+                  style={{ background: "#3b82f6", borderColor: "#3b82f6", display: "flex", alignItems: "center", gap: 6 }}
+                  disabled={actionLoading}
+                  onClick={() => onDispatch(flag)}
+                >
+                  <Icon.Send /> Dispatch
+                </button>
+                <button
+                  className="primary-btn"
+                  style={{ background: "#1e293b", borderColor: "#1e293b" }}
+                  disabled={actionLoading}
+                  onClick={() => onEscalate(flag.id)}
+                >
+                  {actionLoading ? "Escalating…" : "Escalate"}
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Secondary Actions */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--color-border-soft)", paddingTop: 16 }}>
+            {isAdmin ? (
               <button
-                className="primary-btn"
-                style={{ background: "#3b82f6", borderColor: "#3b82f6", display: "flex", alignItems: "center", gap: 6 }}
+                className="ghost-btn"
+                style={{ color: "var(--color-danger)", padding: "6px 12px", fontSize: 12, borderColor: "transparent" }}
                 disabled={actionLoading}
-                onClick={() => onDispatch(flag)}
+                onClick={() => onDelete(flag.id)}
               >
-                <Icon.Send /> Dispatch
+                Delete Flag
               </button>
-              <button
-                className="primary-btn"
-                style={{ background: "#1e293b", borderColor: "#1e293b" }}
-                disabled={actionLoading}
-                onClick={() => onEscalate(flag.id)}
+            ) : <div />}
+            {flag.latitude && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                className="ghost-btn"
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none", padding: "6px 12px", fontSize: 12 }}
               >
-                {actionLoading ? "Escalating…" : "Escalate to Black"}
-              </button>
-            </>
-          )}
-          {flag.latitude && (
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}`}
-              target="_blank"
-              rel="noreferrer"
-              className="ghost-btn"
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none" }}
-            >
-              <Icon.ExternalLink /> View on Google Maps
-            </a>
-          )}
+                <Icon.ExternalLink /> View on Google Maps
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -473,7 +501,7 @@ function FullFlagListModal({ flags, onClose, onSelectFlag }) {
 }
 
 // ── Map Canvas ────────────────────────────────────────────────────────────────
-function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, barangayRiskLevels, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, satellite, clusters, barangayRedFlagCounts }) {
+function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, barangayRiskLevels, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, satellite, clusters, barangayRedFlagCounts, adjustingFlagId, adjustingLatLng, onAdjustDragEnd }) {
   const markerRefs      = useRef(new Map());
   const internalMapRef  = useRef(null);
   const clusterRef      = useRef(null); 
@@ -542,7 +570,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
         content: `
           <div style="font-family:sans-serif;font-size:13px;line-height:1.6;padding:4px 6px;">
             <strong style="color:#b91c1c;">
-              Hotspot Cluster #${cl.clusterID}
+              Risk Heatmap Cluster #${cl.clusterID}
             </strong><br/>
             <span style="color:#475569;">
               ${cl.size} Red Flag${cl.size !== 1 ? "s" : ""} within ${cl.radius_m} m
@@ -600,13 +628,15 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
         ).toLowerCase();
         const bName = rawName
           .replace("barangay ", "").replace("brgy. ", "")
-          .replace("san sebastian", "san seb.").trim();
+          .replace("san sebastian", "san seb.")
+          .replace("(pob.)", "")
+          .trim();
 
         const compact = rawName.replace(/\s+/g, "");
         const isMunicipalBoundary =
           MUNICIPAL_BOUNDARY_NAMES.has(bName) ||
           [...MUNICIPAL_BOUNDARY_NAMES].some(
-            (n) => compact === n.replace(/\s+/g, "") || rawName.includes(n),
+                  (n) => compact === n.replace(/\s+/g, "") || bName === n,
           );
 
         let count;
@@ -712,18 +742,50 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
 
     const visibleFlags = flags.filter(f => f.latitude != null && f.longitude != null);
     const markers = [];
+    const coordCounts = {};
 
     visibleFlags.forEach(flag => {
+      const isAdjusting = flag.id === adjustingFlagId;
+      let lat = Number(flag.latitude);
+      let lng = Number(flag.longitude);
+
+      if (isAdjusting && adjustingLatLng) {
+        // Snap to exactly where the user is dragging it
+        lat = adjustingLatLng.lat;
+        lng = adjustingLatLng.lng;
+      } else if (!isAdjusting) {
+        // Group overlapping pins by rounding to ~11 meters (4 decimal places)
+        const coordKey = `${lat.toFixed(4)}_${lng.toFixed(4)}`;
+        const countIndex = coordCounts[coordKey] || 0;
+        coordCounts[coordKey] = countIndex + 1;
+
+        if (countIndex > 0) {
+          // Apply Golden Spiral jitter so hidden pins fan out beautifully instead of perfectly overlapping
+          const angle = countIndex * 2.39996; // Golden angle
+          const radius = 0.00015 * Math.sqrt(countIndex); // Expand outward
+          lat += Math.cos(angle) * radius;
+          lng += Math.sin(angle) * radius;
+        }
+      }
+
       const marker = new window.google.maps.marker.AdvancedMarkerElement({
-        position: { lat: Number(flag.latitude), lng: Number(flag.longitude) },
+        position: { lat, lng },
         map:      internalMapRef.current,
-        content:  buildMarkerContent(flag, flag.id === selectedFlagId),
+        content:  buildMarkerContent(flag, flag.id === selectedFlagId || isAdjusting),
+        gmpDraggable: isAdjusting
       });
 
-      marker.addListener("gmp-click", () => onMarkerClick(flag.id));
+      if (isAdjusting) {
+        marker.addListener("dragend", (e) => {
+          onAdjustDragEnd({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+        });
+      } else {
+        marker.addListener("gmp-click", () => onMarkerClick(flag.id));
+        markers.push(marker);
+      }
+
       marker._revelaFlagColor = flag.color;
       markerRefs.current.set(flag.id, marker);
-      markers.push(marker);
     });
 
     // Cluster markers that are close together
@@ -732,7 +794,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
       markers,
       algorithm: new SuperClusterAlgorithm({
         radius: 80,        // smaller = breaks apart sooner
-        maxZoom: 16,       // at zoom 16+, show individual pins
+        maxZoom: 17,       // at zoom 17+, show individual pins
         minPoints: 2,      // only cluster if 2+ pins overlap
       }),
       renderer: {
@@ -781,7 +843,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
         clusterRef.current = null;
       }
     };
-  }, [isLoaded, layers.flags, flags, selectedFlagId, onMarkerClick, buildMarkerContent]);
+  }, [isLoaded, layers.flags, flags, selectedFlagId, onMarkerClick, buildMarkerContent, adjustingFlagId, adjustingLatLng, onAdjustDragEnd]);
   
   // Update cursor dynamically if picking state changes
   useEffect(() => {
@@ -1131,6 +1193,7 @@ export default function MapPage() {
   const [actionError,         setActionError]          = useState("");
   const [actionLoading,       setActionLoading]        = useState(false);
   const [runDetectionLoading, setRunDetectionLoading]  = useState(false);
+  const [opsRankings,         setOpsRankings]          = useState([]);
 
   const [layers, setLayers] = useState({ base: true, heatmap: false, flags: true, barangay: false, diagnostics: false });
   const [selectedFlag, setSelectedFlag] = useState(null);   // logID of selected flag
@@ -1151,6 +1214,10 @@ export default function MapPage() {
   const [clusters,         setClusters]         = useState([]);
   const [clustersLoading,  setClustersLoading]  = useState(false);
 
+  const [adjustingFlagId, setAdjustingFlagId] = useState(null);
+  const [adjustingLatLng, setAdjustingLatLng] = useState(null);
+  const [saveAdjustLoading, setSaveAdjustLoading] = useState(false);
+
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchFlags = useCallback(async () => {
     if (!token) return;
@@ -1162,9 +1229,10 @@ export default function MapPage() {
       
       // Fetch analytics for border-to-border risk heatmap (current state of the barangay)
       try {
-        const analytics = await getAnalyticsOverviewRequest(token);
-        const payload = analytics?.data || analytics;
-        const rankings = payload?.prescriptive?.rankings || [];
+        const ops = await getOpsRankingsRequest(token);
+        const rankings = ops?.data || [];
+        setOpsRankings(rankings);
+        
         const riskMap = {};
         rankings.forEach(r => {
            const bName = (r.barangayName || "").toLowerCase()
@@ -1172,7 +1240,7 @@ export default function MapPage() {
              .replace("san sebastian", "san seb.").trim();
            riskMap[bName] = {
              risk_level:   r.risk_level,             // "High" | "Medium" | "Low"
-             redFlagCount: r.redFlagCount ?? r.red_flag_count ?? 0,
+             redFlagCount: r.flagged_count ?? 0,
            };
         });
         setBarangayRiskLevels(riskMap);
@@ -1258,6 +1326,55 @@ export default function MapPage() {
     }
   };
 
+  // ── Drag & Drop Adjust Location ───────────────────────────────────────────
+  const handleStartAdjustLocation = (flag) => {
+    setModalFlag(null);
+    setSelectedFlag(null);
+    setAdjustingFlagId(flag.id);
+    setAdjustingLatLng({ lat: Number(flag.latitude), lng: Number(flag.longitude) });
+  };
+
+  const handleSaveAdjustedLocation = async () => {
+    setSaveAdjustLoading(true);
+    try {
+      await updateFlagLocationRequest(adjustingFlagId, adjustingLatLng.lat, adjustingLatLng.lng, token);
+      await fetchFlags();
+      setAdjustingFlagId(null);
+      setAdjustingLatLng(null);
+    } catch (err) {
+      setActionError(err.message || "Failed to update location.");
+    } finally {
+      setSaveAdjustLoading(false);
+    }
+  };
+
+  const handleDeleteFlag = async (logId) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "This flag will be permanently removed from the map.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, delete it'
+    });
+
+    if (result.isConfirmed) {
+      setActionLoading(true);
+      setActionError("");
+      try {
+        await deleteFlagRequest(logId, token);
+        Swal.fire({ icon: 'success', title: 'Deleted', text: 'Flag deleted successfully.', timer: 1500, showConfirmButton: false });
+        await fetchFlags();
+        setModalFlag(null);
+      } catch (err) {
+        setActionError(err.message || "Failed to delete flag.");
+      } finally {
+        setActionLoading(false);
+      }
+    }
+  };
+
   // ── Marker click → pan map + open detail modal ────────────────────────────
   const handleMarkerClick = useCallback((id) => {
     const flag = flags.find(f => f.id === id);
@@ -1269,7 +1386,7 @@ export default function MapPage() {
     // Pan map to marker
     if (mapRef.current && flag.latitude && flag.longitude) {
       mapRef.current.panTo({ lat: Number(flag.latitude), lng: Number(flag.longitude) });
-      mapRef.current.setZoom(16);
+      mapRef.current.setZoom(18);
     }
   }, [flags]);
 
@@ -1279,7 +1396,7 @@ export default function MapPage() {
     setModalFlag(flag);
     if (mapRef.current && flag.latitude && flag.longitude) {
       mapRef.current.panTo({ lat: Number(flag.latitude), lng: Number(flag.longitude) });
-      mapRef.current.setZoom(16);
+      mapRef.current.setZoom(18);
     }
   };
   
@@ -1308,7 +1425,7 @@ export default function MapPage() {
       })()
     : DEFAULT_MAP_CENTER;
 
-  const mapZoom = selectedFlag ? 16 : 13;
+  const mapZoom = selectedFlag ? 18 : 13;
 
   // Flag counts
   const counts = {
@@ -1357,6 +1474,21 @@ export default function MapPage() {
         <div style={styles.pickingBanner}>
           <Icon.Crosshair /> Click anywhere on the map to set the flag's coordinates. 
           <button style={{ marginLeft: 16, background: "none", border: "none", color: "#fff", textDecoration: "underline", cursor: "pointer" }} onClick={() => { setIsPickingYellowLocation(false); setShowYellowModal(true); }}>Cancel</button>
+        </div>
+      )}
+
+      {/* Banner showing when adjusting an existing flag */}
+      {adjustingFlagId && (
+        <div style={{ ...styles.pickingBanner, background: "var(--color-ink)", zIndex: 101, top: 70 }}>
+          <Icon.MapPin /> Drag the pin to its correct location. 
+          <div style={{ display: "flex", gap: 8, marginLeft: 16 }}>
+            <button style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontWeight: 600, fontSize: 13 }} onClick={() => { setAdjustingFlagId(null); setAdjustingLatLng(null); }} disabled={saveAdjustLoading}>
+              Cancel
+            </button>
+            <button className="primary-btn" style={{ padding: "6px 14px", fontSize: 12 }} onClick={handleSaveAdjustedLocation} disabled={saveAdjustLoading}>
+              {saveAdjustLoading ? "Saving..." : "Save Location"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -1423,6 +1555,9 @@ export default function MapPage() {
               satellite={satellite}
               clusters={clusters}
               barangayRedFlagCounts={barangayRedFlagCounts}
+              adjustingFlagId={adjustingFlagId}
+              adjustingLatLng={adjustingLatLng}
+              onAdjustDragEnd={setAdjustingLatLng}
             />
             {/* Discrete risk legend — matches HEATMAP_RISK_STYLE on the Data layer */}
             {layers.heatmap && (
@@ -1567,6 +1702,42 @@ export default function MapPage() {
             )}
           </div>
 
+          {/* Priority Dispatch Queue */}
+          {isAdmin && opsRankings.length > 0 && (
+            <div style={{ marginBottom: 14, background: "rgba(239,246,255,0.8)", padding: 12, borderRadius: "var(--radius-md)", border: "1px solid #bfdbfe" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <div style={{ color: "#1e3a8a", display: "flex" }}><Icon.AlertTriangle /></div>
+                <h4 style={{ fontSize: 12, fontWeight: 700, color: "#1e3a8a", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Priority Dispatch Queue
+                </h4>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {opsRankings.filter(r => r.flagged_count > 0).slice(0, 3).map((r, i) => (
+                   <div key={r.barangayID} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: "8px 10px", borderRadius: 8, border: "1px solid #dbeafe" }}>
+                     <div>
+                       <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af", marginBottom: 2 }}>{i+1}. {r.barangayName}</div>
+                       <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                         OPS: <span style={{ color: r.ops_score >= 60 ? "#dc2626" : r.ops_score >= 30 ? "#d97706" : "#16a34a" }}>{r.ops_score}</span>
+                         <span style={{ margin: "0 4px" }}>•</span> 
+                         {r.flagged_count} flagged
+                       </div>
+                     </div>
+                     <button 
+                       className="ghost-btn" 
+                       style={{ fontSize: 10, padding: "4px 10px", color: "#2563eb", background: "#eff6ff", borderColor: "#bfdbfe" }} 
+                       onClick={() => {
+                         setSearch(r.barangayName);
+                         setFilterColor("all");
+                       }}
+                     >
+                       Filter
+                     </button>
+                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Flag list */}
           <div style={styles.flagList}>
             {loadingFlags ? (
@@ -1600,7 +1771,9 @@ export default function MapPage() {
           flag={modalFlag}
           onClose={() => { setModalFlag(null); setSelectedFlag(null); }}
           onEscalate={handleEscalate}
+          onAdjustLocation={handleStartAdjustLocation}
           onDispatch={(flag) => setDispatchTarget(flag)}
+          onDelete={handleDeleteFlag}
           isAdmin={isAdmin}
           actionLoading={actionLoading}
         />

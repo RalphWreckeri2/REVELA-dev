@@ -257,11 +257,13 @@ def run_detection():
         for place in places:
             place_id = place.get("place_id")
             place_name = place.get("name", "Unknown")
-            loc = place.get("geometry", {}).get("location", {})
+            geometry = place.get("geometry") or {}
+            loc = geometry.get("location") or {}
             lat = loc.get("lat")
             lng = loc.get("lng")
             address = place.get("vicinity")   # street address from Places API
-            compound_code = place.get("plus_code", {}).get("compound_code", "")
+            plus_code = place.get("plus_code") or {}
+            compound_code = plus_code.get("compound_code", "")
 
             if not lat or not lng or not place_id:
                 continue
@@ -269,7 +271,7 @@ def run_detection():
             # ── STRICT TEXT-BASED LOCATION FILTER ──────────────────────────
             # The spatial polygon boundary might overlap with neighboring towns
             # according to Google Maps. We double-check the text representation.
-            location_text = f"{address} {compound_code}".lower()
+            location_text = f"{address or ''} {compound_code}".lower()
 
             # 1. Reject if it doesn't mention Mataasnakahoy (with spelling variations)
             valid_spellings = ["mataasnakahoy",
@@ -295,7 +297,7 @@ def run_detection():
                 new_flags += 1
             else:
                 _match_registry_to_google(
-                    place_id, nearest['businessID'], place_name)
+                    place_id, nearest['businessID'], nearest['businessName'])
 
         return {
             "new_flags":        new_flags,
@@ -430,6 +432,58 @@ def escalate_to_black(log_id):
             SET flagColor = 'Black'
             WHERE logID = %s
         """, (log_id,))
+        mysql.connection.commit()
+        cursor.close()
+        return True, None
+
+    except Exception as e:
+        return False, str(e)
+
+
+# ── Delete Flag ───────────────────────────────────────────────────────────────
+
+def delete_flag(log_id):
+    """Delete a flag. If it has a corresponding registry entry, delete that too."""
+    try:
+        cursor = mysql.connection.cursor()
+
+        # Find the flag
+        cursor.execute(
+            "SELECT detectedName, barangayID FROM geospatial_logs WHERE logID = %s",
+            (log_id,)
+        )
+        flag = cursor.fetchone()
+
+        if not flag:
+            cursor.close()
+            return False, "Flag not found"
+
+        # Check if there is an associated registry entry
+        cursor.execute("""
+            SELECT businessID FROM official_registry
+            WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
+        """, (flag["detectedName"], flag["barangayID"]))
+        business = cursor.fetchone()
+
+        if business:
+            # Delete all logs and inspection reports for this business
+            cursor.execute("SELECT logID FROM geospatial_logs WHERE LOWER(detectedName) = LOWER(%s) AND barangayID = %s",
+                           (flag["detectedName"], flag["barangayID"]))
+            logs = cursor.fetchall()
+            for log in logs:
+                cursor.execute(
+                    "DELETE FROM inspection_reports WHERE targetID = %s", (log["logID"],))
+                cursor.execute(
+                    "DELETE FROM geospatial_logs WHERE logID = %s", (log["logID"],))
+            cursor.execute(
+                "DELETE FROM official_registry WHERE businessID = %s", (business["businessID"],))
+        else:
+            # Just delete this specific flag and its inspections
+            cursor.execute(
+                "DELETE FROM inspection_reports WHERE targetID = %s", (log_id,))
+            cursor.execute(
+                "DELETE FROM geospatial_logs WHERE logID = %s", (log_id,))
+
         mysql.connection.commit()
         cursor.close()
         return True, None

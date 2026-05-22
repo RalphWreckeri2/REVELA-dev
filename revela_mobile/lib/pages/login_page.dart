@@ -135,6 +135,16 @@ class _LoginPageState extends State<LoginPage>
       case LoginResult.failed:
         _showSnackBar('Login failed. Please check your credentials.');
         break;
+      case LoginResult.networkError:
+        _showErrorDialog(
+          'Cannot Reach Server',
+          'The app could not connect to the REVELA backend.\n\n'
+          '• Start the API: python app.py (in revela_backend)\n'
+          '• USB device: run adb reverse tcp:5000 tcp:5000, or use '
+          'DEVELOPMENT/scripts/run-mobile-usb.ps1\n'
+          '• Wi‑Fi device: flutter run --dart-define=API_BASE=http://YOUR_PC_IP:5000',
+        );
+        break;
     }
   }
 

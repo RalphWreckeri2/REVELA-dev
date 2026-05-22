@@ -1,7 +1,7 @@
 /**
  * HomePage.jsx — Overview Dashboard
  * Live KPIs from /api/analytics/all
- * Live Recent Detections from /api/flags
+ * Recent Detections from /api/flags (newest activity, all colors)
  * Mini Google Map preview with real flag markers
  */
 
@@ -26,6 +26,14 @@ const FLAG_COLORS = {
 };
 const defaultColor = { marker: "#94a3b8", bg: "#f1f5f9", text: "#64748b", label: "Unknown" };
 const getFlagColor = (c) => FLAG_COLORS[c] ?? defaultColor;
+
+const parseColor = (f) => {
+  const raw = f.flagColor || f.color || f.flag_color;
+  if (!raw) return "Red";
+  const s = String(raw).trim();
+  if (!s) return "Red";
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
 
 const shortBarangay = (name = "") => name.replace("Barangay ", "Brgy.");
 
@@ -180,9 +188,24 @@ function ComplianceTrendWidget() {
   );
 }
 
-function HighPriorityAlertsWidget({ flags, navigate }) {
-  const criticalFlags = flags.filter(f => f.flagColor === 'Black' || f.flagColor === 'Red').slice(0, 2);
+function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
+  // Map severity for sorting
+  const severity = { Black: 3, Red: 2, Yellow: 1, Green: 0 };
+  const getSeverity = (capColor) => {
+    return severity[capColor] || 0;
+  };
   
+  // Filter to non-green, sort by severity then date, and take top 5
+  const criticalFlags = flags
+    .filter(f => getSeverity(parseColor(f)) > 0)
+    .sort((a, b) => {
+      const sevA = getSeverity(parseColor(a));
+      const sevB = getSeverity(parseColor(b));
+      if (sevA !== sevB) return sevB - sevA; // Highest severity first
+      return new Date(b.detectedDate || 0) - new Date(a.detectedDate || 0); // Newest first
+    })
+    .slice(0, 5);
+
   return (
     <div className="dashboard-widget frosted-glass saas-card">
       <div className="widget-header">
@@ -197,22 +220,35 @@ function HighPriorityAlertsWidget({ flags, navigate }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
         {criticalFlags.length === 0 ? (
           <div style={{ textAlign: "center", padding: "20px 0", color: "var(--color-muted)", fontSize: 13 }}>
-            No critical alerts right now.
+            {hasLoadedFlags && flags.length > 0
+              ? "No critical alerts — latest scans show compliant or verified establishments."
+              : hasLoadedFlags
+                ? "No flags in the system yet. Run the detection engine or add a manual flag."
+                : "Loading alerts…"}
           </div>
-        ) : criticalFlags.map(f => (
-          <div 
-            key={f.logID} 
-            style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 12px", borderRadius: 10, cursor: "pointer", transition: "transform 0.15s" }} 
-            onClick={() => navigate('/map')}
-            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-            onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-          >
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#991b1b", marginBottom: 2 }}>{f.detectedName || "Unknown Establishment"}</div>
-            <div style={{ fontSize: 11, color: "#b91c1c" }}>
-              {f.flagColor === 'Black' ? 'Non-responsive for 7+ days' : 'Unregistered - Escalation needed'}
+        ) : criticalFlags.map(f => {
+          const capColor = parseColor(f);
+          const fc = getFlagColor(capColor);
+          
+          let alertReason = "Unregistered - Escalation needed";
+          if (capColor === 'Black') alertReason = 'Non-responsive for 7+ days';
+          else if (capColor === 'Yellow') alertReason = 'Suspected - Needs verification';
+
+          return (
+            <div 
+              key={f.logID || f.id} 
+              style={{ background: fc.bg, border: `1px solid ${fc.marker}`, padding: "10px 12px", borderRadius: 10, cursor: "pointer", transition: "transform 0.15s" }} 
+              onClick={() => navigate('/map')}
+              onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+              onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: fc.text, marginBottom: 2 }}>{f.detectedName || f.name || "Unknown Establishment"}</div>
+              <div style={{ fontSize: 11, color: fc.text, opacity: 0.9 }}>
+                {alertReason}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {criticalFlags.length > 0 && (
           <button className="ghost-btn" style={{ fontSize: 11, padding: "6px", color: "#b91c1c", borderColor: "transparent", marginTop: 4, width: "100%" }} onClick={() => navigate('/map')}>
             View All Critical Targets →
@@ -254,7 +290,7 @@ function MiniMapWidget({ flags, onOpenMap, isLoaded, loadError }) {
       .filter(f => f.latitude != null && f.longitude != null)
       .slice(0, 100) // cap for performance
       .forEach(f => {
-        const fc = getFlagColor(f.flagColor);
+        const fc = getFlagColor(parseColor(f));
         const marker = new window.google.maps.marker.AdvancedMarkerElement({
           position: { lat: Number(f.latitude), lng: Number(f.longitude) },
           map:      mapRef.current,
@@ -320,7 +356,7 @@ function MiniMapWidget({ flags, onOpenMap, isLoaded, loadError }) {
             borderRadius: 20, backdropFilter: "blur(4px)",
             pointerEvents: "none",
           }}>
-            {flags.filter(f => f.flagColor !== "Green").length} active flags
+            {flags.filter(f => parseColor(f) !== "Green").length} active flags
           </div>
         )}
       </div>
@@ -345,7 +381,7 @@ const miniMapFallback = {
 };
 
 // ── Recent Detections Widget ──────────────────────────────────────────────────
-function RecentFlagsWidget({ flags, loading, onViewAll, onOpenMap }) {
+function RecentFlagsWidget({ flags, loading, onViewAll, onOpenMap, totalFetched }) {
   return (
     <div className="dashboard-widget frosted-glass saas-card">
       <div className="widget-header">
@@ -364,19 +400,21 @@ function RecentFlagsWidget({ flags, loading, onViewAll, onOpenMap }) {
           ))
         ) : flags.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8", fontSize: 13 }}>
-            No flags detected yet.
+            {totalFetched > 0
+              ? "No recent log entries in the current batch."
+              : "No flags detected yet. Run the detection engine from the map or quick actions."}
           </div>
         ) : flags.map((f) => {
-          const fc = getFlagColor(f.flagColor);
+          const fc = getFlagColor(parseColor(f));
           return (
-            <div className="flag-item" key={f.logID}>
+            <div className="flag-item" key={f.logID || f.id}>
               <div style={{
                 width: 10, height: 10, borderRadius: "50%",
                 background: fc.marker, flexShrink: 0,
               }} />
               <div className="flag-details">
-                <h4>{f.detectedName || "Unknown Establishment"}</h4>
-                <p>{shortBarangay(f.barangayName || "—")}</p>
+                <h4>{f.detectedName || f.name || "Unknown Establishment"}</h4>
+                <p>{shortBarangay(f.barangayName || f.barangay || "—")}</p>
               </div>
               <span style={{
                 fontSize: 10, fontWeight: 700, padding: "2px 8px",
@@ -432,12 +470,17 @@ export default function HomePage() {
       .then(res => {
         const data = res?.data ?? [];
         setAllFlags(data);
-        // Recent detections: latest 3 non-green flags
+        // Recent detections: newest activity first (all colors). Non-green surfaces first, then by date.
+        const byDate = (a, b) =>
+          new Date(b.detectedDate || 0) - new Date(a.detectedDate || 0);
         const nonGreen = data
-          .filter(f => f.flagColor !== "Green")
-          .sort((a, b) => new Date(b.detectedDate || 0) - new Date(a.detectedDate || 0))
-          .slice(0, 3);
-        setRecentFlags(nonGreen);
+          .filter(f => parseColor(f) !== "Green")
+          .sort(byDate);
+        const greenOnly = data
+          .filter(f => parseColor(f) === "Green")
+          .sort(byDate);
+        const recent = [...nonGreen, ...greenOnly].slice(0, 5);
+        setRecentFlags(recent);
       })
       .catch(() => {})
       .finally(() => setFlagsLoading(false));
@@ -541,7 +584,11 @@ export default function HomePage() {
       {/* New Widgets: Actions & Alerts */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, marginTop: 24 }}>
         <QuickActionsWidget navigate={navigate} />
-        <HighPriorityAlertsWidget flags={allFlags} navigate={navigate} />
+        <HighPriorityAlertsWidget
+          flags={allFlags}
+          navigate={navigate}
+          hasLoadedFlags={!flagsLoading}
+        />
         <SystemHealthWidget />
       </div>
 
@@ -558,6 +605,7 @@ export default function HomePage() {
           loading={flagsLoading}
           onViewAll={() => navigate("/map")}
           onOpenMap={() => navigate("/map")}
+          totalFetched={allFlags.length}
         />
       </div>
 

@@ -4,6 +4,7 @@ from api.flags.service import (
     get_flags,
     insert_yellow_flag,
     escalate_to_black,
+    delete_flag,
 )
 from api.middleware.decorators import jwt_required, admin_required
 
@@ -75,3 +76,15 @@ def black_flag_route(log_id):
     if not success:
         return jsonify({"error": error}), 400
     return jsonify({"message": f"Flag #{log_id} escalated to Black"}), 200
+
+
+# ── DELETE /api/flags/:id ─────────────────────────────────────────────────────
+@flags_bp.route("/<int:log_id>", methods=["DELETE"])
+@admin_required()
+def delete_flag_route(log_id):
+    """Delete a specific flag. Also deletes associated registry records if they exist."""
+    success, error = delete_flag(log_id)
+    if error:
+        status_code = 404 if error == "Flag not found" else 500
+        return jsonify({"error": error}), status_code
+    return jsonify({"message": f"Flag #{log_id} deleted successfully"}), 200

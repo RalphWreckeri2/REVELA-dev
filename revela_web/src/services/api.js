@@ -1,10 +1,25 @@
-const BASE_URL = "http://127.0.0.1:5000/api";
+export const API_ORIGIN =
+  import.meta.env.VITE_API_ORIGIN ?? "http://127.0.0.1:5000";
+const BASE_URL = `${API_ORIGIN}/api`;
+
+/** Absolute URL for inspection evidence (relative path from API). */
+export function inspectionEvidenceUrl(photoPath) {
+  if (!photoPath) return null;
+  if (photoPath.startsWith("http")) return photoPath;
+  const base = API_ORIGIN.replace(/\/$/, "");
+  return photoPath.startsWith("/")
+    ? `${base}${photoPath}`
+    : `${base}/${photoPath}`;
+}
 
 async function handleResponse(res) {
   try {
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || `Request failed with status ${res.status}`);
+      const msg =
+        [data.message, data.error].filter(Boolean).join(": ") ||
+        `Request failed with status ${res.status}`;
+      throw new Error(msg);
     }
     return data;
   } catch (err) {
@@ -60,6 +75,50 @@ export async function getMeRequest(token) {
     }
     throw err;
   }
+}
+
+/** SSE URL (EventSource cannot send Authorization header reliably). */
+export function getNotificationStreamUrl(token) {
+  return `${API_ORIGIN}/api/notifications/stream?token=${encodeURIComponent(token)}`;
+}
+
+export async function getNotificationsRequest(token) {
+  const res = await fetch(`${BASE_URL}/notifications`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return await handleResponse(res);
+}
+
+export async function getNotificationsUnreadCountRequest(token) {
+  const res = await fetch(`${BASE_URL}/notifications/unread-count`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return await handleResponse(res);
+}
+
+export async function markNotificationsReadRequest(token, ids = null) {
+  const body = ids && ids.length ? { ids } : {};
+  const res = await fetch(`${BASE_URL}/notifications/read`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  return await handleResponse(res);
+}
+
+export async function updateMePreferencesRequest(payload, token) {
+  const res = await fetch(`${BASE_URL}/auth/me/preferences`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  return await handleResponse(res);
 }
 
 export async function requestOtpRequest(identifier) {
@@ -203,6 +262,22 @@ export async function getBusinessByIdRequest(id, token) {
   }
 }
 
+export async function updateBusinessRequest(businessId, payload, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/registry/${businessId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
 export async function getBarangaysRequest(token) {
   const res = await fetch(`${BASE_URL}/registry/barangays`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -279,6 +354,45 @@ export async function runDetectionRequest(token) {
   try {
     const res = await fetch(`${BASE_URL}/flags/run-detection`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function updateFlagLocationRequest(logId, lat, lng, token) {
+  if (!token) {
+    throw new Error("Missing authentication token.");
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/flags/${logId}/location`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ latitude: lat, longitude: lng }),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function deleteFlagRequest(logId, token) {
+  if (!token) {
+    throw new Error("Missing authentication token.");
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/flags/${logId}`, {
+      method: "DELETE",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -379,6 +493,30 @@ export async function assignInspectionRequest(payload, token) {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+/**
+ * POST /api/inspections/:reportId/reassign
+ * Admin sends a submitted report back for inspector redo (→ Reassigned).
+ */
+export async function reassignSubmittedInspectionRequest(
+  reportId,
+  userID,
+  token,
+) {
+  try {
+    const res = await fetch(`${BASE_URL}/inspections/${reportId}/reassign`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ userID }),
     });
     return await handleResponse(res);
   } catch (err) {
@@ -513,10 +651,120 @@ export async function updateWlcConfigRequest(payload, token) {
   }
 }
 
+/**
+ * Normalize (token, filters?) vs (filters, token) — same ambiguity as getFlagsRequest(params, token).
+ * JWT heuristic: long dotted string (typical access_token shape).
+ */
+function resolveTokenAndOptionalFilters(arg1, arg2) {
+  const looksLikeJwt = (v) =>
+    typeof v === "string" &&
+    v.trim().length > 15 &&
+    (v.match(/\./g) || []).length >= 2;
+
+  const isFilterShape = (v) =>
+    v != null && typeof v === "object" && !Array.isArray(v);
+
+  if (looksLikeJwt(arg1)) {
+    return {
+      token: arg1.trim(),
+      filters: isFilterShape(arg2) && !looksLikeJwt(arg2) ? arg2 : {},
+    };
+  }
+  if (looksLikeJwt(arg2)) {
+    return {
+      token: arg2.trim(),
+      filters: isFilterShape(arg1) && !looksLikeJwt(arg1) ? arg1 : {},
+    };
+  }
+  const t = typeof arg1 === "string" ? arg1.trim() : "";
+  return {
+    token: t,
+    filters: isFilterShape(arg2) ? arg2 : {},
+  };
+}
+
+function authHeaders(accessToken) {
+  const h = new Headers();
+  h.set("Authorization", `Bearer ${accessToken}`);
+  return h;
+}
+
+/** Build query string for GET /analytics/all filters (snake_case keys match backend). */
+function analyticsFiltersToSearchParams(filters = {}) {
+  const qs = new URLSearchParams();
+  if (!filters || typeof filters !== "object") return qs;
+  const set = (k, v) => {
+    if (v === undefined || v === null || v === "") return;
+    if (Array.isArray(v)) {
+      if (v.length === 0) return;
+      qs.set(k, v.join(","));
+      return;
+    }
+    qs.set(k, String(v));
+  };
+  set("barangay_ids", filters.barangay_ids);
+  set("barangay_id", filters.barangay_id);
+  set("application_status", filters.application_status);
+  set("line_of_business", filters.line_of_business);
+  set("business_type", filters.business_type);
+  set("business_size", filters.business_size);
+  set("renewal_from", filters.renewal_from);
+  set("renewal_to", filters.renewal_to);
+  set("flag_color", filters.flag_color);
+  set("detected_from", filters.detected_from);
+  set("detected_to", filters.detected_to);
+  set("inspection_result", filters.inspection_result);
+  set("verification_status", filters.verification_status);
+  set("inspection_from", filters.inspection_from);
+  set("inspection_to", filters.inspection_to);
+  return qs;
+}
+
 // For Dashboard overview cards and charts (flag counts, inspection stats, etc.)
-export async function getAnalyticsOverviewRequest(token) {
+// Accepts (token, filters) or (filters, token) like getFlagsRequest(params, token).
+export async function getAnalyticsOverviewRequest(arg1, arg2) {
   try {
-    const res = await fetch(`${BASE_URL}/analytics/all`, {
+    const { token, filters } = resolveTokenAndOptionalFilters(arg1, arg2);
+    if (!token) {
+      throw new Error("Missing authentication token.");
+    }
+    const qs = analyticsFiltersToSearchParams(filters);
+    const q = qs.toString();
+    const url = q
+      ? `${BASE_URL}/analytics/all?${q}`
+      : `${BASE_URL}/analytics/all`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: authHeaders(token),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function getAnalyticsFilterMetadataRequest(token) {
+  try {
+    const { token: accessToken } = resolveTokenAndOptionalFilters(
+      token,
+      undefined,
+    );
+    if (!accessToken) {
+      throw new Error("Missing authentication token.");
+    }
+    const res = await fetch(`${BASE_URL}/analytics/filter-metadata`, {
+      method: "GET",
+      headers: authHeaders(accessToken),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function getOpsRankingsRequest(token) {
+  try {
+    const res = await fetch(`${BASE_URL}/analytics/ops-rankings`, {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
     });

@@ -5,7 +5,7 @@ import { AuthContext } from "../context/AuthContext";
 import { changePasswordRequest, setup2faRequest, verify2faSetupRequest } from "../services/authService";
 import Swal from "sweetalert2";
 import { QRCodeSVG } from "qrcode.react";
-import { getWlcConfigRequest, updateWlcConfigRequest } from "../services/api";
+import { getWlcConfigRequest, updateWlcConfigRequest, updateMePreferencesRequest } from "../services/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const EyeIcon = () => (
@@ -169,7 +169,6 @@ function Setup2FAModal({ onClose, token, onSuccess }) {
 export default function SettingsPage() {
   const { token, user, refreshUser } = useContext(AuthContext);
   const [emailAlerts, setEmailAlerts] = useState(true);
-  const [autoSync, setAutoSync] = useState(false);
   const { isDark, setTheme } = useTheme();
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
@@ -183,9 +182,12 @@ export default function SettingsPage() {
   // Load initial settings on mount
   useEffect(() => {
     const savedEmailAlerts = localStorage.getItem("revela_emailAlerts");
-    const savedAutoSync = localStorage.getItem("revela_autoSync");
-    if (savedEmailAlerts !== null) setEmailAlerts(savedEmailAlerts === "true");
-    if (savedAutoSync !== null) setAutoSync(savedAutoSync === "true");
+
+    if (user != null && typeof user.emailInspectionAlerts === "boolean") {
+      setEmailAlerts(user.emailInspectionAlerts);
+    } else if (savedEmailAlerts !== null) {
+      setEmailAlerts(savedEmailAlerts === "true");
+    }
 
     getWlcConfigRequest(token).then(data => {
       if(data) {
@@ -196,15 +198,30 @@ export default function SettingsPage() {
         }
       }
     }).catch(console.error);
-  }, [token]);
+  }, [token, user]);
 
   const handleSavePreferences = async () => {
     setSavingPreferences(true);
     localStorage.setItem("revela_emailAlerts", emailAlerts);
-    localStorage.setItem("revela_autoSync", autoSync);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    Swal.fire({ icon: 'success', title: 'Saved', text: 'Local preferences updated.', timer: 2000, showConfirmButton: false });
-    setSavingPreferences(false);
+    try {
+      await updateMePreferencesRequest({ emailInspectionAlerts: emailAlerts }, token);
+      if (refreshUser) await refreshUser();
+      Swal.fire({
+        icon: "success",
+        title: "Saved",
+        text: "Preferences synced to your account.",
+        timer: 2000,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Save failed",
+        text: err.message || "Could not update notification preferences on the server.",
+      });
+    } finally {
+      setSavingPreferences(false);
+    }
   };
 
   const handleSavePolicy = async () => {
@@ -303,7 +320,7 @@ export default function SettingsPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
               <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>Local UI Preferences</h3>
-              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Control dashboard alerts, sync behavior, and appearance.</p>
+              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Control dashboard alerts and appearance. Email inspection alerts are saved to your account and used when inspectors submit field evidence (requires RESEND_API_KEY on the server).</p>
             </div>
             <button className="primary-btn" type="button" onClick={handleSavePreferences} disabled={savingPreferences}>
               {savingPreferences ? "Saving..." : "Save Preferences"}
@@ -311,12 +328,8 @@ export default function SettingsPage() {
           </div>
           <div style={{ display: "grid", gap: 12 }}>
             <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-              <span>Email notifications</span>
+              <span>Email notifications (inspection evidence submitted)</span>
               <input type="checkbox" checked={emailAlerts} onChange={() => setEmailAlerts((prev) => !prev)} />
-            </label>
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-              <span>Auto-sync data</span>
-              <input type="checkbox" checked={autoSync} onChange={() => setAutoSync((prev) => !prev)} />
             </label>
             <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
               <span>Dark mode</span>

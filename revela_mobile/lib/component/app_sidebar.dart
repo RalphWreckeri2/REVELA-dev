@@ -1,8 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
 import '../service/auth_service.dart';
+import '../pages/inspection_page.dart';
+import '../pages/settings_screen.dart';
 
 class AppSidebar extends StatefulWidget {
   const AppSidebar({super.key});
@@ -107,20 +108,26 @@ class _AppSidebarState extends State<AppSidebar> {
           _buildDrawerItem(
             icon: Icons.assignment_outlined,
             label: 'Task Assignment',
-            onTap: () {},
+            onTap: () {
+              Navigator.pop(context); // close drawer first
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const InspectionPage()),
+              );
+            },
           ),
-          _buildDrawerItem(
-            icon: Icons.notifications_none_rounded,
-            label: 'Notifications',
-            onTap: () {},
-          ),
-
           const Divider(),
 
           _buildDrawerItem(
             icon: Icons.settings_outlined,
             label: 'Settings',
-            onTap: () {},
+            onTap: () {
+              Navigator.pop(context); // close drawer first
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
           ),
 
           const Spacer(), // Pushes logout to the bottom

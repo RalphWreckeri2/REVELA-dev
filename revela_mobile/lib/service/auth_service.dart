@@ -2,27 +2,19 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../pages/login_page.dart';
+import 'api_config.dart';
 
-enum LoginResult { success, notInspector, failed }
+enum LoginResult { success, notInspector, failed, networkError }
 
 class AuthService {
-  // Use 10.0.2.2 to access localhost from an Android emulator.
-  // Use 127.0.0.1 for iOS simulator.
-  // Change to your machine's IP (e.g., 192.168.x.x) if using a physical device.
-  static const String _baseUrl = 'http://10.0.2.2:5000';
-
-  final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      headers: {'Content-Type': 'application/json'},
-    ),
-  );
+  late final Dio _dio;
 
   Dio get dio => _dio;
 
+  static String get apiBase => ApiConfig.apiBase;
+
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  // Global key to access the Navigator from outside widgets
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
@@ -33,11 +25,20 @@ class AuthService {
   }
 
   AuthService._internal() {
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: ApiConfig.apiBase,
+        headers: {'Content-Type': 'application/json'},
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest:
             (RequestOptions options, RequestInterceptorHandler handler) async {
-              // Attach JWT token to requests automatically
+              options.baseUrl = ApiConfig.apiBase;
               final token = await _storage.read(key: 'jwt_token');
               if (token != null) {
                 options.headers['Authorization'] = 'Bearer $token';
@@ -46,7 +47,7 @@ class AuthService {
             },
         onError: (DioException e, ErrorInterceptorHandler handler) async {
           if (e.response?.statusCode == 401) {
-            await logout(); // Clear the token
+            await logout();
             if (navigatorKey.currentState != null) {
               navigatorKey.currentState!.pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -60,7 +61,17 @@ class AuthService {
     );
   }
 
+  void syncBaseUrl() {
+    _dio.options.baseUrl = ApiConfig.apiBase;
+  }
+
   Future<LoginResult> loginWithRole(String email, String password) async {
+    final reachable = await ApiConfig.ensureReachable();
+    if (reachable == null) {
+      return LoginResult.networkError;
+    }
+    syncBaseUrl();
+
     try {
       final response = await _dio.post(
         '/api/auth/login',
@@ -70,10 +81,9 @@ class AuthService {
       if (response.statusCode == 200 && response.data['access_token'] != null) {
         final user = response.data['user'];
 
-        // ✅ Check if userRole is Inspector before allowing login
         final String userRole = user?['userRole']?.toString() ?? '';
         if (userRole != 'Inspector') {
-          return LoginResult.notInspector; // Block non-inspectors silently
+          return LoginResult.notInspector;
         }
 
         final String token = response.data['access_token'];
@@ -91,16 +101,20 @@ class AuthService {
       }
       return LoginResult.failed;
     } on DioException catch (e) {
-      print('Login Error: ${e.response?.data ?? e.message}');
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return LoginResult.networkError;
+      }
+      debugPrint('Login Error: ${e.response?.data ?? e.message}');
       return LoginResult.failed;
     }
   }
 
   Future<void> logout() async {
-    // Clear all stored keys to ensure a complete local session wipe
     await _storage.deleteAll();
 
-    // Clear Flutter's image cache to free up memory and force a UI refresh on next login
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
 

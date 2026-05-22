@@ -3,6 +3,14 @@ from app import mysql
 
 # ── Inspector task list ───────────────────────────────────────────────────────
 
+def _as_user_id(user_id):
+    """JWT identity is stored as string; DB column is numeric."""
+    try:
+        return int(user_id)
+    except (TypeError, ValueError):
+        return user_id
+
+
 def get_inspector_tasks(user_id):
     """
     Return all inspection reports assigned to this inspector
@@ -10,6 +18,7 @@ def get_inspector_tasks(user_id):
     Joins geospatial_logs for flag details and barangays for name.
     """
     try:
+        uid = _as_user_id(user_id)
         cursor = mysql.connection.cursor()
         cursor.execute("""
             SELECT
@@ -33,7 +42,51 @@ def get_inspector_tasks(user_id):
             WHERE ir.userID = %s
               AND ir.verificationStatus IN ('Assigned', 'Reassigned')
             ORDER BY ir.irTimestamp DESC
-        """, (user_id,))
+        """, (uid,))
+        rows = cursor.fetchall()
+        cursor.close()
+
+        for row in rows:
+            if row.get("irTimestamp"):
+                row["irTimestamp"] = str(row["irTimestamp"])
+
+        return {"data": rows, "total": len(rows)}, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+def get_inspector_reports_history(user_id):
+    """
+    All inspection reports for this inspector (any status), newest first.
+    Used by the mobile app history tab.
+    """
+    try:
+        uid = _as_user_id(user_id)
+        cursor = mysql.connection.cursor()
+        cursor.execute("""
+            SELECT
+                ir.reportID,
+                ir.userID,
+                ir.targetID          AS logID,
+                ir.inspectionResult,
+                ir.verificationStatus,
+                ir.remarks,
+                ir.photoPath,
+                ir.irTimestamp,
+                ir.nearestLandmark,
+                g.detectedName,
+                g.flagColor,
+                g.latitude,
+                g.longitude,
+                b.barangayName
+            FROM inspection_reports ir
+            JOIN geospatial_logs g  ON ir.targetID   = g.logID
+            LEFT JOIN barangays b   ON g.barangayID  = b.barangayID
+            WHERE ir.userID = %s
+            ORDER BY ir.irTimestamp DESC
+            LIMIT 200
+        """, (uid,))
         rows = cursor.fetchall()
         cursor.close()
 
@@ -142,13 +195,14 @@ def submit_inspection(log_id, user_id, inspection_result,
         cursor = mysql.connection.cursor()
 
         # Find the open assignment for this inspector + log
+        uid = _as_user_id(user_id)
         cursor.execute("""
             SELECT reportID, irTimestamp FROM inspection_reports
             WHERE targetID = %s
               AND userID   = %s
               AND verificationStatus IN ('Assigned', 'Reassigned')
             LIMIT 1
-        """, (log_id, user_id))
+        """, (log_id, uid))
         report = cursor.fetchone()
 
         if not report:
@@ -193,6 +247,79 @@ def submit_inspection(log_id, user_id, inspection_result,
             "inspectionResult": inspection_result,
             "status":           "Submitted",
             "resolutionMins":   resolution_mins,
+        }, None
+
+    except Exception as e:
+        return None, str(e)
+
+
+# ── Reassign submitted (redo) ─────────────────────────────────────────────────
+
+def reassign_submitted_report(report_id, inspector_user_id, assigned_by):
+    """
+    Admin sends a submitted report back to the field for redo.
+    Clears submission data and sets verificationStatus to Reassigned.
+    """
+    try:
+        cursor = mysql.connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT reportID, targetID, verificationStatus
+            FROM inspection_reports
+            WHERE reportID = %s
+            """,
+            (report_id,),
+        )
+        report = cursor.fetchone()
+        if not report:
+            cursor.close()
+            return None, f"Report #{report_id} not found"
+
+        if report["verificationStatus"] != "Submitted":
+            cursor.close()
+            return None, (
+                f"Report is '{report['verificationStatus']}' — "
+                "only Submitted reports can be sent back for redo"
+            )
+
+        cursor.execute(
+            """
+            SELECT userID, fullName, userRole FROM users
+            WHERE userID = %s AND userRole = 'Inspector'
+            """,
+            (inspector_user_id,),
+        )
+        inspector = cursor.fetchone()
+        if not inspector:
+            cursor.close()
+            return None, f"Inspector userID {inspector_user_id} not found"
+
+        cursor.execute(
+            """
+            UPDATE inspection_reports
+            SET userID = %s,
+                verificationStatus = 'Reassigned',
+                inspectionResult = NULL,
+                remarks = NULL,
+                photoPath = NULL,
+                resolutionTime = NULL,
+                nearestLandmark = NULL,
+                irTimestamp = NOW()
+            WHERE reportID = %s
+            """,
+            (inspector_user_id, report_id),
+        )
+
+        mysql.connection.commit()
+        cursor.close()
+
+        return {
+            "reportID": report_id,
+            "logID": report["targetID"],
+            "inspectorID": inspector_user_id,
+            "inspector": inspector["fullName"],
+            "status": "Reassigned",
         }, None
 
     except Exception as e:

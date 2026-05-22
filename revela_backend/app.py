@@ -49,6 +49,13 @@ def create_app():
     from api.geospatial.routes import geospatial_bp
     app.register_blueprint(geospatial_bp, url_prefix="/api/geospatial")
 
+    from api.notifications.routes import notifications_bp
+    app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
+
+    @app.route("/api/health", methods=["GET"])
+    def health():
+        return jsonify({"status": "ok"}), 200
+
     # Intercept all exceptions to ensure CORS headers are preserved on 500 errors
     @app.errorhandler(Exception)
     def handle_exception(e):

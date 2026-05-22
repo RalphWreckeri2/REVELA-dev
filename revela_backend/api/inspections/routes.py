@@ -1,15 +1,37 @@
-from flask import Blueprint, request, jsonify
+import os
+import uuid
+
+from flask import Blueprint, request, jsonify, send_from_directory
 from flask_jwt_extended import get_jwt_identity
+from werkzeug.utils import secure_filename
+
 from api.inspections.service import (
     get_inspector_tasks,
+    get_inspector_reports_history,
     assign_inspection,
     submit_inspection,
+    reassign_submitted_report,
     verify_inspection,
     get_all_inspections,
 )
 from api.middleware.decorators import jwt_required, admin_required
+from api.notifications.service import (
+    notify_inspection_assigned,
+    notify_inspection_submitted,
+)
 
 inspections_bp = Blueprint("inspections", __name__)
+
+_EVIDENCE_DIR = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__), "..", "..", "instance", "inspection_evidence"
+    )
+)
+
+
+def _ensure_evidence_dir():
+    os.makedirs(_EVIDENCE_DIR, exist_ok=True)
+    return _EVIDENCE_DIR
 
 
 # ── GET /api/inspections/tasks ────────────────────────────────────────────────
@@ -22,6 +44,56 @@ def get_tasks():
     if error:
         return jsonify({"error": error}), 500
     return jsonify(result), 200
+
+
+# ── GET /api/inspections/my-reports ───────────────────────────────────────────
+@inspections_bp.route("/my-reports", methods=["GET"])
+@jwt_required()
+def my_reports():
+    """Inspector: full history of their reports (all statuses)."""
+    user_id = get_jwt_identity()
+    result, error = get_inspector_reports_history(user_id=user_id)
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result), 200
+
+
+# ── POST /api/inspections/evidence ────────────────────────────────────────────
+@inspections_bp.route("/evidence", methods=["POST"])
+@jwt_required()
+def upload_evidence():
+    """Inspector: upload a photo; returns a relative photoURL for submit."""
+    if "file" not in request.files:
+        return jsonify({"error": "Missing file field"}), 400
+    file = request.files["file"]
+    if not file or file.filename == "":
+        return jsonify({"error": "Empty file"}), 400
+
+    orig = secure_filename(file.filename) or "evidence.jpg"
+    ext = os.path.splitext(orig)[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        ext = ".jpg"
+    name = f"{uuid.uuid4().hex}{ext}"
+
+    folder = _ensure_evidence_dir()
+    path = os.path.join(folder, name)
+    file.save(path)
+
+    rel = f"/api/inspections/public-evidence/{name}"
+    return jsonify({"photoURL": rel}), 201
+
+
+# ── GET /api/inspections/public-evidence/<name> ───────────────────────────────
+@inspections_bp.route("/public-evidence/<filename>", methods=["GET"])
+def download_public_evidence(filename):
+    """Serve inspection images (unguessable filenames). No auth for <img> tags."""
+    if not filename or ".." in filename or "/" in filename or "\\" in filename:
+        return jsonify({"error": "Invalid filename"}), 400
+    folder = _ensure_evidence_dir()
+    path = os.path.join(folder, filename)
+    if not os.path.isfile(path):
+        return jsonify({"error": "Not found"}), 404
+    return send_from_directory(folder, filename)
 
 
 # ── POST /api/inspections/assign ──────────────────────────────────────────────
@@ -43,6 +115,15 @@ def assign():
     )
     if error:
         return jsonify({"error": error}), 500
+    try:
+        notify_inspection_assigned(
+            report_id=result["reportID"],
+            log_id=result["logID"],
+            inspector_user_id=result["inspectorID"],
+            status=result.get("status", "Assigned"),
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        print(f"notify_inspection_assigned skipped: {exc}")
     return jsonify(result), 201
 
 
@@ -73,13 +154,59 @@ def submit():
     )
     if error:
         return jsonify({"error": error}), 500
+
+    has_photo = bool(data.get("photoURL"))
+    try:
+        notify_inspection_submitted(
+            report_id=result["reportID"],
+            log_id=data["logID"],
+            inspector_user_id=int(user_id),
+            inspection_result=data["inspectionResult"],
+            has_evidence_photo=has_photo,
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        print(f"notify_inspection_submitted skipped: {exc}")
+
+    return jsonify(result), 200
+
+
+# ── POST /api/inspections/<id>/reassign ───────────────────────────────────────
+@inspections_bp.route("/<int:report_id>/reassign", methods=["POST", "OPTIONS"])
+@admin_required()
+def reassign_submitted(report_id):
+    if request.method == "OPTIONS":
+        return "", 204
+    """Admin: send a submitted report back to an inspector for redo."""
+    data = request.get_json()
+    if not data or "userID" not in data:
+        return jsonify({"error": "userID is required"}), 400
+
+    result, error = reassign_submitted_report(
+        report_id=report_id,
+        inspector_user_id=data["userID"],
+        assigned_by=get_jwt_identity(),
+    )
+    if error:
+        status = 400 if "only Submitted" in error or "not found" in error else 500
+        return jsonify({"error": error}), status
+    try:
+        notify_inspection_assigned(
+            report_id=result["reportID"],
+            log_id=result["logID"],
+            inspector_user_id=result["inspectorID"],
+            status="Reassigned",
+        )
+    except (TypeError, ValueError, KeyError) as exc:
+        print(f"notify_inspection_assigned skipped: {exc}")
     return jsonify(result), 200
 
 
 # ── POST /api/inspections/<id>/verify ─────────────────────────────────────────
-@inspections_bp.route("/<int:report_id>/verify", methods=["POST"])
+@inspections_bp.route("/<int:report_id>/verify", methods=["POST", "OPTIONS"])
 @admin_required()
 def verify(report_id):
+    if request.method == "OPTIONS":
+        return "", 204
     """Admin confirms inspection result → updates geospatial_logs flagColor."""
     result, error = verify_inspection(report_id=report_id)
     if error:

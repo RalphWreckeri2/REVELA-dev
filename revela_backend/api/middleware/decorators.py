@@ -12,7 +12,7 @@ def jwt_required():
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if request.method == "OPTIONS":
-                return fn(*args, **kwargs)
+                return "", 204
 
             try:
                 verify_jwt_in_request()  # validates the Bearer token
@@ -39,7 +39,7 @@ def admin_required():
         @wraps(fn)
         def wrapper(*args, **kwargs):
             if request.method == "OPTIONS":
-                return fn(*args, **kwargs)
+                return "", 204
 
             try:
                 verify_jwt_in_request()
@@ -47,7 +47,7 @@ def admin_required():
                 return jsonify({"error": "Unauthorized", "message": str(e)}), 401
 
             role = get_current_role()
-            if role not in ("Admin", "SUPER_ADMIN"):
+            if role not in ("Admin", "SUPER_ADMIN", "System Administrator"):
                 return jsonify({"error": "Forbidden", "message": "Admins only"}), 403
 
             return fn(*args, **kwargs)

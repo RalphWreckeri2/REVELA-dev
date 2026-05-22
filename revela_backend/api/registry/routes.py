@@ -5,6 +5,8 @@ from api.registry.service import (
     sync_registry,
     get_all_businesses,
     get_business_by_id,
+    update_business,
+    delete_business,
 )
 from api.middleware.decorators import jwt_required, admin_required
 
@@ -108,6 +110,38 @@ def get_business(business_id):
         return jsonify({"error": "Business not found"}), 404
 
     return jsonify(business), 200
+
+
+# ── PUT /api/registry/<id> ────────────────────────────────────────────────────
+@registry_bp.route("/<int:business_id>", methods=["PUT"])
+@admin_required()
+def edit_business(business_id):
+    """Update a single business record by ID."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    success, error = update_business(business_id, data)
+
+    if error:
+        status_code = 404 if error == "Business not found" else 500
+        return jsonify({"error": error}), status_code
+
+    return jsonify({"message": "Business updated successfully"}), 200
+
+
+# ── DELETE /api/registry/<id> ─────────────────────────────────────────────────
+@registry_bp.route("/<int:business_id>", methods=["DELETE"])
+@admin_required()
+def delete_business_route(business_id):
+    """Delete a single business record by ID."""
+    success, error = delete_business(business_id)
+
+    if error:
+        status_code = 404 if error == "Business not found" else 500
+        return jsonify({"error": error}), status_code
+
+    return jsonify({"message": "Business deleted successfully"}), 200
 
 
 @registry_bp.route("/barangays", methods=["GET"])

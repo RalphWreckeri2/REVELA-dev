@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
     setToken(data.access_token);
     const me = await getMeRequest(data.access_token);
     setUser(me);
-    return data;
+    return { ...data, user: me };
   }
 
   // Called after 2FA verification succeeds
@@ -28,6 +28,7 @@ export function AuthProvider({ children }) {
     setToken(accessToken);
     const me = await getMeRequest(accessToken);
     setUser(me);
+    return me;
   }
 
   async function refreshUser() {

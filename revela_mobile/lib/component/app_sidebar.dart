@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../theme/app_theme.dart';
 import '../service/auth_service.dart';
+import '../pages/dashboard_page.dart';
+import '../pages/home_page.dart';
 import '../pages/inspection_page.dart';
+import '../pages/pdf_generator_page.dart';
 import '../pages/settings_screen.dart';
 
 class AppSidebar extends StatefulWidget {
@@ -101,18 +104,46 @@ class _AppSidebarState extends State<AppSidebar> {
 
           // Navigation Items
           _buildDrawerItem(
+            icon: Icons.dashboard_outlined,
+            label: 'Dashboard',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const DashboardPage()),
+              );
+            },
+          ),
+          _buildDrawerItem(
             icon: Icons.map_outlined,
             label: 'Map View',
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HomePage()),
+              );
+            },
           ),
           _buildDrawerItem(
             icon: Icons.assignment_outlined,
             label: 'Task Assignment',
             onTap: () {
-              Navigator.pop(context); // close drawer first
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const InspectionPage()),
+              );
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.picture_as_pdf_outlined,
+            label: 'Notice PDF Generator',
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PdfGeneratorPage()),
               );
             },
           ),
@@ -122,7 +153,7 @@ class _AppSidebarState extends State<AppSidebar> {
             icon: Icons.settings_outlined,
             label: 'Settings',
             onTap: () {
-              Navigator.pop(context); // close drawer first
+              Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const SettingsScreen()),

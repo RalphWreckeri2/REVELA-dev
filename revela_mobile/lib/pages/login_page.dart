@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_text_field.dart';
 import '../service/auth_service.dart';
-import 'home_page.dart';
+import 'dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -123,8 +123,14 @@ class _LoginPageState extends State<LoginPage>
       case LoginResult.success:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
+          MaterialPageRoute(builder: (_) => const DashboardPage()),
         );
+        break;
+      case LoginResult.mustChangePassword:
+        _showForcePasswordChangeDialog();
+        break;
+      case LoginResult.twoFactorRequired:
+        _show2FALoginDialog();
         break;
       case LoginResult.notInspector:
         _showErrorDialog(
@@ -146,6 +152,304 @@ class _LoginPageState extends State<LoginPage>
         );
         break;
     }
+  }
+
+  void _show2FALoginDialog() {
+    final codeController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isSubmitting = false;
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.security, color: AppColors.darkGreen, size: 28),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Two-Factor Authentication',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Step 2 of 2 — Enter the 6-digit code from your authenticator app to complete sign in.',
+                        style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                      ),
+                      const SizedBox(height: 16),
+                      if (errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            errorMessage!,
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      TextFormField(
+                        controller: codeController,
+                        keyboardType: TextInputType.number,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: '6-Digit 2FA Code',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.pin),
+                        ),
+                        validator: (v) =>
+                            v == null || v.length < 6 ? 'Enter 6-digit code' : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.darkGreen,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (formKey.currentState!.validate()) {
+                            setDialogState(() {
+                              isSubmitting = true;
+                              errorMessage = null;
+                            });
+                            final res = await _authService.verify2FALogin(
+                              codeController.text.trim(),
+                            );
+                            if (!mounted) return;
+                            if (res == LoginResult.success) {
+                              Navigator.pop(ctx);
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (_) => const DashboardPage()),
+                              );
+                            } else if (res == LoginResult.mustChangePassword) {
+                              Navigator.pop(ctx);
+                              _showForcePasswordChangeDialog();
+                            } else {
+                              setDialogState(() {
+                                isSubmitting = false;
+                                errorMessage = 'Invalid 2FA code. Please try again.';
+                              });
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Verify Code'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showForcePasswordChangeDialog() {
+    final oldController = TextEditingController(text: _passwordController.text);
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool obscureOld = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isSubmitting = false;
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Password Change Required',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Your administrator requires you to update your temporary password before accessing the system.',
+                        style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                      ),
+                      const SizedBox(height: 16),
+                      if (errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            errorMessage!,
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      TextFormField(
+                        controller: oldController,
+                        obscureText: obscureOld,
+                        decoration: InputDecoration(
+                          labelText: 'Temporary Password',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureOld ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () => setDialogState(() => obscureOld = !obscureOld),
+                          ),
+                        ),
+                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: newController,
+                        obscureText: obscureNew,
+                        decoration: InputDecoration(
+                          labelText: 'New Password (min. 8 chars)',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Required';
+                          if (v.length < 8) return 'Must be at least 8 characters';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: confirmController,
+                        obscureText: obscureConfirm,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm New Password',
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v != newController.text) return 'Passwords do not match';
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.darkGreen,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (formKey.currentState!.validate()) {
+                            setDialogState(() {
+                              isSubmitting = true;
+                              errorMessage = null;
+                            });
+                            final res = await _authService.changePassword(
+                              oldController.text,
+                              newController.text,
+                            );
+                            if (res['success'] == true) {
+                              if (mounted) {
+                                Navigator.pop(ctx);
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const DashboardPage()),
+                                );
+                              }
+                            } else {
+                              setDialogState(() {
+                                isSubmitting = false;
+                                errorMessage = res['error']?.toString() ?? 'Failed to change password';
+                              });
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Update & Continue'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override

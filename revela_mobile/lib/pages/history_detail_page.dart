@@ -214,6 +214,41 @@ class HistoryDetailPage extends StatelessWidget {
                     const SizedBox(height: 16),
                   ],
 
+                  if (resolvedTask.inspectionResult == 'Given First Notice' ||
+                      (resolvedTask.remarks != null && resolvedTask.remarks!.contains('Given First Notice'))) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Given First Notice',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.orange),
+                                ),
+                                Text(
+                                  'First official compliance notice was issued to this establishment.',
+                                  style: TextStyle(fontSize: 11, color: Colors.black87),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Remarks
                   const Text(
                     'Remarks',

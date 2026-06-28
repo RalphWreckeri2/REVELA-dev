@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../component/inspection_modal.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
 import 'history_detail_page.dart';
@@ -89,11 +90,19 @@ class _InspectionPageState extends State<InspectionPage>
     }
   }
 
-  // Tapping a CURRENT item navigates to HistoryDetailPage
+  // Tapping a CURRENT item opens the interactive InspectionModal to conduct report
   void _onCurrentTaskTap(InspectionTask task) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => HistoryDetailPage(task: task)),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => InspectionModal(
+        task: task,
+        onSubmitted: () {
+          _fetchCurrent();
+          _fetchHistory();
+        },
+      ),
     );
   }
 

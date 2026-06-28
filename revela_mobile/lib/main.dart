@@ -4,10 +4,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'theme/app_theme.dart';
 import 'pages/welcome_page.dart';
 import 'pages/login_page.dart';
-import 'pages/home_page.dart';
+import 'pages/dashboard_page.dart';
 import 'service/auth_service.dart';
 import 'service/api_config.dart';
 import 'service/assignment_notifications.dart';
+
+final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +19,8 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final bool seenWelcome = prefs.getBool('seen_welcome') ?? false;
+  final bool isDarkMode = prefs.getBool('is_dark_mode') ?? false;
+  themeModeNotifier.value = isDarkMode ? ThemeMode.dark : ThemeMode.light;
 
   const secureStorage = FlutterSecureStorage();
   final String? token = await secureStorage.read(key: 'jwt_token');
@@ -32,14 +36,21 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: AuthService.navigatorKey,
-      debugShowCheckedModeBanner: false,
-      title: 'REVELA',
-      theme: AppTheme.theme,
-      home: isLoggedIn
-          ? const HomePage()
-          : (seenWelcome ? const LoginPage() : const WelcomePage()),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, currentMode, _) {
+        return MaterialApp(
+          navigatorKey: AuthService.navigatorKey,
+          debugShowCheckedModeBanner: false,
+          title: 'REVELA',
+          theme: AppTheme.theme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: currentMode,
+          home: isLoggedIn
+              ? const DashboardPage()
+              : (seenWelcome ? const LoginPage() : const WelcomePage()),
+        );
+      },
     );
   }
 }

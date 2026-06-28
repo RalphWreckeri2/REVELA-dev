@@ -97,13 +97,13 @@ const Icon = {
 };
 
 
-const STATUS_FILTERS = ["All Status", "Active", "Expired", "Revoked", "Pending"];
+const STATUS_FILTERS = ["All Status", "Active", "Expired", "Revoked", "Pending", "Closed"];
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 const DEFAULT_PAGE_SIZE = 10;
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 function getStatusVariant(status) {
-  return { Active: "green", Expired: "gold", Revoked: "red", Pending: "default" }[status] ?? "default";
+  return { Active: "green", Expired: "gold", Revoked: "red", Pending: "default", Closed: "orange" }[status] ?? "default";
 }
 
 function getFlagVariant(flag) {
@@ -295,6 +295,7 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
                       <option value="Active">Active</option>
                       <option value="Expired">Expired</option>
                       <option value="Revoked">Revoked</option>
+                      <option value="Closed">Closed</option>
                     </select>
                   ) : field === "businessSize" ? (
                     <select 

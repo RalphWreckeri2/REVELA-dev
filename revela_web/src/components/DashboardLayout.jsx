@@ -257,10 +257,16 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
           return;
         }
         if (data.type === "heartbeat" || data.type === "connected") return;
-        refreshNotifications();
+        if (data.type !== "detection_progress") {
+          refreshNotifications();
+        }
         if (data.type === "inspection_submitted") {
           window.dispatchEvent(
             new CustomEvent("revela:inspection-update", { detail: data }),
+          );
+        } else if (data.type === "detection_progress") {
+          window.dispatchEvent(
+            new CustomEvent("revela:detection-progress", { detail: data }),
           );
         }
       };

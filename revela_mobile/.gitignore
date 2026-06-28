@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+revela_mobile/.flutter-plugins
+revela_mobile/.flutter-plugins-dependencies
+revela_mobile/windows/flutter/generated_*
+revela_mobile/linux/flutter/generated_*

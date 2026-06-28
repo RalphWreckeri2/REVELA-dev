@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid,
@@ -23,6 +23,7 @@ const COLOR = {
   black:  "#1a202c",
   blue:   "#3b82f6",
   muted:  "#94a3b8",
+  orange: "#ea580c",
   greenLight: "rgba(86,171,47,0.15)",
   redLight:   "rgba(239,68,68,0.15)",
   yellowLight:"rgba(245,158,11,0.15)",
@@ -33,6 +34,7 @@ const FLAG_COLORS = {
   Red:    COLOR.red,
   Yellow: COLOR.yellow,
   Black:  COLOR.black,
+  Orange: COLOR.orange,
 };
 
 // ── Tiny helpers ──────────────────────────────────────────────────────────────
@@ -96,6 +98,83 @@ const Skeleton = ({ h = 200 }) => (
   }} />
 );
 
+// ── Chart Interpretation & Insights ──────────────────────────────────────────
+const ChartInterpretation = ({ type = "info", title = "Analysis & Recommendations", findings = [], actions = [] }) => {
+  const styles = {
+    info: {
+      borderLeft: "4px solid #3b82f6",
+      background: "rgba(239,246,255,0.7)",
+      color: "#1e3a8a",
+      titleColor: "#1e40af",
+    },
+    success: {
+      borderLeft: "4px solid #22c55e",
+      background: "rgba(240,253,244,0.7)",
+      color: "#166534",
+      titleColor: "#15803d",
+    },
+    warning: {
+      borderLeft: "4px solid #f59e0b",
+      background: "rgba(254,253,237,0.7)",
+      color: "#78350f",
+      titleColor: "#92400e",
+    },
+    danger: {
+      borderLeft: "4px solid #ef4444",
+      background: "rgba(254,242,242,0.7)",
+      color: "#991b1b",
+      titleColor: "#b91c1c",
+    },
+  }[type] || {
+    borderLeft: "4px solid #94a3b8",
+    background: "rgba(248,250,252,0.7)",
+    color: "#334155",
+    titleColor: "#1e293b",
+  };
+
+  return (
+    <div style={{
+      marginTop: 16,
+      padding: "14px 18px",
+      borderRadius: "var(--radius-md, 8px)",
+      borderLeft: styles.borderLeft,
+      background: styles.background,
+      backdropFilter: "blur(8px)",
+      fontSize: 13,
+      lineHeight: 1.5,
+      boxShadow: "0 2px 10px rgba(0,0,0,0.03)"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: styles.titleColor, flexShrink: 0 }}>
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+        </svg>
+        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: styles.titleColor, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          {title}
+        </h4>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {findings.length > 0 && (
+          <div>
+            <strong style={{ color: styles.titleColor, display: "block", marginBottom: 2 }}>Key Observations:</strong>
+            <ul style={{ margin: 0, paddingLeft: 16, color: "#1a202c" }}>
+              {findings.map((f, i) => <li key={i} style={{ marginBottom: 2 }}>{f}</li>)}
+            </ul>
+          </div>
+        )}
+        {actions.length > 0 && (
+          <div>
+            <strong style={{ color: styles.titleColor, display: "block", marginBottom: 2 }}>Actionable BPLO Strategy:</strong>
+            <ul style={{ margin: 0, paddingLeft: 16, color: "#1a202c" }}>
+              {actions.map((a, i) => <li key={i} style={{ marginBottom: 2, listStyleType: "square" }}>{a}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const createEmptyFilters = () => ({
   barangay_ids: [],
   application_status: "",
@@ -155,6 +234,7 @@ export default function AnalyticsPage() {
   const [draftFilters, setDraftFilters] = useState(createEmptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(createEmptyFilters);
   const [showFilters, setShowFilters] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [filterMeta, setFilterMeta] = useState(null);
   const [barangaysList, setBarangaysList] = useState([]);
 
@@ -239,7 +319,23 @@ export default function AnalyticsPage() {
     Red:    row.red_count    || 0,
     Yellow: row.yellow_count || 0,
     Black:  row.black_count  || 0,
+    Orange: row.orange_count || 0,
   }));
+
+  // Calculate aggregate counts of flags per color
+  const totalGreen  = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.green_count  || 0), 0);
+  const totalYellow = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.yellow_count || 0), 0);
+  const totalRed    = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.red_count    || 0), 0);
+  const totalBlack  = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.black_count  || 0), 0);
+  const totalOrange = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.orange_count || 0), 0);
+
+  const flagsByColorData = [
+    { name: "Active Business",        value: totalGreen,  fill: FLAG_COLORS.Green  || COLOR.green },
+    { name: "Suspected Unregistered", value: totalYellow, fill: FLAG_COLORS.Yellow || COLOR.yellow },
+    { name: "Closed Business",        value: totalOrange, fill: FLAG_COLORS.Orange || COLOR.orange },
+    { name: "Detected Unregistered",  value: totalRed,    fill: FLAG_COLORS.Red    || COLOR.red },
+    { name: "Critical Violation",     value: totalBlack,  fill: FLAG_COLORS.Black  || COLOR.black },
+  ].filter(item => item.value > 0 || item.name === "Closed Business");
 
   // ── Sectoral distribution pie ─────────────────────────────────────────────
   const SECTOR_COLORS = [
@@ -282,6 +378,7 @@ export default function AnalyticsPage() {
       Red:    r.red_count    || 0,
       Yellow: r.yellow_count || 0,
       Black:  r.black_count  || 0,
+      Orange: r.orange_count || 0,
       total:  r.flagged_count || 0,
     }));
 
@@ -326,6 +423,39 @@ export default function AnalyticsPage() {
   const ahp_w2 = Math.max(1, wlcConfig.w2_sector);
   const ahp_w3 = Math.max(1, wlcConfig.w3_distance);
   const ahpVal = (num, den) => (num / den).toFixed(2);
+
+  const leaderboardData = useMemo(() => {
+    if (!desc?.enforcement_progress) return [];
+    return desc.enforcement_progress.map(row => {
+      const g = row.green_count || 0;
+      const r = row.red_count || 0;
+      const y = row.yellow_count || 0;
+      const b = row.black_count || 0;
+      const o = row.orange_count || 0;
+      const total = g + r + y + b + o;
+      const rate = total > 0 ? Math.round((g / total) * 100) : 100;
+      return {
+        barangayName: row.barangayName,
+        shortName: shortBarangay(row.barangayName),
+        activeCount: g,
+        totalFlags: total,
+        rate,
+      };
+    });
+  }, [desc?.enforcement_progress]);
+
+  const topCompliant = useMemo(() => {
+    return [...leaderboardData]
+      .sort((a, b) => b.rate - a.rate || b.activeCount - a.activeCount)
+      .slice(0, 5);
+  }, [leaderboardData]);
+
+  const bottomCompliant = useMemo(() => {
+    return [...leaderboardData]
+      .filter(x => x.totalFlags > 0)
+      .sort((a, b) => a.rate - b.rate || b.totalFlags - a.totalFlags)
+      .slice(0, 3);
+  }, [leaderboardData]);
 
   const activeFilterCount = countActiveBackendFilters(data?.applied_filters);
 
@@ -460,121 +590,206 @@ export default function AnalyticsPage() {
         </div>
 
         {showFilters && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             
-            {/* Location Group */}
-            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                Location & Zoning
-              </h4>
+            {/* Basic Streamlined Filters Grid */}
+            <div className="frosted-glass saas-card" style={{ 
+              display: "grid", 
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", 
+              gap: 16, 
+              padding: 16, 
+              background: "rgba(255, 255, 255, 0.4)",
+              border: "1px solid rgba(226, 232, 240, 0.8)",
+              borderRadius: 12
+            }}>
+              {/* Barangay Filter */}
               <div>
-                <label style={filterLabelStyle}>Barangays (Ctrl+click multi)</label>
+                <label style={filterLabelStyle}>Barangay</label>
                 <select
-                  multiple
-                  size={5}
-                  value={draftFilters.barangay_ids.map(String)}
+                  value={draftFilters.barangay_ids[0] || ""}
                   onChange={(e) => {
-                    const next = [...e.target.selectedOptions].map((o) => parseInt(o.value, 10));
-                    setDraftFilters((d) => ({ ...d, barangay_ids: next }));
+                    const val = e.target.value;
+                    setDraftFilters((d) => ({ ...d, barangay_ids: val ? [parseInt(val, 10)] : [] }));
                   }}
-                  style={{ ...filterInputStyle, minHeight: 140 }}
+                  style={filterInputStyle}
                 >
+                  <option value="">All Barangays</option>
                   {barangaysList.map((b) => (
                     <option key={b.barangayID} value={b.barangayID}>{b.barangayName}</option>
                   ))}
                 </select>
               </div>
-            </div>
 
-            {/* Business Registry Group */}
-            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                Business Registry
-              </h4>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 12 }}>
-                <div>
-                  <label style={filterLabelStyle}>Status</label>
-                  {sel(draftFilters.application_status, (e) => setDraftFilters((d) => ({ ...d, application_status: e.target.value })), fm.application_statuses, "All statuses")}
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Sector</label>
-                  {sel(draftFilters.line_of_business, (e) => setDraftFilters((d) => ({ ...d, line_of_business: e.target.value })), fm.lines_of_business, "All sectors")}
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Type</label>
-                  {sel(draftFilters.business_type, (e) => setDraftFilters((d) => ({ ...d, business_type: e.target.value })), fm.business_types, "All types")}
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Size</label>
-                  {sel(draftFilters.business_size, (e) => setDraftFilters((d) => ({ ...d, business_size: e.target.value })), fm.business_sizes, "All sizes")}
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Renewal From</label>
-                  <input type="date" value={draftFilters.renewal_from} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_from: e.target.value }))} style={filterInputStyle} />
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Renewal To</label>
-                  <input type="date" value={draftFilters.renewal_to} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_to: e.target.value }))} style={filterInputStyle} />
-                </div>
+              {/* Business Registry Status */}
+              <div>
+                <label style={filterLabelStyle}>Registry Status</label>
+                <select
+                  value={draftFilters.application_status}
+                  onChange={(e) => setDraftFilters((d) => ({ ...d, application_status: e.target.value }))}
+                  style={filterInputStyle}
+                >
+                  <option value="">All statuses</option>
+                  <option value="Active">Active</option>
+                  <option value="Expired">Expired</option>
+                  <option value="Revoked">Revoked</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </div>
+
+              {/* Flag Status */}
+              <div>
+                <label style={filterLabelStyle}>Flag Status</label>
+                <select
+                  value={draftFilters.flag_color}
+                  onChange={(e) => setDraftFilters((d) => ({ ...d, flag_color: e.target.value }))}
+                  style={filterInputStyle}
+                >
+                  <option value="">All statuses</option>
+                  <option value="Green">Active Business</option>
+                  <option value="Orange">Closed Business</option>
+                  <option value="Yellow">Suspected Unregistered</option>
+                  <option value="Red">Detected Unregistered</option>
+                  <option value="Black">Critical Violation</option>
+                </select>
+              </div>
+
+              {/* Sector Filter */}
+              <div>
+                <label style={filterLabelStyle}>Sector</label>
+                {sel(draftFilters.line_of_business, (e) => setDraftFilters((d) => ({ ...d, line_of_business: e.target.value })), fm.lines_of_business, "All sectors")}
               </div>
             </div>
-          </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
-            {/* Geospatial Group */}
-            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
-                Geospatial Flags
-              </h4>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div>
-                  <label style={filterLabelStyle}>Flag Color</label>
-                  {sel(draftFilters.flag_color, (e) => setDraftFilters((d) => ({ ...d, flag_color: e.target.value })), fm.flag_colors, "All colors")}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 12 }}>
-                  <div>
-                    <label style={filterLabelStyle}>Detected From</label>
-                    <input type="date" value={draftFilters.detected_from} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_from: e.target.value }))} style={filterInputStyle} />
+            {/* Advanced Filters Expand Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              style={{
+                alignSelf: "flex-start",
+                background: "none",
+                border: "none",
+                color: "#2563eb",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "2px 0",
+                transition: "color 0.15s",
+                textTransform: "uppercase",
+                letterSpacing: "0.04em"
+              }}
+            >
+              {showAdvanced ? "▲ Hide Advanced Options" : "▼ Show Advanced Options (Dates, Sizes, Inspections, Multi-Select)"}
+            </button>
+
+            {/* Advanced Filters Section */}
+            {showAdvanced && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
+                  
+                  {/* Advanced Location Multi-Select */}
+                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      Location (Multi-Select)
+                    </h4>
+                    <div>
+                      <label style={filterLabelStyle}>Hold Ctrl for multiple selection</label>
+                      <select
+                        multiple
+                        size={4}
+                        value={draftFilters.barangay_ids.map(String)}
+                        onChange={(e) => {
+                          const next = [...e.target.selectedOptions].map((o) => parseInt(o.value, 10));
+                          setDraftFilters((d) => ({ ...d, barangay_ids: next }));
+                        }}
+                        style={{ ...filterInputStyle, minHeight: 90 }}
+                      >
+                        {barangaysList.map((b) => (
+                          <option key={b.barangayID} value={b.barangayID}>{b.barangayName}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label style={filterLabelStyle}>Detected To</label>
-                    <input type="date" value={draftFilters.detected_to} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_to: e.target.value }))} style={filterInputStyle} />
+
+                  {/* Advanced Business Profile */}
+                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                      Business Profile
+                    </h4>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <label style={filterLabelStyle}>Type</label>
+                        {sel(draftFilters.business_type, (e) => setDraftFilters((d) => ({ ...d, business_type: e.target.value })), fm.business_types, "All types")}
+                      </div>
+                      <div>
+                        <label style={filterLabelStyle}>Size</label>
+                        {sel(draftFilters.business_size, (e) => setDraftFilters((d) => ({ ...d, business_size: e.target.value })), fm.business_sizes, "All sizes")}
+                      </div>
+                      <div>
+                        <label style={filterLabelStyle}>Renewal From</label>
+                        <input type="date" value={draftFilters.renewal_from} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_from: e.target.value }))} style={filterInputStyle} />
+                      </div>
+                      <div>
+                        <label style={filterLabelStyle}>Renewal To</label>
+                        <input type="date" value={draftFilters.renewal_to} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_to: e.target.value }))} style={filterInputStyle} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
+                  {/* Advanced Geospatial Dates */}
+                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+                      Flag Timelines
+                    </h4>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <label style={filterLabelStyle}>Detected From</label>
+                        <input type="date" value={draftFilters.detected_from} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_from: e.target.value }))} style={filterInputStyle} />
+                      </div>
+                      <div>
+                        <label style={filterLabelStyle}>Detected To</label>
+                        <input type="date" value={draftFilters.detected_to} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_to: e.target.value }))} style={filterInputStyle} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Advanced Inspection Audits */}
+                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                      Inspection Details
+                    </h4>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <label style={filterLabelStyle}>Result</label>
+                        {sel(draftFilters.inspection_result, (e) => setDraftFilters((d) => ({ ...d, inspection_result: e.target.value })), fm.inspection_results, "All results")}
+                      </div>
+                      <div>
+                        <label style={filterLabelStyle}>Verification</label>
+                        {sel(draftFilters.verification_status, (e) => setDraftFilters((d) => ({ ...d, verification_status: e.target.value })), fm.verification_statuses, "All verification")}
+                      </div>
+                      <div>
+                        <label style={filterLabelStyle}>Inspected From</label>
+                        <input type="datetime-local" value={draftFilters.inspection_from} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_from: e.target.value }))} style={filterInputStyle} />
+                      </div>
+                      <div>
+                        <label style={filterLabelStyle}>Inspected To</label>
+                        <input type="datetime-local" value={draftFilters.inspection_to} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_to: e.target.value }))} style={filterInputStyle} />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Inspections Group */}
-            <div style={{ background: "rgba(241,245,249,0.5)", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-              <h4 style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                Inspections
-              </h4>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 12 }}>
-                <div>
-                  <label style={filterLabelStyle}>Result</label>
-                  {sel(draftFilters.inspection_result, (e) => setDraftFilters((d) => ({ ...d, inspection_result: e.target.value })), fm.inspection_results, "All results")}
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Verification</label>
-                  {sel(draftFilters.verification_status, (e) => setDraftFilters((d) => ({ ...d, verification_status: e.target.value })), fm.verification_statuses, "All verification")}
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Inspected From</label>
-                  <input type="datetime-local" value={draftFilters.inspection_from} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_from: e.target.value }))} style={filterInputStyle} />
-                </div>
-                <div>
-                  <label style={filterLabelStyle}>Inspected To</label>
-                  <input type="datetime-local" value={draftFilters.inspection_to} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_to: e.target.value }))} style={filterInputStyle} />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
-        </div>
         )}
       </div>
 
@@ -651,87 +866,138 @@ export default function AnalyticsPage() {
               Enforcement Pipeline
             </h3>
             {loading ? <Skeleton h={110} /> : (
-              <div style={{ display: "flex", gap: 24, alignItems: "stretch", overflowX: "auto", paddingBottom: 8 }}>
-                {funnelData.map((item, i) => {
-                  const rate = item.value > 0 ? Math.round((funnelData[i+1]?.value / item.value) * 100) : 0;
-                  return (
-                    <div key={item.step} style={{ 
-                      flex: 1, 
-                      minWidth: 140,
-                      background: item.color, 
-                      borderRadius: 12, 
-                      padding: "16px 20px",
-                      color: "#fff",
-                      position: "relative",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
-                    }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 12 }}>{item.step}</span>
-                      <span style={{ fontSize: 28, fontWeight: 800 }}>{item.value.toLocaleString()}</span>
-                      
-                      {i < funnelData.length - 1 && (
-                        <div style={{ 
-                          position: "absolute", 
-                          right: "-12px", 
-                          top: "50%", 
-                          transform: "translate(50%, -50%)", 
-                          zIndex: 2,
-                          background: "#fff",
-                          color: "#1a202c",
-                          border: "1px solid #e2e8f0",
-                          borderRadius: 20,
-                          padding: "4px 8px",
-                          fontSize: 11,
-                          fontWeight: 700,
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4
-                        }}>
-                          {rate}%
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <div style={{ display: "flex", gap: 24, alignItems: "stretch", overflowX: "auto", paddingBottom: 8 }}>
+                  {funnelData.map((item, i) => {
+                    const rate = item.value > 0 ? Math.round((funnelData[i+1]?.value / item.value) * 100) : 0;
+                    return (
+                      <div key={item.step} style={{ 
+                        flex: 1, 
+                        minWidth: 140,
+                        background: item.color, 
+                        borderRadius: 12, 
+                        padding: "16px 20px",
+                        color: "#fff",
+                        position: "relative",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
+                      }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 12 }}>{item.step}</span>
+                        <span style={{ fontSize: 28, fontWeight: 800 }}>{item.value.toLocaleString()}</span>
+                        
+                        {i < funnelData.length - 1 && (
+                          <div style={{ 
+                            position: "absolute", 
+                            right: "-12px", 
+                            top: "50%", 
+                            transform: "translate(50%, -50%)", 
+                            zIndex: 2,
+                            background: "#fff",
+                            color: "#1a202c",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: 20,
+                            padding: "4px 8px",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4
+                          }}>
+                            {rate}%
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <ChartInterpretation
+                  type="info"
+                  title="Pipeline Conversion Insights"
+                  findings={[
+                    `The funnel tracks registration conversion stages from initial detection (${kpiTotalBiz + kpiTotalFlagged}) to final cleared audits (${clearedCount}).`,
+                    `The pipeline converts approximately ${funnelData[0].value > 0 ? Math.round((clearedCount / funnelData[0].value) * 100) : 0}% of all detected entities into cleared compliant businesses.`
+                  ]}
+                  actions={[
+                    "Deploy active dispatch inspectors to high-density unregistered clusters to push entities from 'Active' to 'Inspected' stages.",
+                    "Ensure cleared businesses are officially moved out of inspection backlogs to speed up pipeline clearance rates."
+                  ]}
+                />
+              </>
             )}
           </div>
 
-          {/* ENFORCEMENT PROGRESS TRACKER + SECTORAL DISTRIBUTION */}
+          {/* FLAGS BY COLOR OVERVIEW + SECTORAL DISTRIBUTION */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
-            {/* Stacked Bar — Enforcement Progress */}
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "2 1 400px", minWidth: 0 }}>
+            {/* Donut — Flags by Color Breakdown */}
+            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 48%", minWidth: 320 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
-                Enforcement Progress Tracker
+                Flags by Color Breakdown
                 <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
-                  — Flag distribution across all 16 barangays
+                  — Total active pin distribution
                 </span>
               </h3>
-              {loading ? <Skeleton h={300} /> : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={enforcementData} margin={{ top: 0, right: 10, left: -20, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} angle={-45} textAnchor="end" interval={0} />
-                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Green"  stackId="a" fill={COLOR.green}  radius={[0,0,0,0]} />
-                    <Bar dataKey="Yellow" stackId="a" fill={COLOR.yellow} />
-                    <Bar dataKey="Red"    stackId="a" fill={COLOR.red} />
-                    <Bar dataKey="Black"  stackId="a" fill={COLOR.black}  radius={[4,4,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              {loading ? <Skeleton h={300} /> : flagsByColorData.length === 0 ? (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>
+                  No flags detected in the system
+                </div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie 
+                        data={flagsByColorData} 
+                        dataKey="value" 
+                        nameKey="name" 
+                        cx="50%" 
+                        cy="50%" 
+                        innerRadius={55}
+                        outerRadius={80} 
+                        label={false}
+                      >
+                        {flagsByColorData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                    {flagsByColorData.map((s, i) => {
+                      const totalSum = totalGreen + totalYellow + totalRed + totalBlack + totalOrange;
+                      const pct = totalSum > 0 ? Math.round((s.value / totalSum) * 100) : 0;
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
+                          <span style={{ color: "#64748b", flex: 1 }}>{s.name}</span>
+                          <span style={{ fontSize: 11, color: "#94a3b8", marginRight: 8 }}>{pct}%</span>
+                          <strong style={{ color: "#1a202c" }}>{s.value}</strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <ChartInterpretation
+                    type={totalRed > (totalGreen * 0.3) ? "danger" : "info"}
+                    title="Business Status Breakdown Insights"
+                    findings={[
+                      `Active Businesses (Green) make up ${totalGreen} locations.`,
+                      `Detected Unregistered (Red: ${totalRed}) and Suspected Unregistered (Yellow: ${totalYellow}) indicate potential tax and zoning compliance leaks.`,
+                      `Closed Businesses (Orange: ${totalOrange}) represent inactive entries ready for official registry updates.`
+                    ]}
+                    actions={[
+                      totalRed > 0 ? "Initiate standard notice sequences for Detected Unregistered establishments." : "Unregistered counts are low. Focus on maintaining registration renewals.",
+                      "Perform formal business registry database updates for Closed Businesses (Orange) to archive their licenses."
+                    ]}
+                  />
+                </>
               )}
             </div>
 
             {/* Pie — Sectoral Distribution */}
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 300px", minWidth: 0 }}>
+            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 48%", minWidth: 320 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
                 Sectoral Distribution
               </h3>
@@ -758,11 +1024,195 @@ export default function AnalyticsPage() {
                       </div>
                     ))}
                   </div>
+                  {(() => {
+                    const topSec = sectoralData[0];
+                    const topSecName = topSec ? topSec.name : "Retail/Commercial";
+                    const topSecVal = topSec ? topSec.value : 0;
+                    return (
+                      <ChartInterpretation
+                        type="info"
+                        title="Sectoral Distribution Insights"
+                        findings={[
+                          `The "${topSecName}" sector is the dominant commercial activity in Mataasnakahoy, accounting for ${topSecVal} registered businesses.`,
+                          "Highly concentrated sectors represent critical drivers of municipal permit revenue."
+                        ]}
+                        actions={[
+                          `Draft streamlined permit guidelines tailored to "${topSecName}" activities to encourage compliance.`,
+                          "Coordinate with commercial sector associations to simplify licensing processes."
+                        ]}
+                      />
+                    );
+                  })()}
                 </>
               )}
             </div>
           </div>
 
+          {/* BARANGAY COMPLIANCE LEADERBOARD */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
+            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 100%", minWidth: 0 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 6px 0" }}>
+                Barangay Compliance Leaderboard
+                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
+                  — Ranked compliance rates based on registered vs flagged entities
+                </span>
+              </h3>
+              <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px 0" }}>
+                Compliance rate measures official active registrations (Green) as a percentage of all local business activities.
+              </p>
+
+              {loading ? <Skeleton h={220} /> : leaderboardData.length === 0 ? (
+                <div style={{ padding: "40px 0", textAlign: "center", color: COLOR.muted }}>
+                  No compliance data available.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: 24 }}>
+                  {/* Top 5 Compliant */}
+                  <div style={{ background: "rgba(240,253,244,0.4)", borderRadius: 12, padding: 18, border: "1px solid rgba(34,197,94,0.12)" }}>
+                    <h4 style={{ margin: "0 0 14px 0", fontSize: 13, fontWeight: 800, color: "#15803d", display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                      Top Performing Zones (Highest Compliance)
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {topCompliant.map((b, idx) => (
+                        <div key={b.barangayName}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
+                              {idx + 1}. {b.barangayName}
+                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: "#166534" }}>
+                              {b.rate}% compliance
+                            </span>
+                          </div>
+                          <div style={{ height: 6, background: "rgba(226,232,240,0.6)", borderRadius: 3, overflow: "hidden" }}>
+                            <div style={{ width: `${b.rate}%`, height: "100%", background: "#22c55e", borderRadius: 3 }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
+                            <span>Active Registered: <strong>{b.activeCount}</strong></span>
+                            <span>Total Flags: {b.totalFlags}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bottom 3 Non-Compliant */}
+                  <div style={{ background: "rgba(254,242,242,0.4)", borderRadius: 12, padding: 18, border: "1px solid rgba(239,68,68,0.12)" }}>
+                    <h4 style={{ margin: "0 0 14px 0", fontSize: 13, fontWeight: 800, color: "#b91c1c", display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                      Urgent Action Areas (Lowest Compliance)
+                    </h4>
+                    {bottomCompliant.length === 0 ? (
+                      <p style={{ fontSize: 12, color: "#64748b", textAlign: "center", padding: "20px 0" }}>All active zones have high compliance levels!</p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {bottomCompliant.map((b, idx) => (
+                          <div key={b.barangayName}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
+                                {idx + 1}. {b.barangayName}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: "#991b1b" }}>
+                                {b.rate}% compliance
+                              </span>
+                            </div>
+                            <div style={{ height: 6, background: "rgba(226,232,240,0.6)", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${b.rate}%`, height: "100%", background: "#ef4444", borderRadius: 3 }} />
+                            </div>
+                            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
+                              <span>Active Registered: <strong>{b.activeCount}</strong></span>
+                              <span>Total Flags: {b.totalFlags}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Leaderboard Interpretation */}
+              {!loading && leaderboardData.length > 0 && (() => {
+                const worstBrgy = bottomCompliant[0];
+                const bestBrgy = topCompliant[0];
+                const worstBrgyName = worstBrgy ? worstBrgy.barangayName : "N/A";
+                const bestBrgyName = bestBrgy ? bestBrgy.barangayName : "N/A";
+                
+                return (
+                  <ChartInterpretation
+                    type={worstBrgy && worstBrgy.rate < 60 ? "warning" : "success"}
+                    title="Compliance Leaderboard Insights"
+                    findings={[
+                      `Highest compliance registered in ${bestBrgyName} (${bestBrgy ? bestBrgy.rate : 0}%).`,
+                      worstBrgy ? `Urgent attention required in ${worstBrgyName} with a low compliance rate of ${worstBrgy.rate}% and ${worstBrgy.totalFlags} flagged locations.` : "All active zones show standard compliance rates above 70%."
+                    ]}
+                    actions={[
+                      worstBrgy ? `Dispatch inspectors to ${worstBrgyName} to resolve unregistered/expired establishments.` : "Continue monitoring low-risk zones to maintain compliance rates.",
+                      "Acknowledge and document successful compliance processes in high-performing zones for regional replication."
+                    ]}
+                  />
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* FULL-WIDTH ENFORCEMENT PROGRESS TRACKER */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
+            {/* Stacked Bar — Enforcement Progress */}
+            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 100%", minWidth: 0 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
+                Enforcement Progress Tracker
+                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
+                  — Flag distribution across all 16 barangays
+                </span>
+              </h3>
+              {loading ? <Skeleton h={300} /> : (
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={enforcementData} margin={{ top: 0, right: 10, left: -20, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} angle={-45} textAnchor="end" interval={0} />
+                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar dataKey="Green"  name="Active Business"  stackId="a" fill={COLOR.green}  radius={[0,0,0,0]} />
+                      <Bar dataKey="Yellow" name="Suspected Unregistered" stackId="a" fill={COLOR.yellow} />
+                      <Bar dataKey="Orange" name="Closed Business" stackId="a" fill={COLOR.orange} />
+                      <Bar dataKey="Red"    name="Detected Unregistered"    stackId="a" fill={COLOR.red} />
+                      <Bar dataKey="Black"  name="Critical Violation"  stackId="a" fill={COLOR.black}  radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {/* Dynamic Stacked Tracker Interpretation */}
+                  {!loading && enforcementData.length > 0 && (() => {
+                    const sortedByViolations = [...(desc?.enforcement_progress || [])]
+                      .map(row => ({
+                        name: row.barangayName,
+                        violations: (row.red_count || 0) + (row.yellow_count || 0) + (row.black_count || 0)
+                      }))
+                      .sort((a, b) => b.violations - a.violations);
+                    const worstBrgy = sortedByViolations[0];
+                    const worstBrgyName = worstBrgy ? worstBrgy.name : "N/A";
+                    const worstBrgyVal = worstBrgy ? worstBrgy.violations : 0;
+
+                    return (
+                      <ChartInterpretation
+                        type={worstBrgyVal > 5 ? "danger" : "info"}
+                        title="Enforcement Progress Insights"
+                        findings={[
+                          `Visual comparative inspection shows flag variance across all 16 municipal zones.`,
+                          worstBrgyVal > 0 ? `Establishments in ${worstBrgyName} present the highest volume of total compliance flags (${worstBrgyVal} issues).` : "No urgent compliance spikes detected across municipal barangays."
+                        ]}
+                        actions={[
+                          worstBrgyVal > 0 ? `Target ${worstBrgyName} with a concentrated enforcement sweep.` : "Continue routine inspections on a standard rotating schedule.",
+                          "Verify that newly resolved/active businesses have updated status codes reflected in registry records."
+                        ]}
+                      />
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          </div>
           {/* COMPLIANCE CONVERSION TIMELINE + BUSINESS SIZE + AUDIT SUMMARY */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 0 }}>
             {/* Line — Compliance Conversion Timeline */}
@@ -778,17 +1228,31 @@ export default function AnalyticsPage() {
                   No timeline data — renewal dates may not be populated yet.
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={timelineData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line type="monotone" dataKey="Active"      stroke={COLOR.green}  strokeWidth={2.5} dot={{ r: 4 }} />
-                    <Line type="monotone" dataKey="Non-Active"  stroke={COLOR.red}    strokeWidth={2.5} dot={{ r: 4 }} strokeDasharray="5 3" />
-                  </LineChart>
-                </ResponsiveContainer>
+                <>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={timelineData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Line type="monotone" dataKey="Active"      stroke={COLOR.green}  strokeWidth={2.5} dot={{ r: 4 }} />
+                      <Line type="monotone" dataKey="Non-Active"  stroke={COLOR.red}    strokeWidth={2.5} dot={{ r: 4 }} strokeDasharray="5 3" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <ChartInterpretation
+                    type="info"
+                    title="Conversion Timeline Insights"
+                    findings={[
+                      "Monitors registration transitions (Active vs Non-Active) over the preceding 12-month period.",
+                      "An ascending Green line confirms positive enforcement response and successful business onboarding."
+                    ]}
+                    actions={[
+                      "Review seasonal peaks to determine BPLO application intake capacity needs.",
+                      "Cross-reference compliance timeline drops with historical registration deadlines."
+                    ]}
+                  />
+                </>
               )}
             </div>
 
@@ -912,18 +1376,42 @@ export default function AnalyticsPage() {
                   No flagged entities detected yet. Run detection first.
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={riskBarData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.4)" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} width={90} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Red"    stackId="a" fill={COLOR.red}    />
-                    <Bar dataKey="Yellow" stackId="a" fill={COLOR.yellow} />
-                    <Bar dataKey="Black"  stackId="a" fill={COLOR.black}  radius={[0,4,4,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={riskBarData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.4)" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} width={90} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar dataKey="Yellow" name="Suspected Unregistered" stackId="a" fill={COLOR.yellow} />
+                      <Bar dataKey="Orange" name="Closed Business" stackId="a" fill={COLOR.orange} />
+                      <Bar dataKey="Red"    name="Detected Unregistered"    stackId="a" fill={COLOR.red}    />
+                      <Bar dataKey="Black"  name="Critical Violation"  stackId="a" fill={COLOR.black}  radius={[0,4,4,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {/* Dynamic Priority Interpretation */}
+                  {!loading && riskBarData.length > 0 && (() => {
+                    const topRisk = riskBarData[0];
+                    const topRiskName = topRisk ? topRisk.name : "N/A";
+                    const topRiskVal = topRisk ? topRisk.total : 0;
+                    
+                    return (
+                      <ChartInterpretation
+                        type={topRiskVal > 8 ? "danger" : "warning"}
+                        title="Diagnostic Risk Index Insights"
+                        findings={[
+                          `Prioritization maps sort active zones based on cumulative flag counts weighted by severity.`,
+                          topRiskVal > 0 ? `${topRiskName} emerges as the primary municipal non-compliance zone with ${topRiskVal} unresolved flags.` : "Geospatial risk indicators are low across the municipality."
+                        ]}
+                        actions={[
+                          topRiskVal > 0 ? `Deploy BPLO enforcement assets to the highest-priority coordinate clusters in ${topRiskName}.` : "Continue micro-cluster scanning to identify hidden unregistered entities.",
+                          "Examine whether proximity to commercial corridors contributes to high flag density."
+                        ]}
+                      />
+                    );
+                  })()}
+                </>
               )}
             </div>
 

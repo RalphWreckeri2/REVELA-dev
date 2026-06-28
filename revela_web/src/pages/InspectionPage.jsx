@@ -16,6 +16,7 @@ import {
   getInspectorsRequest,
   inspectionEvidenceUrl,
 } from "../services/api";
+import Swal from "sweetalert2";
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
 const Icon = {
@@ -81,6 +82,19 @@ const FLAG_COLOR = {
   Yellow: { bg: "var(--color-gold-light)",    text: "var(--color-gold-dark)" },
   Green:  { bg: "var(--color-primary-light)", text: "var(--color-primary)" },
   Black:  { bg: "#1e1e1e22",                  text: "#1a1a1a" },
+  Orange: { bg: "rgba(249, 115, 22, 0.1)",    text: "#ea580c" },
+  "Given First Notice": { bg: "#ffedd5",       text: "#c2410c" },
+};
+
+const getFriendlyFlagLabel = (color) => {
+  return {
+    Green:  "Active Business",
+    Orange: "Closed Business",
+    Yellow: "Suspected Unregistered",
+    Red:    "Detected Unregistered",
+    Black:  "Critical Violation",
+    "Given First Notice": "First Compliance Notice Issued",
+  }[color] || color;
 };
 
 const STATUS_COLOR = {
@@ -96,6 +110,9 @@ function AssignModal({ report, token, onClose, onSuccess }) {
   const [inspectors, setInspectors] = useState([]);
   const [selectedUID, setSelectedUID] = useState(
     () => (report.inspectorID != null ? String(report.inspectorID) : ""),
+  );
+  const [deadline, setDeadline] = useState(
+    () => (report.deadline ? report.deadline.slice(0, 16) : "")
   );
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -128,10 +145,17 @@ function AssignModal({ report, token, onClose, onSuccess }) {
     try {
       const userID = parseInt(selectedUID, 10);
       if (isRedo) {
-        await reassignSubmittedInspectionRequest(report.reportID, userID, token);
+        await reassignSubmittedInspectionRequest(report.reportID, userID, deadline, token);
       } else {
-        await assignInspectionRequest({ logID: report.logID, userID }, token);
+        await assignInspectionRequest({ logID: report.logID, userID, deadline }, token);
       }
+      Swal.fire({
+        icon: 'success',
+        title: isRedo ? 'Task Reassigned' : 'Inspector Dispatched',
+        text: isRedo ? 'The task has been sent back for redo.' : 'The inspection task has been successfully assigned.',
+        timer: 1500,
+        showConfirmButton: false
+      });
       onSuccess();
       onClose();
     } catch (err) {
@@ -193,6 +217,14 @@ function AssignModal({ report, token, onClose, onSuccess }) {
             ))}
           </select>
         )}
+
+        <label style={s.fieldLabel}>Deadline (Optional)</label>
+        <input
+          type="datetime-local"
+          style={{ ...s.fieldSelect, boxSizing: "border-box", marginTop: 4 }}
+          value={deadline}
+          onChange={e => setDeadline(e.target.value)}
+        />
 
         <div style={s.modalFooter}>
           <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
@@ -282,6 +314,12 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
           </div>
         )}
 
+        {report.deadline && (
+          <p style={{ fontSize: 12, color: "var(--color-danger)", marginBottom: report.resolutionTime ? 4 : 16, display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}>
+            <Icon.Clock /> Due: {new Date(report.deadline).toLocaleString()}
+          </p>
+        )}
+
         {report.resolutionTime && (
           <p style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 16, display: "flex", alignItems: "center", gap: 5 }}>
             <Icon.Clock /> Resolved in {report.resolutionTime} min
@@ -348,7 +386,7 @@ function InspectionDetailModal({ report, onClose }) {
 
         <div style={{ background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "16px", marginBottom: 20 }}>
           <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12, marginTop: 0 }}>Assignment Info</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
             <div>
               <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Inspector</span>
               <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600 }}>{report.inspectorName ?? "Unassigned"}</span>
@@ -357,6 +395,12 @@ function InspectionDetailModal({ report, onClose }) {
               <div>
                 <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Resolution Time</span>
                 <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock /> {report.resolutionTime} min</span>
+              </div>
+            )}
+            {report.deadline && (
+              <div>
+                <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Deadline</span>
+                <span style={{ fontSize: 13, color: "var(--color-danger)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock /> {new Date(report.deadline).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -400,7 +444,7 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text }}>
-          <Icon.Flag /> {report.flagColor}
+          <Icon.Flag /> {getFriendlyFlagLabel(report.flagColor)}
         </span>
         <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 600 }}>
           #{report.reportID ?? report.logID}
@@ -459,6 +503,13 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
       {report.resolutionTime && (
         <p style={{ fontSize: 11, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
           <Icon.Clock /> {report.resolutionTime} min
+        </p>
+      )}
+
+      {/* Deadline */}
+      {report.deadline && (
+        <p style={{ fontSize: 11, color: "var(--color-danger)", display: "flex", alignItems: "center", gap: 4, marginTop: 6, fontWeight: 600 }}>
+          <Icon.Clock /> Due: {new Date(report.deadline).toLocaleString()}
         </p>
       )}
 

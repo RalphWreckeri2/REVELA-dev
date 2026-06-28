@@ -404,6 +404,26 @@ export async function deleteFlagRequest(logId, token) {
   }
 }
 
+export async function updateFlagColorRequest(logId, color, token) {
+  if (!token) {
+    throw new Error("Missing authentication token.");
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/flags/${logId}/color`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ color }),
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
 // ── User Management ───────────────────────────────────────────────────────────
 
 export async function getUsersRequest(token) {
@@ -482,7 +502,7 @@ export async function getInspectorTasksRequest(token) {
 /**
  * POST /api/inspections/assign
  * Admin assigns a flag to an inspector.
- * @param {{ logID: number, userID: number }} payload
+ * @param {{ logID: number, userID: number, deadline?: string }} payload
  */
 export async function assignInspectionRequest(payload, token) {
   try {
@@ -507,6 +527,7 @@ export async function assignInspectionRequest(payload, token) {
 export async function reassignSubmittedInspectionRequest(
   reportId,
   userID,
+  deadline,
   token,
 ) {
   try {
@@ -516,7 +537,7 @@ export async function reassignSubmittedInspectionRequest(
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ userID }),
+      body: JSON.stringify({ userID, deadline }),
     });
     return await handleResponse(res);
   } catch (err) {

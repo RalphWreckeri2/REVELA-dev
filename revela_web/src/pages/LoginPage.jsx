@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { requestOtpRequest, resetPasswordRequest, verify2faRequest } from "../services/api";
+import { changePasswordRequest } from "../services/authService";
 import "../styles/LoginPage.css";
 import Swal from "sweetalert2";
 import sealImg from "../assets/seal.png";
@@ -87,6 +88,80 @@ export default function LoginPage() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
+  const forcePasswordChange = async (accessToken) => {
+    let success = false;
+    while (!success) {
+      const { value: formValues } = await Swal.fire({
+        title: 'Forced Password Change',
+        html:
+          '<p style="font-size: 13px; color: var(--color-muted); margin-bottom: 14px;">Your administrator requires you to update your temporary password before accessing the system.</p>' +
+          '<div style="text-align: left; margin-bottom: 12px;">' +
+          '  <label style="font-size: 12px; font-weight: 600; color: var(--color-ink);">Current Temporary Password</label>' +
+          '  <input id="swal-input-old" type="password" class="swal2-input" placeholder="Temporary password" style="width: 100%; margin: 4px 0 0; box-sizing: border-box;">' +
+          '</div>' +
+          '<div style="text-align: left; margin-bottom: 12px;">' +
+          '  <label style="font-size: 12px; font-weight: 600; color: var(--color-ink);">New Password</label>' +
+          '  <input id="swal-input-new" type="password" class="swal2-input" placeholder="Min. 8 characters" style="width: 100%; margin: 4px 0 0; box-sizing: border-box;">' +
+          '</div>' +
+          '<div style="text-align: left; margin-bottom: 12px;">' +
+          '  <label style="font-size: 12px; font-weight: 600; color: var(--color-ink);">Confirm New Password</label>' +
+          '  <input id="swal-input-confirm" type="password" class="swal2-input" placeholder="Repeat new password" style="width: 100%; margin: 4px 0 0; box-sizing: border-box;">' +
+          '</div>',
+        focusConfirm: false,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        confirmButtonText: 'Update Password',
+        confirmButtonColor: '#56ab2f',
+        preConfirm: () => {
+          const oldPw = document.getElementById('swal-input-old').value;
+          const newPw = document.getElementById('swal-input-new').value;
+          const confirmPw = document.getElementById('swal-input-confirm').value;
+
+          if (!oldPw || !newPw || !confirmPw) {
+            Swal.showValidationMessage('Please fill in all password fields.');
+            return false;
+          }
+          if (newPw !== confirmPw) {
+            Swal.showValidationMessage('New passwords do not match.');
+            return false;
+          }
+          if (newPw.length < 8) {
+            Swal.showValidationMessage('New password must be at least 8 characters.');
+            return false;
+          }
+          if (oldPw === newPw) {
+            Swal.showValidationMessage('New password cannot be the same as the old password.');
+            return false;
+          }
+          return { oldPassword: oldPw, newPassword: newPw };
+        }
+      });
+
+      if (!formValues) {
+        continue;
+      }
+
+      try {
+        Swal.showLoading();
+        await changePasswordRequest(formValues, accessToken);
+        success = true;
+        await Swal.fire({
+          icon: 'success',
+          title: 'Success!',
+          text: 'Your password has been changed successfully. Logging you in...',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } catch (err) {
+        await Swal.fire({
+          icon: 'error',
+          title: 'Update Failed',
+          text: err.message || 'Incorrect temporary password or update failed. Please try again.',
+        });
+      }
+    }
+  };
+
   const handleLogin = async () => {
     if (!username || !password) {
       setLoginError("Please enter your email and password.");
@@ -103,13 +178,17 @@ export default function LoginPage() {
         setTempToken(response.tempToken);
         setLoginStep("2fa"); // Change the UI to show OTP input
       } else {
-        Swal.fire({
-          icon: 'success',
-          title: 'Welcome!',
-          text: 'Welcome back, BPLO Officer.',
-          timer: 2000,
-          showConfirmButton: false
-        });
+        if (response?.user?.mustChangePassword) {
+          await forcePasswordChange(response.access_token);
+        } else {
+          Swal.fire({
+            icon: 'success',
+            title: 'Welcome!',
+            text: 'Welcome back, BPLO Officer.',
+            timer: 2000,
+            showConfirmButton: false
+          });
+        }
         navigate("/home");
       }
     } catch (err) {
@@ -200,14 +279,18 @@ const handleVerify2FA = async () => {
     setLoginLoading(true);
     try {
       const response = await verify2faRequest(tempToken, totpCode);
-      await completeLogin(response.access_token);
-      Swal.fire({
-        icon: 'success',
-        title: 'Welcome!',
-        text: 'Welcome back, BPLO Officer.',
-        timer: 2000,
-        showConfirmButton: false
-      });
+      const me = await completeLogin(response.access_token);
+      if (me?.mustChangePassword) {
+        await forcePasswordChange(response.access_token);
+      } else {
+        Swal.fire({
+          icon: 'success',
+          title: 'Welcome!',
+          text: 'Welcome back, BPLO Officer.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      }
       navigate("/home");
     } catch (err) {
       setLoginError(err.message || "Invalid code. Please try again.");

@@ -78,6 +78,27 @@ def _get_all_analytics_inner(F=None):
     expired_count = cur.fetchone()["n"]
 
     cur.execute(
+        "SELECT COUNT(*) AS n FROM official_registry WHERE applicationStatus = 'Closed'"
+        + reg_no_status,
+        reg_no_status_p,
+    )
+    closed_count = cur.fetchone()["n"]
+
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM official_registry WHERE applicationStatus = 'Pending'"
+        + reg_no_status,
+        reg_no_status_p,
+    )
+    pending_count = cur.fetchone()["n"]
+
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM official_registry WHERE YEAR(lastRenewalDate) = YEAR(CURDATE())"
+        + reg_all,
+        reg_all_p,
+    )
+    current_year_count = cur.fetchone()["n"]
+
+    cur.execute(
         "SELECT COUNT(*) AS n FROM geospatial_logs g WHERE g.flagColor != 'Green'" + geo_g,
         geo_g_p,
     )
@@ -90,9 +111,11 @@ def _get_all_analytics_inner(F=None):
     cur.execute(f"""
         SELECT
             b.barangayName,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Green'  THEN g.logID END) AS green_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
-            COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count
         FROM barangays b
         LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
         WHERE 1=1 {brgy_b}
@@ -102,9 +125,11 @@ def _get_all_analytics_inner(F=None):
     enforcement_progress = [
         {
             "barangayName": row["barangayName"],
+            "green_count":  row["green_count"] or 0,
             "red_count":    row["red_count"] or 0,
             "yellow_count": row["yellow_count"] or 0,
             "black_count":  row["black_count"] or 0,
+            "orange_count": row["orange_count"] or 0,
         }
         for row in cur.fetchall()
     ]
@@ -189,7 +214,8 @@ def _get_all_analytics_inner(F=None):
             COUNT(DISTINCT CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
-            COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count
         FROM barangays b
         LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
         WHERE 1=1 {brgy_b}
@@ -204,6 +230,7 @@ def _get_all_analytics_inner(F=None):
             "red_count":     row["red_count"] or 0,
             "yellow_count":  row["yellow_count"] or 0,
             "black_count":   row["black_count"] or 0,
+            "orange_count":  row["orange_count"] or 0,
         }
         for row in cur.fetchall()
     ]
@@ -527,6 +554,9 @@ def _get_all_analytics_inner(F=None):
                 "total_businesses":    total_businesses,
                 "active_count":        active_count,
                 "expired_count":       expired_count,
+                "closed_count":        closed_count,
+                "pending_count":       pending_count,
+                "current_year_count":  current_year_count,
                 "total_flagged":       total_flagged,
                 "compliance_rate":     compliance_rate,
                 "high_risk_barangays": high_risk_barangays,
@@ -621,7 +651,7 @@ def analytics_filter_metadata():
     cur.close()
 
     return jsonify({
-        "flag_colors": ["Green", "Yellow", "Red", "Black"],
+        "flag_colors": ["Green", "Yellow", "Red", "Black", "Orange"],
         "application_statuses": application_statuses,
         "lines_of_business": lines_of_business,
         "business_types": business_types,

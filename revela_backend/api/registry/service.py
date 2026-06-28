@@ -78,7 +78,7 @@ COLUMN_MAP = {
     "permit_date":         "lastRenewalDate",
 }
 
-VALID_STATUSES = {"Active", "Expired", "Revoked", "Pending"}
+VALID_STATUSES = {"Active", "Expired", "Revoked", "Pending", "Closed"}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -174,12 +174,13 @@ def _normalise_status(raw: str) -> str:
         "expired":        "Expired",
         "revoked":        "Revoked",
         "pending":        "Pending",
-        "For Issuance":   "Pending",
+        "for issuance":   "Pending",
         "cancelled":      "Revoked",
         "lapsed":         "Expired",
         "license issued": "Active",
         "issued":         "Active",
         "renewal":        "Active",
+        "closed":         "Closed",
     }
     return mapping.get(str(raw).strip().lower(), "Pending")
 

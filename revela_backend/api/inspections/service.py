@@ -30,6 +30,7 @@ def get_inspector_tasks(user_id):
                 ir.remarks,
                 ir.photoPath,
                 ir.irTimestamp,
+                ir.deadline,
                 ir.nearestLandmark,
                 g.detectedName,
                 g.flagColor,
@@ -49,6 +50,8 @@ def get_inspector_tasks(user_id):
         for row in rows:
             if row.get("irTimestamp"):
                 row["irTimestamp"] = str(row["irTimestamp"])
+            if row.get("deadline"):
+                row["deadline"] = str(row["deadline"])
 
         return {"data": rows, "total": len(rows)}, None
 
@@ -74,6 +77,7 @@ def get_inspector_reports_history(user_id):
                 ir.remarks,
                 ir.photoPath,
                 ir.irTimestamp,
+                ir.deadline,
                 ir.nearestLandmark,
                 g.detectedName,
                 g.flagColor,
@@ -93,6 +97,8 @@ def get_inspector_reports_history(user_id):
         for row in rows:
             if row.get("irTimestamp"):
                 row["irTimestamp"] = str(row["irTimestamp"])
+            if row.get("deadline"):
+                row["deadline"] = str(row["deadline"])
 
         return {"data": rows, "total": len(rows)}, None
 
@@ -102,7 +108,7 @@ def get_inspector_reports_history(user_id):
 
 # ── Assign inspection ─────────────────────────────────────────────────────────
 
-def assign_inspection(log_id, inspector_user_id, assigned_by):
+def assign_inspection(log_id, inspector_user_id, deadline, assigned_by):
     """
     Create an INSPECTION_REPORTS row linking a geospatial log to an inspector.
     targetType is always 'geospatial_log' since we're dispatching from the flag map.
@@ -153,16 +159,16 @@ def assign_inspection(log_id, inspector_user_id, assigned_by):
         if existing:
             cursor.execute("""
                 UPDATE inspection_reports
-                SET userID = %s, verificationStatus = %s
+                SET userID = %s, verificationStatus = %s, deadline = %s
                 WHERE reportID = %s
-            """, (inspector_user_id, new_status, existing["reportID"]))
+            """, (inspector_user_id, new_status, deadline, existing["reportID"]))
             report_id = existing["reportID"]
         else:
             cursor.execute("""
                 INSERT INTO inspection_reports
-                    (userID, targetID, targetType, verificationStatus)
-                VALUES (%s, %s, 'geospatial_log', %s)
-            """, (inspector_user_id, log_id, new_status))
+                    (userID, targetID, targetType, verificationStatus, deadline)
+                VALUES (%s, %s, 'geospatial_log', %s, %s)
+            """, (inspector_user_id, log_id, new_status, deadline))
             report_id = cursor.lastrowid
 
         mysql.connection.commit()
@@ -255,7 +261,7 @@ def submit_inspection(log_id, user_id, inspection_result,
 
 # ── Reassign submitted (redo) ─────────────────────────────────────────────────
 
-def reassign_submitted_report(report_id, inspector_user_id, assigned_by):
+def reassign_submitted_report(report_id, inspector_user_id, deadline, assigned_by):
     """
     Admin sends a submitted report back to the field for redo.
     Clears submission data and sets verificationStatus to Reassigned.
@@ -305,10 +311,11 @@ def reassign_submitted_report(report_id, inspector_user_id, assigned_by):
                 photoPath = NULL,
                 resolutionTime = NULL,
                 nearestLandmark = NULL,
+                deadline = %s,
                 irTimestamp = NOW()
             WHERE reportID = %s
             """,
-            (inspector_user_id, report_id),
+            (inspector_user_id, deadline, report_id),
         )
 
         mysql.connection.commit()
@@ -429,6 +436,7 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
                 ir.remarks,
                 ir.photoPath,
                 ir.irTimestamp,
+                ir.deadline,
                 ir.resolutionTime,
                 ir.nearestLandmark,
                 g.detectedName,
@@ -454,6 +462,8 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
         for row in rows:
             if row.get("irTimestamp"):
                 row["irTimestamp"] = str(row["irTimestamp"])
+            if row.get("deadline"):
+                row["deadline"] = str(row["deadline"])
 
         return {
             "data":     rows,

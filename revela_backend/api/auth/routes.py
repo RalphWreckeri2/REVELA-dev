@@ -42,6 +42,7 @@ def login():
             "userID": user["userID"],
             "fullName": user["fullName"],
             "userRole": user["userRole"],
+            "mustChangePassword": bool(user.get("mustChangePassword", False))
         }
     }), 200
 

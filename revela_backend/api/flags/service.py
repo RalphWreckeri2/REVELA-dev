@@ -104,7 +104,7 @@ def _fetch_places_for_point(lat, lng, radius_m, places_dict):
     return outside_count
 
 
-def _fetch_all_places():
+def _fetch_all_places(progress_cb=None):
     """
     Uses a grid-based search to bypass Google Places API's hard limit of 60 results
     per query. Returns a flat list of place dicts — filtered to municipality bounds.
@@ -120,17 +120,26 @@ def _fetch_all_places():
     step = 0.018
     radius_m = 2000
 
+    # 1. Precalculate grid points to allow progress tracking
+    grid_points = []
     lat = min_lat
     while lat <= max_lat:
         lng = min_lng
         while lng <= max_lng:
             # Buffer the municipality polygon by ~2km to save API calls on far corners
             if _MUNICIPALITY_BOUNDARY.buffer(0.02).contains(Point(lng, lat)):
-                outside = _fetch_places_for_point(
-                    lat, lng, radius_m, places_dict)
-                total_outside += outside
+                grid_points.append((lat, lng))
             lng += step
         lat += step
+
+    total_steps = len(grid_points)
+
+    # 2. Iterate and query each point
+    for idx, (lat, lng) in enumerate(grid_points):
+        if progress_cb:
+            progress_cb(idx, total_steps, lat, lng)
+        outside = _fetch_places_for_point(lat, lng, radius_m, places_dict)
+        total_outside += outside
 
     return list(places_dict.values()), total_outside
 
@@ -248,13 +257,40 @@ def run_detection():
     Returns { new_flags, total_checked, outside_boundary }
     """
     try:
-        places, outside_count = _fetch_all_places()
+        from api.notifications import hub
+
+        def progress_callback(idx, total_steps, lat, lng):
+            percentage = int((idx / total_steps) * 80)
+            hub.publish_to_admins({
+                "type": "detection_progress",
+                "stage": "scanning",
+                "current_step": idx + 1,
+                "total_steps": total_steps,
+                "percentage": percentage,
+                "status": f"Scanning coordinates ({lat:.4f}, {lng:.4f}) — step {idx + 1} of {total_steps}..."
+            })
+
+        places, outside_count = _fetch_all_places(progress_callback)
+
+        hub.publish_to_admins({
+            "type": "detection_progress",
+            "stage": "matching",
+            "percentage": 82,
+            "status": "Loading official business registry database..."
+        })
         registry = _load_registry()
 
         total_checked = len(places)
         new_flags = 0
 
-        for place in places:
+        hub.publish_to_admins({
+            "type": "detection_progress",
+            "stage": "matching",
+            "percentage": 85,
+            "status": f"Cross-referencing {total_checked} detected POIs against official registry..."
+        })
+
+        for idx, place in enumerate(places):
             place_id = place.get("place_id")
             place_name = place.get("name", "Unknown")
             geometry = place.get("geometry") or {}
@@ -288,6 +324,16 @@ def run_detection():
             if _already_flagged(place_id):
                 continue
 
+            # Publish matching progress updates periodically
+            if idx % 5 == 0 or idx == total_checked - 1:
+                percentage = 85 + int(((idx + 1) / (total_checked or 1)) * 12)
+                hub.publish_to_admins({
+                    "type": "detection_progress",
+                    "stage": "matching",
+                    "percentage": percentage,
+                    "status": f"Analyzing geospatial location for “{place_name}” ({idx + 1}/{total_checked})..."
+                })
+
             nearest, dist = _find_nearest(lat, lng, registry)
 
             if nearest is None or dist > THRESHOLD_M:
@@ -298,6 +344,13 @@ def run_detection():
             else:
                 _match_registry_to_google(
                     place_id, nearest['businessID'], nearest['businessName'])
+
+        hub.publish_to_admins({
+            "type": "detection_progress",
+            "stage": "completed",
+            "percentage": 100,
+            "status": f"Scan complete! Discovered {new_flags} new unregistered business{'' if new_flags == 1 else 'es'}."
+        })
 
         return {
             "new_flags":        new_flags,
@@ -355,7 +408,15 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50):
                     WHEN g.flagColor = 'Green' AND g.placeID IS NOT NULL AND r.businessID IS NOT NULL THEN 'registry_and_maps'
                     WHEN g.flagColor = 'Green' AND g.placeID IS NULL THEN 'registry_only'
                     ELSE 'maps_only'
-                END AS flagSource
+                END AS flagSource,
+                (
+                    SELECT verificationStatus
+                    FROM inspection_reports
+                    WHERE targetID = g.logID
+                        AND targetType = 'geospatial_log'
+                    ORDER BY irTimestamp DESC
+                    LIMIT 1
+                ) AS verificationStatus
             FROM geospatial_logs g
             LEFT JOIN barangays b ON g.barangayID = b.barangayID
             LEFT JOIN official_registry r
@@ -388,22 +449,59 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50):
 
 # ── Insert Yellow Flag ────────────────────────────────────────────────────────
 
-def insert_yellow_flag(business_name, lat, lng, barangay_id, notes=None):
-    """Manually insert a Yellow Flag."""
+def insert_yellow_flag(business_name, lat, lng, barangay_id, notes=None, flag_color='Yellow'):
+    """Manually insert a Yellow or Orange Flag."""
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("""
             INSERT INTO geospatial_logs
                 (barangayID, reportID, detectedName, latitude, longitude,
                  flagColor, nearestLandmark)
-            VALUES (%s, NULL, %s, %s, %s, 'Yellow', %s)
-        """, (barangay_id, business_name, lat, lng, notes))
+            VALUES (%s, NULL, %s, %s, %s, %s, %s)
+        """, (barangay_id, business_name, lat, lng, flag_color, notes))
         mysql.connection.commit()
         log_id = cursor.lastrowid
         cursor.close()
         return {"logID": log_id}, None
     except Exception as e:
         return None, str(e)
+
+
+def update_flag_color(log_id, color):
+    """Update a flag's color manually (e.g. to Orange, Yellow, Red, Black, Green)."""
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute("SELECT flagColor, detectedName, barangayID FROM geospatial_logs WHERE logID = %s", (log_id,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            return False, "Flag not found"
+
+        cursor.execute("""
+            UPDATE geospatial_logs
+            SET flagColor = %s
+            WHERE logID = %s
+        """, (color, log_id))
+        
+        # Propagate changes: if marked Orange, set registry status to Closed
+        if color == 'Orange':
+            cursor.execute("""
+                UPDATE official_registry
+                SET applicationStatus = 'Closed'
+                WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
+            """, (row["detectedName"], row["barangayID"]))
+        elif color == 'Green' and row["flagColor"] == 'Orange':
+            cursor.execute("""
+                UPDATE official_registry
+                SET applicationStatus = 'Active'
+                WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s AND applicationStatus = 'Closed'
+            """, (row["detectedName"], row["barangayID"]))
+
+        mysql.connection.commit()
+        cursor.close()
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 
 # ── Escalate to Black Flag ────────────────────────────────────────────────────

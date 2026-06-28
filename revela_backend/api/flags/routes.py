@@ -3,6 +3,7 @@ from api.flags.service import (
     run_detection,
     get_flags,
     insert_yellow_flag,
+    update_flag_color,
     escalate_to_black,
     delete_flag,
 )
@@ -48,12 +49,16 @@ def get_flags_route():
 @flags_bp.route("/yellow", methods=["POST"])
 @admin_required()
 def yellow_flag_route():
-    """Manually insert a Yellow Flag."""
+    """Manually insert a Yellow or Orange Flag."""
     data = request.get_json()
 
     required = ["businessName", "lat", "lng", "barangayID"]
     if not data or not all(k in data for k in required):
         return jsonify({"error": f"Required fields: {required}"}), 400
+
+    flag_color = data.get("flagColor", "Yellow")
+    if flag_color not in ("Yellow", "Orange"):
+        return jsonify({"error": "Invalid flag color for manual creation"}), 400
 
     result, error = insert_yellow_flag(
         business_name=data["businessName"],
@@ -61,6 +66,7 @@ def yellow_flag_route():
         lng=data["lng"],
         barangay_id=data["barangayID"],
         notes=data.get("notes"),
+        flag_color=flag_color,
     )
     if error:
         return jsonify({"error": error}), 500
@@ -76,6 +82,26 @@ def black_flag_route(log_id):
     if not success:
         return jsonify({"error": error}), 400
     return jsonify({"message": f"Flag #{log_id} escalated to Black"}), 200
+
+
+# ── PATCH /api/flags/:id/color ────────────────────────────────────────────────
+@flags_bp.route("/<int:log_id>/color", methods=["PATCH"])
+@admin_required()
+def change_flag_color_route(log_id):
+    """Update a flag's color manually (e.g. to Orange, Yellow, Red, Black, Green)."""
+    data = request.get_json()
+    if not data or "color" not in data:
+        return jsonify({"error": "Missing 'color' parameter"}), 400
+
+    color = data["color"]
+    valid_colors = {"Red", "Yellow", "Black", "Green", "Orange"}
+    if color not in valid_colors:
+        return jsonify({"error": f"Invalid color. Must be one of {valid_colors}"}), 400
+
+    success, error = update_flag_color(log_id, color)
+    if not success:
+        return jsonify({"error": error}), 400
+    return jsonify({"message": f"Flag #{log_id} color updated to {color}"}), 200
 
 
 # ── DELETE /api/flags/:id ─────────────────────────────────────────────────────

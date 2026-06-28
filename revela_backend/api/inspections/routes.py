@@ -24,7 +24,8 @@ inspections_bp = Blueprint("inspections", __name__)
 
 _EVIDENCE_DIR = os.path.abspath(
     os.path.join(
-        os.path.dirname(__file__), "..", "..", "instance", "inspection_evidence"
+        os.path.dirname(
+            __file__), "..", "..", "instance", "inspection_evidence"
     )
 )
 
@@ -108,9 +109,14 @@ def assign():
     if not data or not all(k in data for k in required):
         return jsonify({"error": f"Required fields: {required}"}), 400
 
+    deadline = data.get("deadline")
+    if not deadline:
+        deadline = None
+
     result, error = assign_inspection(
         log_id=data["logID"],
         inspector_user_id=data["userID"],
+        deadline=deadline,
         assigned_by=assigned_by,
     )
     if error:
@@ -181,9 +187,14 @@ def reassign_submitted(report_id):
     if not data or "userID" not in data:
         return jsonify({"error": "userID is required"}), 400
 
+    deadline = data.get("deadline")
+    if not deadline:
+        deadline = None
+
     result, error = reassign_submitted_report(
         report_id=report_id,
         inspector_user_id=data["userID"],
+        deadline=deadline,
         assigned_by=get_jwt_identity(),
     )
     if error:

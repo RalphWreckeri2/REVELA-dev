@@ -19,10 +19,11 @@ const MAP_LIBRARIES = ["places", "marker"];
 const DEFAULT_CENTER = { lat: 13.9667, lng: 121.1167 };
 
 const FLAG_COLORS = {
-  Red:    { marker: "#ef4444", bg: "#fee2e2", text: "#b91c1c", label: "Unregistered"   },
-  Yellow: { marker: "#f59e0b", bg: "#fef3c7", text: "#92400e", label: "Suspected"      },
-  Black:  { marker: "#1e293b", bg: "#f1f5f9", text: "#1e293b", label: "Non-Responsive" },
-  Green:  { marker: "#22c55e", bg: "#dcfce7", text: "#15803d", label: "Compliant"      },
+  Red:    { marker: "#ef4444", bg: "#fee2e2", text: "#b91c1c", label: "Detected Unregistered" },
+  Yellow: { marker: "#f59e0b", bg: "#fef3c7", text: "#92400e", label: "Suspected Unregistered" },
+  Orange: { marker: "#f97316", bg: "#ffedd5", text: "#c2410c", label: "Closed Business" },
+  Black:  { marker: "#1e293b", bg: "#f1f5f9", text: "#1e293b", label: "Critical Violation" },
+  Green:  { marker: "#22c55e", bg: "#dcfce7", text: "#15803d", label: "Active Business" },
 };
 const defaultColor = { marker: "#94a3b8", bg: "#f1f5f9", text: "#64748b", label: "Unknown" };
 const getFlagColor = (c) => FLAG_COLORS[c] ?? defaultColor;
@@ -96,7 +97,7 @@ function QuickActionsWidget({ navigate }) {
           Dispatch Inspector
         </button>
         <button className="ghost-btn" onClick={() => navigate('/map')} style={{ justifyContent: 'center' }}>
-          Manually Add Yellow Flag
+          Manually Add Flag
         </button>
         <button className="ghost-btn" onClick={() => navigate('/map')} style={{ justifyContent: 'center' }}>
           Run Detection Engine

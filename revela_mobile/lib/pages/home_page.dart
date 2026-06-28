@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../component/app_sidebar.dart';
 import '../component/inspection_card.dart';
+import '../component/inspection_modal.dart';
 import '../service/assignment_notifications.dart';
 import '../service/in_app_notifications_service.dart';
 import '../service/inspection_service.dart';
@@ -272,7 +273,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
-          _InspectionModal(task: task, onSubmitted: () => _fetchTasks()),
+          InspectionModal(task: task, onSubmitted: () => _fetchTasks()),
     );
   }
 

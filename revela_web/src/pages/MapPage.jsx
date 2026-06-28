@@ -21,6 +21,7 @@ import {
   getDiagnosticClustersRequest,
   updateFlagLocationRequest,
   deleteFlagRequest,
+  updateFlagColorRequest,
 } from "../services/api";
 import Swal from "sweetalert2";
 
@@ -135,10 +136,11 @@ const LAYER_OPTIONS = [
 
 // Flag color → UI color mapping
 const FLAG_COLORS = {
-  Red:    { marker: "#ef4444", bg: "#fee2e2", text: "#b91c1c", label: "Unregistered" },
-  Yellow: { marker: "#f59e0b", bg: "#fef3c7", text: "#92400e", label: "Suspected"    },
-  Black:  { marker: "#1e293b", bg: "#f1f5f9", text: "#1e293b", label: "Non-Responsive" },
-  Green:  { marker: "#22c55e", bg: "#dcfce7", text: "#15803d", label: "Compliant"    },
+  Red:    { marker: "#ef4444", bg: "#fee2e2", text: "#b91c1c", label: "Detected Unregistered" },
+  Yellow: { marker: "#f59e0b", bg: "#fef3c7", text: "#92400e", label: "Suspected Unregistered" },
+  Orange: { marker: "#f97316", bg: "#ffedd5", text: "#c2410c", label: "Closed Business" },
+  Black:  { marker: "#1e293b", bg: "#f1f5f9", text: "#1e293b", label: "Critical Violation" },
+  Green:  { marker: "#22c55e", bg: "#dcfce7", text: "#15803d", label: "Active Business" },
 };
 
 const defaultColor = { marker: "#94a3b8", bg: "#f1f5f9", text: "#64748b", label: "Unknown" };
@@ -197,7 +199,7 @@ function getFlagColor(flagColor) {
 }
 
 /** Higher = more severe — used so mixed clusters show the worst color, not green. */
-const FLAG_SEVERITY_RANK = { Green: 1, Yellow: 2, Red: 3, Black: 4 };
+const FLAG_SEVERITY_RANK = { Green: 1, Orange: 2, Yellow: 3, Red: 4, Black: 5 };
 
 function flagSeverityRank(flagColor) {
   return FLAG_SEVERITY_RANK[flagColor] ?? 0;
@@ -235,6 +237,10 @@ function normalizeFlag(flag) {
     flag.latitude != null && flag.longitude != null
       ? `${Number(flag.latitude).toFixed(6)}°N, ${Number(flag.longitude).toFixed(6)}°E`
       : "No coordinates";
+        
+  const hasActiveInspection = flag.verificationStatus === 'Assigned' || 
+                              flag.verificationStatus === 'Reassigned' || 
+                              flag.hasActiveInspection === true;
 
   return {
     ...flag,
@@ -246,120 +252,518 @@ function normalizeFlag(flag) {
     size:     flag.businessSize ?? "—",                 
     coords,
     color,
+    verificationStatus: flag.verificationStatus,
+    hasActiveInspection
   };
 }
 
 // ── Flag Detail Modal ─────────────────────────────────────────────────────────
-function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocation, onDelete, isAdmin, actionLoading }) {
+function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocation, onDelete, onUpdateColor, isAdmin, actionLoading }) {
   const fc = getFlagColor(flag.color);
+
+  // Source labels
+  const sourceLabel = flag.source === "registry_and_maps"
+    ? "Registry & Google Maps"
+    : flag.source === "maps_only"
+    ? "Google Maps Only"
+    : "Official BPLO Registry";
 
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
-      <div style={styles.detailModal} onClick={e => e.stopPropagation()}>
+      <div 
+        style={{ 
+          ...styles.detailModal, 
+          width: "min(100%, 460px)", 
+          borderRadius: 24,
+          background: "#ffffff",
+          boxShadow: "0 20px 50px rgba(15, 23, 42, 0.12), 0 0 30px rgba(148, 163, 184, 0.03)",
+          border: "1px solid rgba(226, 232, 240, 0.8)",
+          overflow: "hidden"
+        }} 
+        onClick={e => e.stopPropagation()}
+      >
 
-        {/* Header strip */}
-        <div style={{ ...styles.detailHeader, background: fc.bg }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Color dot */}
-            <span style={{ width: 12, height: 12, borderRadius: "50%", background: fc.marker, flexShrink: 0, display: "inline-block" }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: fc.text, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        {/* Floating Transparent Header Block */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ 
+              display: "inline-flex", 
+              alignItems: "center", 
+              gap: 6, 
+              background: fc.bg, 
+              color: fc.text, 
+              padding: "5px 12px", 
+              borderRadius: 12, 
+              fontSize: 10, 
+              fontWeight: 800, 
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              border: `1px solid ${fc.marker}15`
+            }}>
+              <span style={{ 
+                width: 6, 
+                height: 6, 
+                borderRadius: "50%", 
+                background: fc.marker,
+                boxShadow: `0 0 8px ${fc.marker}` 
+              }} />
               {fc.label}
             </span>
           </div>
-          <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
+          <button 
+            style={{ 
+              width: 32, 
+              height: 32, 
+              borderRadius: "50%", 
+              border: "1px solid rgba(226, 232, 240, 0.8)", 
+              background: "#ffffff", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              cursor: "pointer", 
+              color: "#64748b",
+              transition: "all 0.2s"
+            }} 
+            onClick={onClose}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#0f172a"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.color = "#64748b"; }}
+          >
+            <Icon.X />
+          </button>
         </div>
 
-        {/* Body */}
-        <div style={styles.detailBody}>
-          <h2 style={styles.detailName}>{flag.name}</h2>
+        {/* Subtle separator */}
+        <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", margin: "0 24px" }} />
 
-          <div style={styles.detailGrid}>
-            {[
-              ["Log ID",      `#${flag.id}`],
-              ["Barangay",    flag.barangay  || "—"],
-              ["Address",     flag.address   || "—"],
-              ["Business Size", flag.size      || "—"],
-              ["Source",      flag.source === "registry_and_maps"
-                              ? "✅ In Registry & Google Maps"
-                              : flag.source === "maps_only"
-                              ? "🗺️ Google Maps Only"
-                              : "📋 In Registry"],
-              // -------------------------------
-              ["Coordinates", flag.coords],
-              ["Detected",    flag.detectedDate ? flag.detectedDate.slice(0, 10) : "—"],
-              ["Flag Status", flag.color],
-            ].map(([label, value]) => (
-              <div key={label} style={styles.detailRow}>
-                <span style={styles.detailLabel}>{label}</span>
-                <span style={styles.detailValue}>
-                  {label === "Flag Status"
-                    ? <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text }}>{fc.label}</span>
-                    : value}
+        {/* Modal Body */}
+        <div style={{ padding: "20px 24px" }}>
+          
+          {/* Establishment Title */}
+          <h2 style={{ 
+            fontSize: 22, 
+            color: "#0f172a", 
+            fontWeight: 800, 
+            letterSpacing: "-0.02em", 
+            margin: "0 0 10px", 
+            lineHeight: 1.25 
+          }}>
+            {flag.name}
+          </h2>
+          
+          {/* Metadata Chips Row */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+            <span style={{ 
+              background: "rgba(71, 85, 105, 0.05)", 
+              color: "#475569", 
+              padding: "4px 10px", 
+              borderRadius: 8, 
+              fontSize: 11, 
+              fontWeight: 700, 
+              border: "1px solid rgba(71, 85, 105, 0.1)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4
+            }}>
+              <span>#</span>ID: {flag.id}
+            </span>
+            <span style={{ 
+              background: "rgba(59, 130, 246, 0.05)", 
+              color: "#1d4ed8", 
+              padding: "4px 10px", 
+              borderRadius: 8, 
+              fontSize: 11, 
+              fontWeight: 700, 
+              border: "1px solid rgba(59, 130, 246, 0.1)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4
+            }}>
+              📍 {flag.barangay || "Mataasnakahoy"}
+            </span>
+            <span style={{ 
+              background: "rgba(124, 58, 237, 0.05)", 
+              color: "#6d28d9", 
+              padding: "4px 10px", 
+              borderRadius: 8, 
+              fontSize: 11, 
+              fontWeight: 700, 
+              border: "1px solid rgba(124, 58, 237, 0.1)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4
+            }}>
+              🏢 {flag.size || "—"} Size
+            </span>
+          </div>
+
+          {/* Section Divider */}
+          <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+
+          {/* Location & Address Row (Seamless) */}
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 18 }}>
+            <div style={{ 
+              marginTop: 2, 
+              color: fc.marker, 
+              background: fc.bg, 
+              padding: 6, 
+              borderRadius: "50%", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              border: `1px solid ${fc.marker}15`
+            }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <circle cx="12" cy="10" r="3"/>
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+              </svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <strong style={{ display: "block", color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                Location & Address
+              </strong>
+              <span style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, lineHeight: 1.5 }}>
+                {flag.address || "No address description provided."}
+              </span>
+            </div>
+          </div>
+
+          {/* Section Divider */}
+          <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+
+          {/* Details Row (Seamless 2-column) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 18 }}>
+            {/* Left Column: Source */}
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <div style={{ 
+                marginTop: 2, 
+                color: "#3b82f6", 
+                background: "rgba(59, 130, 246, 0.05)", 
+                padding: 6, 
+                borderRadius: "50%", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center"
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                  <polyline points="10 9 9 9 8 9"/>
+                </svg>
+              </div>
+              <div>
+                <span style={{ display: "block", color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>
+                  Record Source
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>
+                  {sourceLabel}
                 </span>
               </div>
-            ))}
+            </div>
+
+            {/* Right Column: Detected Date */}
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <div style={{ 
+                marginTop: 2, 
+                color: "#10b981", 
+                background: "rgba(16, 185, 129, 0.05)", 
+                padding: 6, 
+                borderRadius: "50%", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center"
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+              </div>
+              <div>
+                <span style={{ display: "block", color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>
+                  Detected Date
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>
+                  {flag.detectedDate ? flag.detectedDate.slice(0, 10) : "—"}
+                </span>
+              </div>
+            </div>
           </div>
+
+          {/* Section Divider */}
+          <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+
+          {/* Active Inspection Warning Pill (Seamless overlay) */}
+          {flag.hasActiveInspection && (
+            <>
+              <div style={{ 
+                background: "rgba(59,130,246,0.05)", 
+                border: "1px solid rgba(59,130,246,0.1)", 
+                borderRadius: 12, 
+                padding: "10px 14px", 
+                display: "flex", 
+                alignItems: "center", 
+                gap: 10, 
+                fontSize: 11, 
+                fontWeight: 600, 
+                color: "#2563eb", 
+                marginBottom: 18 
+              }}>
+                <span style={{ display: "flex", color: "#2563eb" }}><Icon.Radar /></span>
+                <span>Active inspection patrol is ongoing at this location.</span>
+              </div>
+              <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+            </>
+          )}
+
+          {/* Telemetry Geospatial Section (Seamless Coordinates) */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ color: "#64748b", display: "flex" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="22" y1="12" x2="18" y2="12"/>
+                  <line x1="6" y1="12" x2="2" y2="12"/>
+                  <line x1="12" y1="6" x2="12" y2="2"/>
+                  <line x1="12" y1="22" x2="12" y2="18"/>
+                </svg>
+              </div>
+              <span style={{ color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Geospatial Coordinates
+              </span>
+            </div>
+            <span style={{ fontFamily: "monospace", color: "#0f172a", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em" }}>
+              {flag.latitude ? `${Number(flag.latitude).toFixed(6)}°, ${Number(flag.longitude).toFixed(6)}°` : flag.coords}
+            </span>
+          </div>
+
         </div>
 
-        {/* Footer actions */}
-        <div style={{ ...styles.detailFooter, flexDirection: "column", alignItems: "stretch", gap: 16 }}>
-          {/* Primary Actions */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
-            <button className="ghost-btn" onClick={onClose}>Close</button>
+        {/* Subtle separator */}
+        <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", margin: "0" }} />
+
+        {/* Footer Actions (Seamless pure white container) */}
+        <div style={{ padding: "20px 24px 24px", background: "#ffffff", display: "flex", flexDirection: "column", gap: 12 }}>
+          
+          {/* Primary Action Buttons */}
+          <div style={{ display: "flex", gap: 10, width: "100%" }}>
+            {isAdmin && flag.color !== "Orange" && (
+              <button
+                className="primary-btn"
+                style={{ 
+                  background: "#ea580c", 
+                  borderColor: "#ea580c", 
+                  color: "#ffffff",
+                  flex: 1, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  gap: 6, 
+                  height: 40,
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(234, 88, 12, 0.15)",
+                  transition: "all 0.2s"
+                }}
+                disabled={actionLoading}
+                onClick={() => onUpdateColor(flag.id, "Orange")}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#d94e0b"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#ea580c"; e.currentTarget.style.transform = "none"; }}
+              >
+                Mark as Closed
+              </button>
+            )}
+            {isAdmin && flag.color === "Orange" && (
+              <button
+                className="primary-btn"
+                style={{ 
+                  background: "#16a34a", 
+                  borderColor: "#16a34a", 
+                  color: "#ffffff",
+                  flex: 1, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  gap: 6, 
+                  height: 40,
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(22, 163, 74, 0.15)",
+                  transition: "all 0.2s"
+                }}
+                disabled={actionLoading}
+                onClick={() => onUpdateColor(flag.id, "Green")}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#15803d"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#16a34a"; e.currentTarget.style.transform = "none"; }}
+              >
+                Mark as Active
+              </button>
+            )}
+            
             {isAdmin && (flag.color === "Red" || flag.color === "Yellow") && (
-              <>
-                <button
-                  className="ghost-btn"
-                  style={{ display: "flex", alignItems: "center", gap: 6 }}
-                  disabled={actionLoading}
-                  onClick={() => onAdjustLocation(flag)}
-                >
-                  <Icon.Crosshair /> Adjust
-                </button>
-                <button
-                  className="primary-btn"
-                  style={{ background: "#3b82f6", borderColor: "#3b82f6", display: "flex", alignItems: "center", gap: 6 }}
-                  disabled={actionLoading}
-                  onClick={() => onDispatch(flag)}
-                >
-                  <Icon.Send /> Dispatch
-                </button>
-                <button
-                  className="primary-btn"
-                  style={{ background: "#1e293b", borderColor: "#1e293b" }}
-                  disabled={actionLoading}
-                  onClick={() => onEscalate(flag.id)}
-                >
-                  {actionLoading ? "Escalating…" : "Escalate"}
-                </button>
-              </>
+              <button
+                className="primary-btn"
+                style={{ 
+                  background: "#3b82f6", 
+                  borderColor: "#3b82f6", 
+                  color: "#ffffff",
+                  flex: 1.4, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  gap: 6, 
+                  height: 40,
+                  borderRadius: 12,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(59, 130, 246, 0.15)",
+                  transition: "all 0.2s"
+                }}
+                disabled={actionLoading}
+                onClick={() => onDispatch(flag)}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#2563eb"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#3b82f6"; e.currentTarget.style.transform = "none"; }}
+              >
+                <Icon.Send /> {flag.hasActiveInspection ? "Reassign Patrol" : "Dispatch Inspector"}
+              </button>
             )}
           </div>
 
-          {/* Secondary Actions */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--color-border-soft)", paddingTop: 16 }}>
-            {isAdmin ? (
+          {/* Secondary Utility Controls */}
+          {isAdmin && (flag.color === "Red" || flag.color === "Yellow") && (
+            <div style={{ display: "flex", gap: 8, width: "100%", borderBottom: "1px solid rgba(226, 232, 240, 0.5)", paddingBottom: 12, marginBottom: 4 }}>
               <button
-                className="ghost-btn"
-                style={{ color: "var(--color-danger)", padding: "6px 12px", fontSize: 12, borderColor: "transparent" }}
+                style={{ 
+                  flex: 1, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  gap: 5, 
+                  fontSize: 12, 
+                  fontWeight: 600,
+                  height: 34, 
+                  borderRadius: 8,
+                  border: "1px solid rgba(226, 232, 240, 0.8)",
+                  background: "#ffffff",
+                  color: "#475569",
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                }}
                 disabled={actionLoading}
-                onClick={() => onDelete(flag.id)}
+                onClick={() => onAdjustLocation(flag)}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.color = "#0f172a"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.color = "#475569"; }}
               >
-                Delete Flag
+                <Icon.Crosshair /> Adjust pin
               </button>
-            ) : <div />}
+              <button
+                style={{ 
+                  flex: 1, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  gap: 5, 
+                  fontSize: 12, 
+                  fontWeight: 600,
+                  height: 34, 
+                  borderRadius: 8,
+                  border: "1px solid rgba(220, 38, 38, 0.15)",
+                  background: "#ffffff",
+                  color: "#dc2626",
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                }}
+                disabled={actionLoading}
+                onClick={() => onEscalate(flag.id)}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(220, 38, 38, 0.03)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
+              >
+                <Icon.AlertTriangle /> Escalate Black
+              </button>
+            </div>
+          )}
+
+          {/* Small Row: Delete, Dismiss, and Google Maps Link */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", fontSize: 12 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              {isAdmin && (
+                <button
+                  style={{ 
+                    color: "#ef4444", 
+                    background: "none",
+                    border: "none",
+                    padding: "4px 8px", 
+                    fontSize: 12, 
+                    fontWeight: 600,
+                    height: 28,
+                    cursor: "pointer",
+                    borderRadius: 4,
+                    transition: "background 0.15s"
+                  }}
+                  disabled={actionLoading}
+                  onClick={() => onDelete(flag.id)}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.05)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                >
+                  Delete Flag
+                </button>
+              )}
+              <button 
+                style={{ 
+                  color: "#64748b",
+                  background: "none",
+                  border: "none",
+                  padding: "4px 8px", 
+                  fontSize: 12, 
+                  fontWeight: 600,
+                  height: 28,
+                  cursor: "pointer",
+                  borderRadius: 4,
+                  transition: "background 0.15s"
+                }} 
+                onClick={onClose}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+              >
+                Dismiss
+              </button>
+            </div>
+
             {flag.latitude && (
               <a
                 href={`https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}`}
                 target="_blank"
                 rel="noreferrer"
-                className="ghost-btn"
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, textDecoration: "none", padding: "6px 12px", fontSize: 12 }}
+                style={{ 
+                  display: "inline-flex", 
+                  alignItems: "center", 
+                  gap: 4, 
+                  textDecoration: "none", 
+                  padding: "4px 10px", 
+                  fontSize: 12, 
+                  fontWeight: 700,
+                  height: 28,
+                  borderRadius: 6,
+                  border: "1px solid rgba(59, 130, 246, 0.2)",
+                  background: "#ffffff",
+                  color: "#2563eb",
+                  transition: "all 0.15s"
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(59, 130, 246, 0.04)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
               >
-                <Icon.ExternalLink /> View on Google Maps
+                <Icon.ExternalLink /> Open Map
               </a>
             )}
           </div>
+
         </div>
       </div>
     </div>
@@ -479,6 +883,9 @@ function FullFlagListModal({ flags, onClose, onSelectFlag }) {
                     </td>
                     <td style={styles.td}>
                       <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text }}>{fc.label}</span>
+                      {f.hasActiveInspection && (
+                        <span style={{ marginLeft: 6, fontSize: 11 }} title="Inspection Ongoing">🔍</span>
+                      )}
                     </td>
                     <td style={styles.td}>
                       <button
@@ -501,7 +908,7 @@ function FullFlagListModal({ flags, onClose, onSelectFlag }) {
 }
 
 // ── Map Canvas ────────────────────────────────────────────────────────────────
-function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, barangayRiskLevels, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, satellite, clusters, barangayRedFlagCounts, adjustingFlagId, adjustingLatLng, onAdjustDragEnd }) {
+function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, barangayRiskLevels, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, detectionProgress, elapsedTime, satellite, clusters, barangayRedFlagCounts, adjustingFlagId, adjustingLatLng, onAdjustDragEnd }) {
   const markerRefs      = useRef(new Map());
   const internalMapRef  = useRef(null);
   const clusterRef      = useRef(null); 
@@ -702,6 +1109,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
 
   // Build a proper pin-shaped SVG marker element
   const buildMarkerContent = useCallback((flag, selected) => {
+    console.log(`[marker] ${flag.name} | hasActiveInspection=${flag.hasActiveInspection} | verificationStatus=${flag.verificationStatus}`);
     const fc = getFlagColor(flag.color);
     const color = selected ? "#2563eb" : fc.marker;
     const size  = selected ? 36 : 30;
@@ -713,14 +1121,30 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
       cursor: pointer;
       filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
       transition: transform 0.15s;
+      position: relative;
     `;
-    el.innerHTML = `
-      <svg viewBox="0 0 24 32" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 20 12 20s12-11 12-20C24 5.37 18.63 0 12 0z"
-          fill="${color}" />
+      
+    let innerHtml = `
+      <svg viewBox="0 0 24 32" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible;">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 20 12 20s12-11 12-20C24 5.37 18.63 0 12 0z" fill="${color}" />
         <circle cx="12" cy="12" r="5" fill="white" opacity="0.9"/>
       </svg>
     `;
+    
+    if (flag.hasActiveInspection) {
+      innerHtml += `
+        <div style="position: absolute; top: -4px; right: -4px; background: white; border-radius: 50%; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 10;">
+          <div style="background: #3b82f6; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+               <circle cx="11" cy="11" r="8"></circle>
+               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+             </svg>
+          </div>
+        </div>
+      `;
+    }
+    
+    el.innerHTML = innerHtml;
     el.title = flag.name;
     return el;
   }, []);
@@ -785,6 +1209,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
       }
 
       marker._revelaFlagColor = flag.color;
+      marker._revelaHasActiveInspection = flag.hasActiveInspection;
       markerRefs.current.set(flag.id, marker);
     });
 
@@ -800,6 +1225,7 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
       renderer: {
         render: (cluster /* , stats, map */) => {
           const { count, position, markers: clusterMarkers } = cluster;
+          const hasInspection = clusterMarkers.some(m => m._revelaHasActiveInspection);
           const dominant = getDominantFlagColorFromMarkers(clusterMarkers);
           const fc = getFlagColor(dominant);
           const sev = flagSeverityRank(dominant);
@@ -822,8 +1248,24 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
             cursor: pointer;
             box-shadow: 0 2px 8px rgba(0,0,0,0.25);
             text-shadow: ${dominant === "Yellow" ? "none" : "0 1px 2px rgba(0,0,0,0.35)"};
+            position: relative;
           `;
-          el.textContent = count;
+          
+          let html = `<span>${count}</span>`;
+          if (hasInspection) {
+            html += `
+              <div style="position: absolute; top: -6px; right: -6px; background: white; border-radius: 50%; padding: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 10;">
+                <div style="background: #3b82f6; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                     <circle cx="11" cy="11" r="8"></circle>
+                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                   </svg>
+                </div>
+              </div>
+            `;
+          }
+          
+          el.innerHTML = html;
           el.title = `${count} flags (${fc.label})`;
 
           return new window.google.maps.marker.AdvancedMarkerElement({
@@ -933,14 +1375,124 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
       </div>
 
       {/* Detection overlay */}
-      {runDetectionLoading && (
-        <div style={styles.overlay}>
-          <div style={styles.overlayCard}>
-            <strong>Running detection…</strong>
-            <span style={{ fontSize: 12, opacity: 0.7 }}>This may take up to 30 seconds.</span>
+      {runDetectionLoading && (() => {
+        let etrText = "Calculating ETR...";
+        if (detectionProgress) {
+          const { stage, percentage, current_step, total_steps } = detectionProgress;
+          if (stage === "scanning" && current_step && total_steps) {
+            if (current_step > 0 && elapsedTime > 0) {
+              const timePerStep = elapsedTime / current_step;
+              const remainingSteps = total_steps - current_step;
+              const remainingMs = remainingSteps * timePerStep;
+              // Add a 3 second buffer for matching stage
+              const totalRemainingSeconds = Math.round(remainingMs + 3);
+              if (totalRemainingSeconds > 0) {
+                etrText = `~${totalRemainingSeconds}s remaining`;
+              } else {
+                etrText = "Finishing up...";
+              }
+            } else {
+              // Initial fallback based on total steps (typical 2s/step)
+              etrText = `~${total_steps * 2}s remaining`;
+            }
+          } else if (stage === "matching") {
+            etrText = "Finishing up...";
+          } else if (stage === "completed" || percentage >= 100) {
+            etrText = "Scan Complete!";
+          }
+        }
+
+        return (
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(15, 23, 42, 0.45)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            zIndex: 200,
+            transition: "all 0.3s ease"
+          }}>
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+              color: "#fff",
+              background: "linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.98))",
+              borderRadius: 24,
+              padding: "24px 28px",
+              width: "min(92%, 400px)",
+              boxShadow: "0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              fontFamily: "var(--font-base)",
+              boxSizing: "border-box"
+            }}>
+              {/* Header section with radar and title */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: 14 }}>
+                <div style={{ position: "relative", width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(86, 171, 47, 0.15)", border: "1px solid rgba(86, 171, 47, 0.3)", flexShrink: 0 }}>
+                  {/* Radar pulsing ring */}
+                  <div style={{ position: "absolute", inset: -4, borderRadius: "50%", border: "2px solid var(--color-primary)", opacity: 0.6, animation: "ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite" }} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", animation: "spin 3s linear infinite" }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="2" />
+                      <path d="M12 2a10 10 0 0 1 10 10" />
+                      <path d="M12 6a6 6 0 0 1 6 6" />
+                    </svg>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", color: "#f8fafc" }}>Geospatial Scan Active</span>
+                  <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>REVELA Engine v2.0</span>
+                </div>
+              </div>
+
+              {/* Status updates */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: 11, color: "#a8e063", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                    {detectionProgress?.stage === "scanning" ? "🔍 Bounded Map Scan" : detectionProgress?.stage === "matching" ? "📑 Cross-Referencing" : "⚡ Initializing"}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#f1f5f9" }}>
+                    {detectionProgress?.percentage ?? 0}%
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ width: "100%", height: 8, background: "rgba(15, 23, 42, 0.6)", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <div 
+                    style={{ 
+                      width: `${detectionProgress?.percentage ?? 0}%`, 
+                      height: "100%", 
+                      background: "linear-gradient(90deg, #56ab2f, #a8e063, #56ab2f)", 
+                      backgroundSize: "200% 100%",
+                      borderRadius: 10, 
+                      transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                      animation: "progress-shimmer 2.5s linear infinite" 
+                    }} 
+                  />
+                </div>
+
+                <div style={{ fontSize: 12, color: "#cbd5e1", lineHeight: "1.4", minHeight: 34, marginTop: 4 }}>
+                  {detectionProgress?.status || "Starting scan..."}
+                </div>
+              </div>
+
+              {/* Footer with clock and ETR */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#94a3b8", fontSize: 11, fontWeight: 500 }}>
+                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
+                  <span>Elapsed: {elapsedTime}s</span>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#e2e8f0", background: "rgba(255,255,255,0.06)", padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.03)" }}>
+                  {etrText}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -963,9 +1515,16 @@ function FlagCard({ flag, selected, onClick }) {
           <p style={styles.flagName}>{flag.name}</p>
           <p style={styles.flagMeta}>{flag.barangay}</p>
         </div>
-        <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text, flexShrink: 0, marginLeft: 8 }}>
-          {fc.label}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text, flexShrink: 0, marginLeft: 8 }}>
+            {fc.label}
+          </span>
+          {flag.hasActiveInspection && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: "#3b82f6", background: "#eff6ff", padding: "2px 6px", borderRadius: 10, border: "1px solid #bfdbfe", whiteSpace: "nowrap", marginLeft: 8 }}>
+              INSPECTING
+            </span>
+          )}
+        </div>
       </div>
       {flag.address && (
         <p style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -977,9 +1536,15 @@ function FlagCard({ flag, selected, onClick }) {
 }
 
 function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onSuccess }) {
-  const [form, setForm]     = useState(draft || { businessName: "", lat: "", lng: "", barangayID: "", notes: "" });
+  const [form, setForm]     = useState(draft || { businessName: "", lat: "", lng: "", barangayID: "", notes: "", flagColor: "Yellow" });
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState("");
+
+  useEffect(() => {
+    if (draft) {
+      setForm(prev => ({ ...prev, ...draft, flagColor: draft.flagColor || prev.flagColor || "Yellow" }));
+    }
+  }, [draft]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   
@@ -1001,6 +1566,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
         lng:          parseFloat(form.lng),
         barangayID:   parseInt(form.barangayID, 10),
         notes:        form.notes || undefined,
+        flagColor:    form.flagColor,
       }, token);
       onSuccess();
     } catch (err) {
@@ -1009,16 +1575,25 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
     }
   };
 
+  const isOrange = form.flagColor === "Orange";
+  const headerBg = isOrange ? "#ffedd5" : "#fef3c7";
+  const headerBorder = isOrange ? "#fed7aa" : "#fde68a";
+  const headerColor = isOrange ? "#c2410c" : "#92400e";
+  const dotBg = isOrange ? "#f97316" : "#f59e0b";
+  const headerLabel = isOrange ? "Flag Closed Business" : "Flag Suspected Business";
+  const btnBg = isOrange ? "#ea580c" : "#d97706";
+  const btnLabel = loading ? "Saving…" : (isOrange ? "+ Flag Closed Business" : "+ Flag Suspected Business");
+
   return (
     <div style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
       <div style={{ ...styles.detailModal, padding: 0 }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ ...styles.detailHeader, background: "#fef3c7", borderBottom: "1px solid #fde68a" }}>
+        <div style={{ ...styles.detailHeader, background: headerBg, borderBottom: `1px solid ${headerBorder}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Add Yellow Flag
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: dotBg, display: "inline-block" }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: headerColor, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {headerLabel}
             </span>
           </div>
           <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
@@ -1028,7 +1603,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
         <div style={styles.detailBody}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
             <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.6, maxWidth: "70%" }}>
-              Manually flag a suspected or unverified establishment. It will appear on the map immediately.
+              Manually flag a suspected or closed establishment. It will appear on the map immediately.
             </p>
             <button 
               type="button" 
@@ -1050,7 +1625,6 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
             { label: "Business Name *", key: "businessName", placeholder: "e.g. Aling Nena's Tindahan" },
             { label: "Latitude *",      key: "lat",          placeholder: "e.g. 13.9667" },
             { label: "Longitude *",     key: "lng",          placeholder: "e.g. 121.1167" },
-            { label: "Notes",           key: "notes",        placeholder: "Reason for flagging…" },
           ].map(({ label, key, placeholder }) => (
             <div key={key} style={{ marginBottom: 14 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -1064,6 +1638,32 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
               />
             </div>
           ))}
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Flag Color / Type *
+            </label>
+            <select
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "#fff", cursor: "pointer" }}
+              value={form.flagColor}
+              onChange={e => set("flagColor", e.target.value)}
+            >
+              <option value="Yellow">Suspected Unregistered Business</option>
+              <option value="Orange">Closed Business</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Notes
+            </label>
+            <input
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", outline: "none" }}
+              placeholder="Reason for flagging…"
+              value={form.notes}
+              onChange={e => set("notes", e.target.value)}
+            />
+          </div>
 
           <div style={{ marginBottom: 4 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -1087,11 +1687,11 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
           <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
           <button
             className="primary-btn"
-            style={{ background: "#d97706", borderColor: "#d97706" }}
+            style={{ background: btnBg, borderColor: btnBg }}
             onClick={handleSubmit}
             disabled={loading}
           >
-            {loading ? "Saving…" : "+ Add Yellow Flag"}
+            {btnLabel}
           </button>
         </div>
       </div>
@@ -1103,6 +1703,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
 function DispatchModal({ flag, token, onClose, onSuccess }) {
   const [inspectors, setInspectors] = useState([]);
   const [selectedUID, setSelectedUID] = useState("");
+  const [deadline, setDeadline] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState("");
@@ -1125,7 +1726,14 @@ function DispatchModal({ flag, token, onClose, onSuccess }) {
     setLoading(true);
     setError("");
     try {
-      await assignInspectionRequest({ logID: flag.id, userID: parseInt(selectedUID, 10) }, token);
+      await assignInspectionRequest({ logID: flag.id, userID: parseInt(selectedUID, 10), deadline }, token);
+      Swal.fire({
+        icon: 'success',
+        title: 'Inspector Dispatched',
+        text: 'The inspection task has been successfully assigned.',
+        timer: 1500,
+        showConfirmButton: false
+      });
       onSuccess();
       onClose();
     } catch (err) {
@@ -1165,6 +1773,14 @@ function DispatchModal({ flag, token, onClose, onSuccess }) {
             {inspectors.map(u => (<option key={u.userID} value={u.userID}>{u.fullName}</option>))}
           </select>
         )}
+        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 8, marginTop: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Deadline (Optional)</label>
+        <input
+          type="datetime-local"
+          style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "#fff", marginBottom: 4, outline: "none", boxSizing: "border-box" }}
+          value={deadline}
+          onChange={e => setDeadline(e.target.value)}
+        />
+
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24 }}>
           <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
           <button className="primary-btn" style={{ background: "#3b82f6", borderColor: "#3b82f6", display: "flex", alignItems: "center", gap: 6 }} onClick={handleAssign} disabled={loading || fetching}>{loading ? "Dispatching…" : <><Icon.Send /> Dispatch</>}</button>
@@ -1193,6 +1809,10 @@ export default function MapPage() {
   const [actionError,         setActionError]          = useState("");
   const [actionLoading,       setActionLoading]        = useState(false);
   const [runDetectionLoading, setRunDetectionLoading]  = useState(false);
+  const [detectionProgress,   setDetectionProgress]   = useState(null);
+  const [elapsedTime,         setElapsedTime]         = useState(0);
+  const startTimeRef = useRef(null);
+  const timerIntervalRef = useRef(null);
   const [opsRankings,         setOpsRankings]          = useState([]);
 
   const [layers, setLayers] = useState({ base: true, heatmap: false, flags: true, barangay: false, diagnostics: false });
@@ -1271,6 +1891,26 @@ export default function MapPage() {
   useEffect(() => { fetchFlags(); }, [fetchFlags]);
 
   useEffect(() => {
+    const handleProgress = (event) => {
+      const { detail } = event;
+      setDetectionProgress(detail);
+      if (detail?.stage === "completed") {
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+      }
+    };
+    window.addEventListener("revela:detection-progress", handleProgress);
+    return () => {
+      window.removeEventListener("revela:detection-progress", handleProgress);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!token || !isAdmin) return;
     getBarangaysRequest(token)
       .then(data => setBarangays(Array.isArray(data) ? data : []))
@@ -1307,8 +1947,49 @@ export default function MapPage() {
     }
   };
 
+  const handleUpdateFlagColor = async (logId, color) => {
+    setActionLoading(true);
+    setActionError("");
+    try {
+      await updateFlagColorRequest(logId, color, token);
+      await fetchFlags();
+      setModalFlag(null); // close modal after color update
+      Swal.fire({
+        icon: "success",
+        title: "Flag Updated",
+        text: `Flag color successfully set to ${color}.`,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      setActionError(err.message || "Failed to update flag color.");
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err.message || "Failed to update flag color.",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleRunDetection = async () => {
     setRunDetectionLoading(true);
+    setDetectionProgress({
+      stage: "initializing",
+      percentage: 0,
+      status: "Initializing detection engine..."
+    });
+    setElapsedTime(0);
+    startTimeRef.current = Date.now();
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+    timerIntervalRef.current = setInterval(() => {
+      setElapsedTime(Math.round((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+
     setActionError("");
     try {
       const result = await runDetectionRequest(token);
@@ -1323,6 +2004,11 @@ export default function MapPage() {
       setActionError(err.message || "Detection failed.");
     } finally {
       setRunDetectionLoading(false);
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+      setDetectionProgress(null);
     }
   };
 
@@ -1403,11 +2089,60 @@ export default function MapPage() {
   // ── Map click (for "Drop a Pin" feature) ──────────────────────────────────
   const handleMapClick = useCallback((e) => {
     if (isPickingYellowLocation) {
-      setYellowDraft(prev => ({ ...prev, lat: e.latLng.lat().toFixed(6), lng: e.latLng.lng().toFixed(6) }));
+      const lat = e.latLng.lat();
+      const lng = e.latLng.lng();
+      
+      setYellowDraft(prev => ({ ...prev, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
       setIsPickingYellowLocation(false);
       setShowYellowModal(true);
+
+      // Attempt to auto-fill barangay via reverse geocoding
+      if (window.google && window.google.maps && window.google.maps.Geocoder) {
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          if (status === "OK" && results && results.length > 0) {
+            const allComponents = results.flatMap(r => r.address_components);
+            const bgyComp = allComponents.find(c => 
+              c.types.includes("sublocality") || 
+              c.types.includes("sublocality_level_1") || 
+              c.types.includes("neighborhood")
+            );
+            
+            let matchedId = "";
+
+            if (bgyComp) {
+              const bName = bgyComp.long_name.toLowerCase().replace(/barangay/g, "").replace(/brgy\.?/g, "").trim();
+              const matched = barangays.find(b => {
+                const normalized = b.barangayName.toLowerCase().replace(/barangay/g, "").replace(/brgy\.?/g, "").trim();
+                return normalized === bName || normalized.includes(bName) || bName.includes(normalized);
+              });
+              
+              if (matched) {
+                matchedId = String(matched.barangayID);
+              }
+            }
+
+            // Fallback: search the full formatted address string
+            if (!matchedId) {
+              const addressStr = results[0].formatted_address.toLowerCase();
+              const matched = barangays.find(b => {
+                const normalized = b.barangayName.toLowerCase().replace(/barangay/g, "").replace(/brgy\.?/g, "").trim();
+                if (!normalized) return false;
+                return addressStr.includes(normalized);
+              });
+              if (matched) {
+                matchedId = String(matched.barangayID);
+              }
+            }
+
+            if (matchedId) {
+              setYellowDraft(prev => ({ ...prev, barangayID: matchedId }));
+            }
+          }
+        });
+      }
     }
-  }, [isPickingYellowLocation]);
+  }, [isPickingYellowLocation, barangays]);
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const visibleFlags = flags.filter(f => {
@@ -1433,6 +2168,7 @@ export default function MapPage() {
     Yellow: flags.filter(f => f.color === "Yellow").length,
     Black:  flags.filter(f => f.color === "Black").length,
     Green:  flags.filter(f => f.color === "Green").length,
+    Orange: flags.filter(f => f.color === "Orange").length,
   };
 
   return (
@@ -1459,7 +2195,7 @@ export default function MapPage() {
           {isAdmin && (
             <>
               <button className="ghost-btn" type="button" onClick={() => setShowYellowModal(true)}>
-                + Yellow Flag
+                + Add Flag
               </button>
               <button className="primary-btn" type="button" onClick={handleRunDetection} disabled={runDetectionLoading}>
                 {runDetectionLoading ? "Running…" : "Run Detection"}
@@ -1552,6 +2288,8 @@ export default function MapPage() {
               onMapClick={handleMapClick}
               isPickingLocation={isPickingYellowLocation}
               runDetectionLoading={runDetectionLoading}
+              detectionProgress={detectionProgress}
+              elapsedTime={elapsedTime}
               satellite={satellite}
               clusters={clusters}
               barangayRedFlagCounts={barangayRedFlagCounts}
@@ -1610,11 +2348,12 @@ export default function MapPage() {
           {/* Stats strip */}
         <div style={styles.statsStrip}>
           {[
-            { label: "Total Flags",   value: flags.length,  color: "var(--color-ink)" },
-            { label: "Green Flags",   value: counts.Green,  color: "#22c55e"          },
-            { label: "Red Flags",     value: counts.Red,    color: "#ef4444"          },
-            { label: "Yellow Flags",  value: counts.Yellow, color: "#f59e0b"          },
-            { label: "Black Flags",   value: counts.Black,  color: "#1e293b"          },
+            { label: "Total Flags",           value: flags.length,   color: "var(--color-ink)" },
+            { label: "Active Businesses",     value: counts.Green,   color: "#22c55e"          },
+            { label: "Closed Businesses",     value: counts.Orange,  color: "#f97316"          },
+            { label: "Detected Unregistered", value: counts.Red,     color: "#ef4444"          },
+            { label: "Suspected Unregistered", value: counts.Yellow,  color: "#f59e0b"          },
+            { label: "Critical Violations",   value: counts.Black,   color: "#1e293b"          },
           ].map(s => (
             <div key={s.label} className="frosted-glass saas-card" style={styles.statCard}>
               <span style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</span>
@@ -1657,7 +2396,7 @@ export default function MapPage() {
 
             {/* Color filter pills */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["all", "Red", "Yellow", "Black", "Green"].map(c => (
+              {["all", "Green", "Yellow", "Orange", "Red", "Black"].map(c => (
                 <button
                   key={c}
                   onClick={() => {
@@ -1671,7 +2410,7 @@ export default function MapPage() {
                     borderColor: filterColor === c ? "transparent" : "var(--color-border)",
                   }}
                 >
-                  {c === "all" ? "All" : c}
+                  {c === "all" ? "All" : (FLAG_COLORS[c]?.label ?? c)}
                 </button>
               ))}
             </div>
@@ -1774,6 +2513,7 @@ export default function MapPage() {
           onAdjustLocation={handleStartAdjustLocation}
           onDispatch={(flag) => setDispatchTarget(flag)}
           onDelete={handleDeleteFlag}
+          onUpdateColor={handleUpdateFlagColor}
           isAdmin={isAdmin}
           actionLoading={actionLoading}
         />
@@ -1844,7 +2584,7 @@ const styles = {
   overlayCard:  { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#fff", background: "rgba(15,23,42,0.8)", borderRadius: 16, padding: "16px 24px", fontSize: 14 },
   pickingBanner:{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "var(--color-primary)", color: "#fff", padding: "12px 24px", borderRadius: 30, zIndex: 100, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, boxShadow: "0 10px 25px rgba(0,0,0,0.2)" },
 
-  statsStrip: { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 },
+  statsStrip: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 },
   statCard:   { display: "flex", flexDirection: "column", gap: 2, padding: "14px 18px", borderRadius: "var(--radius-lg)" },
 
   sidePanel: { borderRadius: "var(--radius-lg)", padding: 16, display: "flex", flexDirection: "column", maxHeight: 680, position: "sticky", top: 20 },

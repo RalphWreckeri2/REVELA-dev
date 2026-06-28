@@ -32,4 +32,15 @@ class AppTheme {
       scaffoldBackgroundColor: AppColors.background,
     );
   }
+
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      fontFamily: 'Roboto',
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppColors.darkGreen,
+        brightness: Brightness.dark,
+      ),
+    );
+  }
 }

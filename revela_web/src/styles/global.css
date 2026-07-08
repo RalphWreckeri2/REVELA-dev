@@ -779,3 +779,92 @@ html.theme-dark .menu-item.active {
     background-position: 0% 50%;
   }
 }
+
+/* ── 5. GLOBAL PRINT STYLES ───────────────────────────────── */
+@media print {
+  /* Force height auto and overflow visible on all parent wrappers to prevent blank screen print preview bug */
+  html, body, #root, .saas-root, .saas-main, .saas-content {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    display: block !important;
+    position: static !important;
+    background: #fff !important;
+    color: #000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Hide all screen-only elements recursively */
+  .mobile-toggle,
+  aside,
+  header,
+  .ambient-bg-mesh,
+  .page-header,
+  .saas-card.frosted-glass,
+  .swal2-container,
+  button,
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Print container rules */
+  .print-report-container {
+    display: block !important;
+    background: #fff !important;
+    color: #000 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Print tables */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    margin-bottom: 25px;
+    page-break-inside: auto;
+  }
+  .print-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  .print-table th, .print-table td {
+    border: 1px solid #cbd5e1;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 11px;
+  }
+  .print-table th {
+    font-weight: bold;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-table tr:nth-child(even) td {
+    background-color: #f8fafc !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Dynamic Page numbering */
+  body {
+    counter-reset: page;
+  }
+  .print-page-number::after {
+    counter-increment: page;
+    content: "Page " counter(page);
+  }
+  
+  /* Prevent page break inside section blocks */
+  .page-break-before-avoid {
+    page-break-inside: avoid;
+  }
+}

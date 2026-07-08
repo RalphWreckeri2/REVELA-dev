@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
 import { getAnalyticsOverviewRequest, getFlagsRequest } from "../services/api";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import Papa from "papaparse";
 import { saveAs } from "file-saver";
 import Swal from "sweetalert2";
 import myLogo from "../assets/logo.png";
+import bpLogo from "../assets/bagongpilipinas.png";
+import sealImg from "../assets/seal.png";
 
 const REPORTS = [
   { id: 1, title: "Weekly Compliance Summary", type: "compliance", desc: "Overview of registered vs. unregistered entities and compliance rate." },
@@ -15,194 +15,31 @@ const REPORTS = [
   { id: 3, title: "Field Inspector Dispatch Plan", type: "dispatch", desc: "Barangay priority rankings based on the WLC Operational Priority Score (OPS)." },
 ];
 
-// Helper to convert logo to Base64 for PDF rendering
-const loadImageAsBase64 = (url) => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL("image/png"));
-    };
-    img.onerror = () => {
-      resolve(null);
-    };
-    img.src = url;
-  });
-};
-
-// Formal letterhead and metadata block for page 1
-const drawDocumentHeader = (doc, title, subtitle, logoBase64, userName, isLandscape = false) => {
-  const width = doc.internal.pageSize.width;
-  
-  // 1. Logo
-  if (logoBase64) {
-    doc.addImage(logoBase64, "PNG", 14, 8, 18, 18);
-  }
-
-  // 2. Letterhead text
-  doc.setFont("Helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105); // slate-600
-  doc.text("Republic of the Philippines", width / 2, 11, { align: "center" });
-  doc.text("Province of Batangas", width / 2, 15, { align: "center" });
-  
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.text("MUNICIPALITY OF MATAASNAKAHOY", width / 2, 20, { align: "center" });
-  
-  doc.setFontSize(8);
-  doc.setTextColor(86, 171, 47); // primary green
-  doc.text("BUSINESS PERMITS AND LICENSING OFFICE (BPLO)", width / 2, 24, { align: "center" });
-
-  // 3. Double-line decorative border
-  doc.setDrawColor(86, 171, 47);
-  doc.setLineWidth(1.2);
-  doc.line(14, 27, width - 14, 27);
-  doc.setDrawColor(203, 213, 225); // slate-300
-  doc.setLineWidth(0.4);
-  doc.line(14, 28.5, width - 14, 28.5);
-
-  // 4. Document Title
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(15, 23, 42);
-  doc.text(title.toUpperCase(), 14, 36);
-
-  // 5. Metadata Block
-  const metaY = 41;
-  const metaHeight = 16;
-  doc.setFillColor(248, 250, 252); // slate-50
-  doc.setDrawColor(226, 232, 240); // slate-200
-  doc.setLineWidth(0.4);
-  doc.roundedRect(14, metaY, width - 28, metaHeight, 2, 2, "FD");
-
-  // Left col details
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text("DATE GENERATED:", 18, metaY + 6);
-  doc.text("PREPARED BY:", 18, metaY + 11);
-  
-  doc.setFont("Helvetica", "normal");
-  doc.setTextColor(15, 23, 42);
-  doc.text(new Date().toLocaleString(), 46, metaY + 6);
-  doc.text(userName, 41, metaY + 11);
-
-  // Right col details
-  doc.setFont("Helvetica", "bold");
-  doc.setTextColor(100, 116, 139);
-  doc.text("OFFICE:", isLandscape ? width - 120 : width - 90, metaY + 6);
-  doc.text("CLASSIFICATION:", isLandscape ? width - 120 : width - 90, metaY + 11);
-
-  doc.setFont("Helvetica", "normal");
-  doc.setTextColor(15, 23, 42);
-  doc.text("BPLO Mataasnakahoy", isLandscape ? width - 105 : width - 75, metaY + 6);
-  doc.text("Official Use / Confidential", isLandscape ? width - 92 : width - 62, metaY + 11);
-};
-
-// Simplified header for subsequent pages
-const drawPageHeaderSimplified = (doc, title) => {
-  const width = doc.internal.pageSize.width;
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text(title.toUpperCase(), 14, 12);
-  
-  doc.setFont("Helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()} • BPLO Mataasnakahoy`, 14, 16);
-
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.4);
-  doc.line(14, 18, width - 14, 18);
-};
-
-// Signature block at the end of the report
-const drawSignatureBlock = (doc, userName, finalY) => {
-  const width = doc.internal.pageSize.width;
-  const pageHeight = doc.internal.pageSize.height;
-  let sigY = finalY + 12;
-  
-  // Prevent signature page overflow
-  if (sigY + 25 > pageHeight - 15) {
-    doc.addPage();
-    sigY = 25;
-  }
-
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(8.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Prepared By:", 14, sigY);
-  doc.text("Noted By:", width / 2 + 10, sigY);
-
-  // Line for signature
-  doc.setDrawColor(203, 213, 225); // slate-300
-  doc.setLineWidth(0.4);
-  doc.line(14, sigY + 10, 14 + 50, sigY + 10);
-  doc.line(width / 2 + 10, sigY + 10, width / 2 + 10 + 50, sigY + 10);
-
-  // Signatory details
-  doc.setFont("Helvetica", "bold");
-  doc.setTextColor(15, 23, 42);
-  doc.text(userName.toUpperCase(), 14, sigY + 14);
-  doc.text("BPLO DEPARTMENT HEAD", width / 2 + 10, sigY + 14);
-
-  doc.setFont("Helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(100, 116, 139);
-  doc.text("REVELA System Operator", 14, sigY + 18);
-  doc.text("Business Permits & Licensing Office", width / 2 + 10, sigY + 18);
-};
-
-// Traverse and draw post-processed page numbers and confidentiality rules
-const addPageNumbers = (doc) => {
-  const totalPages = doc.internal.getNumberOfPages();
-  const pageHeight = doc.internal.pageSize.height;
-  const pageWidth = doc.internal.pageSize.width;
-  
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFont("Helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(148, 163, 184); // Slate-400
-    
-    // Left-aligned system ID
-    const footerLeft = "REVELA System • BPLO Compliance Audit Report";
-    doc.text(footerLeft, 14, pageHeight - 8);
-    
-    // Right-aligned page numbers
-    const pageText = `Page ${i} of ${totalPages}`;
-    doc.text(pageText, pageWidth - 14 - doc.getTextWidth(pageText), pageHeight - 8);
-    
-    // Thin line above footer text
-    doc.setDrawColor(241, 245, 249);
-    doc.setLineWidth(0.4);
-    doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
-  }
-};
-
 export default function ExportReportsPage() {
   const { token, user } = useAuth();
   const [loadingId, setLoadingId] = useState(null);
-  const [logoBase64, setLogoBase64] = useState(null);
+  const [printReport, setPrintReport] = useState(null);
 
-  // Pre-load municipal/BPLO logo as base64 on mount to avoid async latency
+  // Handle native printing when printReport state changes
   useEffect(() => {
-    loadImageAsBase64(myLogo).then((base64) => {
-      setLogoBase64(base64);
-    }).catch(err => {
-      console.error("Error pre-loading BPLO logo:", err);
-    });
-  }, []);
+    if (printReport) {
+      const handleAfterPrint = () => {
+        setPrintReport(null);
+      };
+      window.addEventListener("afterprint", handleAfterPrint);
+
+      const timer = setTimeout(() => {
+        window.print();
+      }, 500);
+
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("afterprint", handleAfterPrint);
+      };
+    }
+  }, [printReport]);
 
   const handleDownload = async (report) => {
-    // Prompt user for format preference using SweetAlert
     const { value: format } = await Swal.fire({
       title: 'Select Export Format',
       input: 'radio',
@@ -231,7 +68,7 @@ export default function ExportReportsPage() {
       } else if (report.type === "dispatch") {
         await generateDispatchReport(format);
       }
-      
+
       Swal.fire({
         icon: 'success',
         title: 'Success!',
@@ -251,20 +88,20 @@ export default function ExportReportsPage() {
     }
   };
 
-// Draws a section header text for multi-section reports, handling page breaks safely
-const drawSectionTitle = (doc, titleText, finalY) => {
-  const pageHeight = doc.internal.pageSize.height;
-  let y = finalY + 12;
-  if (y + 15 > pageHeight - 15) {
-    doc.addPage();
-    y = 25;
-  }
-  doc.setFont("Helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.text(titleText, 14, y);
-  return y + 4; // returns startY for the next table
-};
+  // Draws a section header text for multi-section reports, handling page breaks safely
+  const drawSectionTitle = (doc, titleText, finalY) => {
+    const pageHeight = doc.internal.pageSize.height;
+    let y = finalY + 12;
+    if (y + 15 > pageHeight - 15) {
+      doc.addPage();
+      y = 25;
+    }
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(titleText, 14, y);
+    return y + 4;
+  };
 
   const generateComplianceReport = async (format) => {
     const data = await getAnalyticsOverviewRequest(token);
@@ -288,103 +125,30 @@ const drawSectionTitle = (doc, titleText, finalY) => {
       const csv = Papa.unparse(csvData);
       saveAs(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${filename}.csv`);
     } else {
-      const doc = new jsPDF();
-      const userName = user?.fullName || "BPLO Staff";
-      drawDocumentHeader(doc, "Weekly Compliance Summary", "Comprehensive overview of registration rates, compliance audits, and sectoral metrics", logoBase64, userName, false);
-      
-      // Table 1: Key Performance Indicators (KPIs)
-      autoTable(doc, {
-        startY: 62,
-        margin: { top: 25, bottom: 15 },
-        head: [['Compliance Metric', 'Reported Value']],
-        body: csvData.map(r => [r.Metric, r.Value]),
-        theme: 'striped',
-        headStyles: { fillColor: [86, 171, 47], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-        styles: { fontSize: 8.5, cellPadding: 4, font: 'Helvetica' },
-        didDrawPage: (data) => {
-          if (data.pageNumber > 1) {
-            drawPageHeaderSimplified(doc, "Weekly Compliance Summary");
-          }
+      setPrintReport({
+        type: 'compliance',
+        title: "Weekly Compliance Summary",
+        subtitle: "Comprehensive overview of registration rates, compliance audits, and sectoral metrics",
+        date: new Date().toLocaleString(),
+        preparedBy: user?.fullName || "BPLO Staff",
+        office: "BPLO Mataasnakahoy",
+        classification: "Official Use / Confidential",
+        data: {
+          kpis: csvData,
+          sectors: data?.descriptive?.sectoral_distribution || [],
+          sizes: data?.descriptive?.business_size_dist || [],
+          audits: data?.descriptive?.audit_summary?.result_breakdown || [],
+          totalInspections: data?.descriptive?.audit_summary?.total_inspections || 0
         }
       });
-
-      // Table 2: Sectoral Distribution
-      const sectors = data?.descriptive?.sectoral_distribution || [];
-      if (sectors.length > 0) {
-        const nextY = drawSectionTitle(doc, "Business Sector Distribution (Top 10 LOB)", doc.lastAutoTable.finalY);
-        autoTable(doc, {
-          startY: nextY,
-          margin: { top: 25, bottom: 15 },
-          head: [['Business Sector / Category', 'Registered Entities Count']],
-          body: sectors.map(s => [s.sector, s.count]),
-          theme: 'striped',
-          headStyles: { fillColor: [86, 171, 47], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-          styles: { fontSize: 8.5, cellPadding: 4, font: 'Helvetica' },
-          didDrawPage: (data) => {
-            if (data.pageNumber > 1) {
-              drawPageHeaderSimplified(doc, "Weekly Compliance Summary");
-            }
-          }
-        });
-      }
-
-      // Table 3: Business Size Distribution
-      const sizes = data?.descriptive?.business_size_dist || [];
-      if (sizes.length > 0) {
-        const nextY = drawSectionTitle(doc, "Business Size Classification Distribution", doc.lastAutoTable.finalY);
-        autoTable(doc, {
-          startY: nextY,
-          margin: { top: 25, bottom: 15 },
-          head: [['Size Classification', 'Registered Entities Count']],
-          body: sizes.map(s => [s.size_label, s.count]),
-          theme: 'striped',
-          headStyles: { fillColor: [86, 171, 47], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-          styles: { fontSize: 8.5, cellPadding: 4, font: 'Helvetica' },
-          didDrawPage: (data) => {
-            if (data.pageNumber > 1) {
-              drawPageHeaderSimplified(doc, "Weekly Compliance Summary");
-            }
-          }
-        });
-      }
-
-      // Table 4: Field Inspections Audit Summary
-      const audits = data?.descriptive?.audit_summary?.result_breakdown || [];
-      const totalInspections = data?.descriptive?.audit_summary?.total_inspections || 0;
-      const nextY = drawSectionTitle(doc, "Field Inspections Audit Results Breakdown", doc.lastAutoTable.finalY);
-      autoTable(doc, {
-        startY: nextY,
-        margin: { top: 25, bottom: 15 },
-        head: [['Inspection Result Status', 'Conducted Inspections Count']],
-        body: [
-          ...audits.map(a => [a.inspectionResult || "Unclassified", a.count]),
-          ['TOTAL AUDIT INSPECTIONS COMPLETED', totalInspections]
-        ],
-        theme: 'striped',
-        headStyles: { fillColor: [86, 171, 47], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-        styles: { fontSize: 8.5, cellPadding: 4, font: 'Helvetica' },
-        rowStyles: {
-          [audits.length]: { fontStyle: 'bold', fillColor: [241, 245, 249] } // bold total row
-        },
-        didDrawPage: (data) => {
-          if (data.pageNumber > 1) {
-            drawPageHeaderSimplified(doc, "Weekly Compliance Summary");
-          }
-        }
-      });
-
-      drawSignatureBlock(doc, userName, doc.lastAutoTable.finalY);
-      addPageNumbers(doc);
-      doc.save(`${filename}.pdf`);
     }
   };
 
   const generateUnregisteredReport = async (format) => {
     const res = await getFlagsRequest({ limit: 1000 }, token);
     const allFlags = res?.data || [];
-    // Filter for Red and Yellow flags (unregistered / suspected)
     const flags = allFlags.filter(f => f.flagColor === 'Red' || f.flagColor === 'Yellow');
-    
+
     const dateStr = new Date().toISOString().slice(0, 10);
     const filename = `Unregistered_Establishments_${dateStr}`;
 
@@ -401,84 +165,31 @@ const drawSectionTitle = (doc, titleText, finalY) => {
       const csv = Papa.unparse(formattedData);
       saveAs(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${filename}.csv`);
     } else {
-      const doc = new jsPDF('landscape');
-      const userName = user?.fullName || "BPLO Staff";
-      drawDocumentHeader(doc, "Top Suspected Unregistered Establishments", "List of flagged business locations showing commercial activity without matching registrations", logoBase64, userName, true);
-
-      // KPI Summary Cards block (y=62)
-      const summaryY = 62;
-      const width = doc.internal.pageSize.width;
-      const redCount = flags.filter(f => f.flagColor === 'Red').length;
-      const yellowCount = flags.filter(f => f.flagColor === 'Yellow').length;
-      const cardWidth = (width - 28 - 12) / 3;
-      
-      // Card 1: Total
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, summaryY, cardWidth, 14, 1.5, 1.5, "F");
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(7.5);
-      doc.setTextColor(100, 116, 139);
-      doc.text("TOTAL FLAGGED LOCATIONS", 18, summaryY + 5);
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`${flags.length} Suspected Entities`, 18, summaryY + 10);
-
-      // Card 2: Unregistered (Red)
-      doc.setFillColor(254, 242, 242);
-      doc.roundedRect(14 + cardWidth + 6, summaryY, cardWidth, 14, 1.5, 1.5, "F");
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(7.5);
-      doc.setTextColor(220, 38, 38);
-      doc.text("UNREGISTERED COMMERCIAL (RED)", 14 + cardWidth + 10, summaryY + 5);
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`${redCount} Confirmed Locations`, 14 + cardWidth + 10, summaryY + 10);
-
-      // Card 3: Suspected (Yellow)
-      doc.setFillColor(255, 251, 235);
-      doc.roundedRect(14 + cardWidth * 2 + 12, summaryY, cardWidth, 14, 1.5, 1.5, "F");
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(7.5);
-      doc.setTextColor(180, 83, 9);
-      doc.text("SUSPECTED COMPLIANCE GAP (YELLOW)", 14 + cardWidth * 2 + 16, summaryY + 5);
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`${yellowCount} Potential Violations`, 14 + cardWidth * 2 + 16, summaryY + 10);
-
-      // Start table at y=81
-      autoTable(doc, {
-        startY: 81,
-        margin: { top: 25, bottom: 15 },
-        head: [['Log ID', 'Establishment Name', 'Barangay', 'Resolved Address / Nearest Landmark', 'Flag Status', 'Date Flagged']],
-        body: formattedData.map(f => [f.LogID, f.Name, f.Barangay, f.Address, f.Status, f.DetectedDate]),
-        theme: 'striped',
-        headStyles: { fillColor: [239, 68, 68], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
-        styles: { fontSize: 8, cellPadding: 4, font: 'Helvetica' },
-        columnStyles: {
-          0: { cellWidth: 15 },
-          1: { cellWidth: 50 },
-          2: { cellWidth: 35 },
-          3: { cellWidth: 110 },
-          4: { cellWidth: 25 },
-          5: { cellWidth: 25 }
-        },
-        didDrawPage: (data) => {
-          if (data.pageNumber > 1) {
-            drawPageHeaderSimplified(doc, "Top Suspected Unregistered Establishments");
+      setPrintReport({
+        type: 'unregistered',
+        title: "Top Suspected Unregistered Establishments",
+        subtitle: "List of flagged business locations showing commercial activity without matching registrations",
+        date: new Date().toLocaleString(),
+        preparedBy: user?.fullName || "BPLO Staff",
+        office: "BPLO Mataasnakahoy",
+        classification: "Official Use / Confidential",
+        isLandscape: true,
+        data: {
+          flags: formattedData,
+          summary: {
+            total: flags.length,
+            red: flags.filter(f => f.flagColor === 'Red').length,
+            yellow: flags.filter(f => f.flagColor === 'Yellow').length
           }
         }
       });
-
-      drawSignatureBlock(doc, userName, doc.lastAutoTable.finalY);
-      addPageNumbers(doc);
-      doc.save(`${filename}.pdf`);
     }
   };
 
   const generateDispatchReport = async (format) => {
     const data = await getAnalyticsOverviewRequest(token);
     const rankings = data?.prescriptive?.rankings || [];
-    
+
     const dateStr = new Date().toISOString().slice(0, 10);
     const filename = `Inspector_Dispatch_Plan_${dateStr}`;
 
@@ -492,102 +203,514 @@ const drawSectionTitle = (doc, titleText, finalY) => {
       NonComplianceRate: `${r.non_compliance_rate}%`
     }));
 
+    const recs = (data?.prescriptive?.recommendations || []).map((r, i) => ({
+      rank: i + 1,
+      barangayName: r.barangayName,
+      recommendation: r.recommendation
+    }));
+
     if (format === 'csv') {
       const csv = Papa.unparse(formattedData);
       saveAs(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${filename}.csv`);
     } else {
-      const doc = new jsPDF();
-      const userName = user?.fullName || "BPLO Staff";
-      drawDocumentHeader(doc, "Field Inspector Dispatch Plan", "Barangay ranking prioritizations generated via WLC scoring model for optimal dispatching", logoBase64, userName, false);
-
-      // Table 1: Barangay priority rankings
-      autoTable(doc, {
-        startY: 62,
-        margin: { top: 25, bottom: 15 },
-        head: [['Rank', 'Barangay Name', 'WLC OPS Score', 'Risk Level', 'Flag Count', 'Non-Compliance']],
-        body: formattedData.map(r => [r.Rank, r.Barangay, r.PriorityScore, r.RiskLevel, r.TotalFlagged, r.NonComplianceRate]),
-        theme: 'striped',
-        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-        styles: { fontSize: 8.5, cellPadding: 4, font: 'Helvetica' },
-        didDrawPage: (data) => {
-          if (data.pageNumber > 1) {
-            drawPageHeaderSimplified(doc, "Field Inspector Dispatch Plan");
-          }
+      setPrintReport({
+        type: 'dispatch',
+        title: "Field Inspector Dispatch Plan",
+        subtitle: "Barangay ranking prioritizations generated via WLC scoring model for optimal dispatching",
+        date: new Date().toLocaleString(),
+        preparedBy: user?.fullName || "BPLO Staff",
+        office: "BPLO Mataasnakahoy",
+        classification: "Official Use / Confidential",
+        data: {
+          rankings: formattedData,
+          recommendations: recs
         }
       });
-
-      // Table 2: Actionable Dispatch Recommendations
-      const recs = data?.prescriptive?.dispatch_recommendations || [];
-      if (recs.length > 0) {
-        const nextY = drawSectionTitle(doc, "Actionable Dispatch Recommendations & Allocations", doc.lastAutoTable.finalY);
-        autoTable(doc, {
-          startY: nextY,
-          margin: { top: 25, bottom: 15 },
-          head: [['Rank', 'Priority Barangay', 'Actionable Recommendation Plan']],
-          body: recs.map(rec => [
-            `Rank ${rec.rank}`,
-            rec.barangayName,
-            rec.recommendation
-          ]),
-          theme: 'striped',
-          headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-          styles: { fontSize: 8.2, cellPadding: 5, font: 'Helvetica' },
-          columnStyles: {
-            0: { cellWidth: 15 },
-            1: { cellWidth: 35 },
-            2: { cellWidth: 130 }
-          },
-          didDrawPage: (data) => {
-            if (data.pageNumber > 1) {
-              drawPageHeaderSimplified(doc, "Field Inspector Dispatch Plan");
-            }
-          }
-        });
-      }
-
-      drawSignatureBlock(doc, userName, doc.lastAutoTable.finalY);
-      addPageNumbers(doc);
-      doc.save(`${filename}.pdf`);
     }
   };
 
-
   return (
-    <DashboardLayout>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Export Reports</h1>
-          <p className="page-subtitle">Generate and download operational compliance reports in PDF or CSV formats.</p>
+    <>
+      <DashboardLayout>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Export Reports</h1>
+            <p className="page-subtitle">Generate and download operational compliance reports in PDF or CSV formats.</p>
+          </div>
         </div>
-      </div>
 
-      <div className="saas-card frosted-glass">
-        <div style={{ display: "grid", gap: 16 }}>
-          {REPORTS.map((report) => (
-            <div
-              key={report.id}
-              className="saas-card"
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: "18px 20px" }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontSize: 16, color: "var(--color-ink)" }}>{report.title}</h3>
-                <p style={{ margin: "8px 0 0", color: "var(--color-muted)", fontSize: 13 }}>{report.desc}</p>
+        <div className="saas-card frosted-glass">
+          <div style={{ display: "grid", gap: 16 }}>
+            {REPORTS.map((report) => (
+              <div
+                key={report.id}
+                className="saas-card"
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: "18px 20px" }}
+              >
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, color: "var(--color-ink)" }}>{report.title}</h3>
+                  <p style={{ margin: "8px 0 0", color: "var(--color-muted)", fontSize: 13 }}>{report.desc}</p>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <button
+                    className="primary-btn"
+                    type="button"
+                    onClick={() => handleDownload(report)}
+                    disabled={loadingId === report.id}
+                  >
+                    {loadingId === report.id ? "Generating..." : "Download"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </DashboardLayout>
+
+      {/* ── Printable Report View (hidden on screen, visible only during print) ── */}
+      {printReport && (
+        <div className="print-report-container hidden print:block bg-white text-black font-sans w-full">
+
+          {/* ── Custom Print CSS ── */}
+          <style>{`
+            @media print {
+              @page {
+                size: ${printReport.isLandscape ? "landscape" : "portrait"};
+                margin: 0;
+              }
+
+              /* Hide all screen-only UI */
+              .mobile-toggle, aside, header,
+              .ambient-bg-mesh, .page-header,
+              .saas-card.frosted-glass,
+              .swal2-container, button, .no-print {
+                display: none !important;
+              }
+
+              /* Reset parent wrappers to prevent blank-screen bug */
+              html, body, #root, .saas-root, .saas-main, .saas-content {
+                height: auto !important;
+                min-height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                display: block !important;
+                position: static !important;
+                background: #fff !important;
+                color: #000 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                box-shadow: none !important;
+                border: none !important;
+              }
+
+              .print-report-container {
+                display: block !important;
+                background: #fff !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                position: relative !important;
+              }
+
+              /* -- FIXED HEADER: pinned to top of every printed page -- */
+              .print-header {
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                background: #fff !important;
+                z-index: 1000 !important;
+                padding: 12mm 15mm 5mm 15mm !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+
+              /* -- FIXED FOOTER: pinned to bottom of every printed page -- */
+              .print-footer {
+                position: fixed !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                background: #fff !important;
+                z-index: 1000 !important;
+                padding: 3mm 15mm 8mm 15mm !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+
+              /* -- BODY: breathing room so content never clips under header or footer -- */
+              .report-body {
+                margin-top: 105px !important;
+                margin-bottom: 85px !important;
+                padding: 0 15mm !important;
+              }
+
+              /* Print tables */
+              .print-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 12px;
+                margin-bottom: 22px;
+                page-break-inside: auto;
+              }
+              .print-table tr { page-break-inside: avoid; page-break-after: auto; }
+              .print-table th, .print-table td {
+                border: 1px solid #cbd5e1;
+                padding: 7px 11px;
+                text-align: left;
+                font-size: 11px;
+              }
+              .print-table th {
+                font-weight: bold;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .print-table tr:nth-child(even) td {
+                background-color: #f8fafc !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+
+              /* Page counter */
+              body { counter-reset: page; }
+              .print-page-number::after {
+                counter-increment: page;
+                content: "Page " counter(page);
+              }
+
+              .page-break-avoid { page-break-inside: avoid; }
+            }
+          `}</style>
+
+          {/* -- FIXED HEADER -- */}
+          <div className="print-header">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", paddingBottom: "10px" }}>
+              {/* Left: LGU Seal */}
+              <div style={{ width: "72px", textAlign: "left", flexShrink: 0 }}>
+                <img src={sealImg} alt="Mataasnakahoy Seal" style={{ width: "62px", height: "62px", objectFit: "contain" }} />
               </div>
 
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <button 
-                  className="primary-btn" 
-                  type="button" 
-                  onClick={() => handleDownload(report)}
-                  disabled={loadingId === report.id}
-                >
-                  {loadingId === report.id ? "Generating..." : "Download"}
-                </button>
+              {/* Center: Full letterhead text */}
+              <div style={{ textAlign: "center", flex: 1, margin: "0 16px" }}>
+                <div style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#4b5563", fontWeight: "500", lineHeight: "1.5" }}>Republic of the Philippines</div>
+                <div style={{ fontSize: "10.5px", color: "#4b5563", lineHeight: "1.5" }}>Province of Batangas</div>
+                <div style={{ fontSize: "13px", color: "#111827", marginTop: "2px", lineHeight: "1.5" }}>Municipality of Mataasnakahoy</div>
+                <div style={{ fontSize: "13px", fontWeight: "800", color: "#111827", textTransform: "uppercase", letterSpacing: "0.5px", lineHeight: "1.5" }}>Office of the Municipal Mayor</div>
+                <div style={{ fontSize: "10px", color: "#4b5563", marginTop: "3px", lineHeight: "1.6" }}>
+                  Telephone #: <span style={{ fontWeight: 600, color: "#111827" }}>461-2374</span> <br></br>
+                  Email: <span style={{ fontWeight: 400, color: "#111827" }}>licensingoffice2374@yahoo.com</span>
+                </div>
+              </div>
+
+              {/* Right: Bagong Pilipinas Logo */}
+              <div style={{ width: "72px", textAlign: "right", flexShrink: 0 }}>
+                <img src={bpLogo} alt="Bagong Pilipinas Logo" style={{ width: "62px", height: "62px", objectFit: "contain" }} />
               </div>
             </div>
-          ))}
+            {/* Thin separator line below header */}
+            <div style={{ borderBottom: "1.5px solid #e5e7eb", marginTop: "6px" }}></div>
+          </div>
+
+          {/* ── BODY CONTENT ── */}
+          <div className="report-body">
+
+            {/* Document Title */}
+            <h2 style={{ fontSize: "15px", fontWeight: "bold", textAlign: "center", color: "#111827", marginBottom: "16px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              {printReport.title}
+            </h2>
+
+            {/* Document Subtitle */}
+            {printReport.subtitle && (
+              <p style={{ fontSize: "11px", color: "#6b7280", fontStyle: "italic", textAlign: "center", marginBottom: "16px", marginTop: "-10px" }}>
+                {printReport.subtitle}
+              </p>
+            )}
+
+            {/* Metadata Section */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px", marginBottom: "20px", fontSize: "11px" }}>
+              <div><span style={{ fontWeight: "bold", color: "#6b7280", marginRight: "6px" }}>DATE GENERATED:</span><span style={{ color: "#111827", fontWeight: "500" }}>{printReport.date}</span></div>
+              <div><span style={{ fontWeight: "bold", color: "#6b7280", marginRight: "6px" }}>OFFICE:</span><span style={{ color: "#111827", fontWeight: "500" }}>{printReport.office}</span></div>
+              <div><span style={{ fontWeight: "bold", color: "#6b7280", marginRight: "6px" }}>PREPARED BY:</span><span style={{ color: "#111827", fontWeight: "500" }}>{printReport.preparedBy}</span></div>
+              <div><span style={{ fontWeight: "bold", color: "#6b7280", marginRight: "6px" }}>CLASSIFICATION:</span><span style={{ color: "#111827", fontWeight: "500" }}>{printReport.classification}</span></div>
+            </div>
+
+            {/* ── COMPLIANCE REPORT TABLES ── */}
+            {printReport.type === 'compliance' && (
+              <div>
+                <div>
+                  <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Key Performance Indicators</h3>
+                  <table className="print-table">
+                    <thead>
+                      <tr>
+                        <th style={{ background: "#56ab2f", color: "#fff" }}>Compliance Metric</th>
+                        <th style={{ background: "#56ab2f", color: "#fff", width: "160px" }}>Reported Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {printReport.data.kpis.map((kpi, idx) => (
+                        <tr key={idx}>
+                          <td>{kpi.Metric}</td>
+                          <td style={{ fontWeight: "600", color: "#111827" }}>{kpi.Value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {printReport.data.sectors?.length > 0 && (
+                  <div className="page-break-avoid">
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Business Sector Distribution (Top 10 LOB)</h3>
+                    <table className="print-table">
+                      <thead>
+                        <tr>
+                          <th style={{ background: "#56ab2f", color: "#fff" }}>Business Sector / Category</th>
+                          <th style={{ background: "#56ab2f", color: "#fff", width: "160px" }}>Registered Entities Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printReport.data.sectors.map((s, idx) => (
+                          <tr key={idx}>
+                            <td>{s.sector}</td>
+                            <td style={{ fontWeight: "600", color: "#111827" }}>{s.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {printReport.data.sizes?.length > 0 && (
+                  <div className="page-break-avoid">
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Business Size Classification Distribution</h3>
+                    <table className="print-table">
+                      <thead>
+                        <tr>
+                          <th style={{ background: "#56ab2f", color: "#fff" }}>Size Classification</th>
+                          <th style={{ background: "#56ab2f", color: "#fff", width: "160px" }}>Registered Entities Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printReport.data.sizes.map((s, idx) => (
+                          <tr key={idx}>
+                            <td>{s.size_label}</td>
+                            <td style={{ fontWeight: "600", color: "#111827" }}>{s.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {printReport.data.audits?.length > 0 && (
+                  <div className="page-break-avoid">
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Field Inspections Audit Results Breakdown</h3>
+                    <table className="print-table">
+                      <thead>
+                        <tr>
+                          <th style={{ background: "#56ab2f", color: "#fff" }}>Inspection Result Status</th>
+                          <th style={{ background: "#56ab2f", color: "#fff", width: "160px" }}>Conducted Inspections Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printReport.data.audits.map((a, idx) => (
+                          <tr key={idx}>
+                            <td>{a.inspectionResult || "Unclassified"}</td>
+                            <td style={{ fontWeight: "600", color: "#111827" }}>{a.count}</td>
+                          </tr>
+                        ))}
+                        <tr style={{ fontWeight: "bold", background: "#f1f5f9" }}>
+                          <td>TOTAL AUDIT INSPECTIONS COMPLETED</td>
+                          <td>{printReport.data.totalInspections}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── UNREGISTERED REPORT TABLES ── */}
+            {printReport.type === 'unregistered' && (
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px" }}>
+                    <div style={{ fontSize: "9px", fontWeight: "bold", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Flagged Locations</div>
+                    <div style={{ fontSize: "13px", fontWeight: "bold", color: "#1e293b", marginTop: "4px" }}>{printReport.data.summary.total} Suspected Entities</div>
+                  </div>
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px" }}>
+                    <div style={{ fontSize: "9px", fontWeight: "bold", color: "#dc2626", textTransform: "uppercase", letterSpacing: "0.5px" }}>Unregistered Commercial (Red)</div>
+                    <div style={{ fontSize: "13px", fontWeight: "bold", color: "#7f1d1d", marginTop: "4px" }}>{printReport.data.summary.red} Confirmed Locations</div>
+                  </div>
+                  <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "10px" }}>
+                    <div style={{ fontSize: "9px", fontWeight: "bold", color: "#d97706", textTransform: "uppercase", letterSpacing: "0.5px" }}>Suspected Compliance Gap (Yellow)</div>
+                    <div style={{ fontSize: "13px", fontWeight: "bold", color: "#92400e", marginTop: "4px" }}>{printReport.data.summary.yellow} Potential Violations</div>
+                  </div>
+                </div>
+
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th style={{ background: "#ef4444", color: "#fff", width: "48px" }}>Log ID</th>
+                      <th style={{ background: "#ef4444", color: "#fff" }}>Establishment Name</th>
+                      <th style={{ background: "#ef4444", color: "#fff", width: "100px" }}>Barangay</th>
+                      <th style={{ background: "#ef4444", color: "#fff" }}>Resolved Address / Nearest Landmark</th>
+                      <th style={{ background: "#ef4444", color: "#fff", width: "80px" }}>Flag Status</th>
+                      <th style={{ background: "#ef4444", color: "#fff", width: "80px" }}>Date Flagged</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printReport.data.flags.map((f, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontFamily: "monospace" }}>{f.LogID}</td>
+                        <td style={{ fontWeight: "600", color: "#111827" }}>{f.Name}</td>
+                        <td>{f.Barangay}</td>
+                        <td style={{ fontSize: "10.5px" }}>{f.Address}</td>
+                        <td>
+                          <span style={{
+                            padding: "2px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold",
+                            background: f.Status === 'Unregistered' ? '#fee2e2' : '#fef3c7',
+                            color: f.Status === 'Unregistered' ? '#b91c1c' : '#b45309'
+                          }}>
+                            {f.Status}
+                          </span>
+                        </td>
+                        <td>{f.DetectedDate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── DISPATCH REPORT TABLES ── */}
+            {printReport.type === 'dispatch' && (
+              <div>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Barangay Priority Rankings</h3>
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th style={{ background: "#3b82f6", color: "#fff", width: "48px" }}>Rank</th>
+                      <th style={{ background: "#3b82f6", color: "#fff" }}>Barangay Name</th>
+                      <th style={{ background: "#3b82f6", color: "#fff", width: "100px" }}>WLC OPS Score</th>
+                      <th style={{ background: "#3b82f6", color: "#fff", width: "80px" }}>Risk Level</th>
+                      <th style={{ background: "#3b82f6", color: "#fff", width: "80px" }}>Flag Count</th>
+                      <th style={{ background: "#3b82f6", color: "#fff", width: "100px" }}>Non-Compliance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printReport.data.rankings.map((r, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontWeight: "bold", color: "#111827" }}>Rank {r.Rank}</td>
+                        <td style={{ fontWeight: "600", color: "#111827" }}>{r.Barangay}</td>
+                        <td>{r.PriorityScore}</td>
+                        <td>
+                          <span style={{
+                            padding: "2px 6px", borderRadius: "4px", fontSize: "10px", fontWeight: "bold",
+                            background: r.RiskLevel === 'High' ? '#fee2e2' : r.RiskLevel === 'Medium' ? '#fef3c7' : '#dcfce7',
+                            color: r.RiskLevel === 'High' ? '#b91c1c' : r.RiskLevel === 'Medium' ? '#b45309' : '#166534'
+                          }}>
+                            {r.RiskLevel}
+                          </span>
+                        </td>
+                        <td>{r.TotalFlagged}</td>
+                        <td style={{ fontWeight: "600", color: "#111827" }}>{r.NonComplianceRate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {printReport.data.recommendations?.length > 0 && (
+                  <div className="page-break-avoid">
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Actionable Dispatch Recommendations &amp; Allocations</h3>
+                    <table className="print-table">
+                      <thead>
+                        <tr>
+                          <th style={{ background: "#3b82f6", color: "#fff", width: "60px" }}>Rank</th>
+                          <th style={{ background: "#3b82f6", color: "#fff", width: "140px" }}>Priority Barangay</th>
+                          <th style={{ background: "#3b82f6", color: "#fff" }}>Actionable Recommendation Plan</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printReport.data.recommendations.map((rec, idx) => (
+                          <tr key={idx}>
+                            <td style={{ fontWeight: "bold", color: "#111827" }}>Rank {rec.rank}</td>
+                            <td style={{ fontWeight: "600", color: "#111827" }}>{rec.barangayName}</td>
+                            <td>{rec.recommendation}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Signature block */}
+            <div style={{ marginTop: "40px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px", fontSize: "11px" }}>
+              <div>
+                <div style={{ color: "#6b7280", fontWeight: "bold", marginBottom: "36px" }}>Prepared By:</div>
+                <div style={{ borderBottom: "1px solid #cbd5e1", width: "180px", marginBottom: "4px" }}></div>
+                <div style={{ fontWeight: "bold", color: "#111827" }}>{printReport.preparedBy.toUpperCase()}</div>
+                <div style={{ color: "#6b7280", fontSize: "10px" }}>REVELA System Operator</div>
+                <div style={{ color: "#6b7280", fontSize: "10px" }}>Business Permits &amp; Licensing Office</div>
+              </div>
+              <div>
+                <div style={{ color: "#6b7280", fontWeight: "bold", marginBottom: "36px" }}>Noted By:</div>
+                <div style={{ borderBottom: "1px solid #cbd5e1", width: "180px", marginBottom: "4px" }}></div>
+                <div style={{ fontWeight: "bold", color: "#111827" }}>BPLO DEPARTMENT HEAD</div>
+                <div style={{ color: "#6b7280", fontSize: "10px" }}>Business Permits &amp; Licensing Office</div>
+              </div>
+            </div>
+
+          </div>{/* end .report-body */}
+
+          {/* -- FIXED FOOTER -- */}
+          <div className="print-footer">
+            {/* Top border line */}
+            <div style={{ borderTop: "1.5px solid #e5e7eb", marginBottom: "8px" }}></div>
+
+            {/* HOPE slogan - centered */}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ display: "inline-flex", alignItems: "baseline", gap: "2px", fontSize: "10px", fontWeight: "600", color: "#374151" }}>
+                <span style={{ display: "inline-flex", alignItems: "baseline" }}>
+                  <span style={{ fontFamily: "'Dancing Script', 'Great Vibes', 'Brush Script MT', cursive", fontSize: "18px", color: "#1d4ed8", fontWeight: "700", lineHeight: 1 }}>H</span>
+                  <span>ealth</span>
+                </span>
+                <span style={{ color: "#d1d5db", margin: "0 5px" }}>|</span>
+                <span style={{ display: "inline-flex", alignItems: "baseline" }}>
+                  <span style={{ fontFamily: "'Dancing Script', 'Great Vibes', 'Brush Script MT', cursive", fontSize: "18px", color: "#1d4ed8", fontWeight: "700", lineHeight: 1 }}>O</span>
+                  <span>pportunity</span>
+                </span>
+                <span style={{ color: "#d1d5db", margin: "0 5px" }}>|</span>
+                <span style={{ display: "inline-flex", alignItems: "baseline" }}>
+                  <span style={{ fontFamily: "'Dancing Script', 'Great Vibes', 'Brush Script MT', cursive", fontSize: "18px", color: "#1d4ed8", fontWeight: "700", lineHeight: 1 }}>P</span>
+                  <span>eace &amp; Order</span>
+                </span>
+                <span style={{ color: "#d1d5db", margin: "0 5px" }}>|</span>
+                <span style={{ display: "inline-flex", alignItems: "baseline" }}>
+                  <span style={{ fontFamily: "'Dancing Script', 'Great Vibes', 'Brush Script MT', cursive", fontSize: "18px", color: "#1d4ed8", fontWeight: "700", lineHeight: 1 }}>E</span>
+                  <span>ducation &amp; Economy</span>
+                </span>
+              </div>
+
+              {/* LOVEMATAASNAKAHOY slogan */}
+              <div style={{ fontSize: "9.5px", fontWeight: 800, color: "#d97706", letterSpacing: "0.3em", marginTop: "4px", textTransform: "uppercase", textAlign: "center" }}>
+                LOVEMATAASNAKAHOY
+              </div>
+            </div>
+
+            {/* System audit line and page number */}
+            <div style={{ fontSize: "8.5px", color: "#9ca3af", marginTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+              <span>REVELA System {'\u2022'} BPLO Compliance Audit Report</span>
+              <span className="print-page-number" style={{ fontWeight: "500" }}></span>
+            </div>
+          </div>
+
         </div>
-      </div>
-    </DashboardLayout>
+      )}
+    </>
   );
 }

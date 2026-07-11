@@ -58,8 +58,10 @@ function ForgotPasswordModal({ onClose, onSuccess }) {
   );
 }
 
+const ALLOWED_ROLES = ["Admin", "SUPER_ADMIN", "System Administrator"];
+
 export default function LoginPage() {
-  const { login, completeLogin } = useAuth();
+  const { login, completeLogin, logout } = useAuth();
   const navigate = useNavigate();
 
   // -- 2FA
@@ -280,6 +282,13 @@ const handleVerify2FA = async () => {
     try {
       const response = await verify2faRequest(tempToken, totpCode);
       const me = await completeLogin(response.access_token);
+      // Block non-admin roles from accessing the web dashboard
+      if (!ALLOWED_ROLES.includes(me?.role)) {
+        logout();
+        setLoginStep("credentials");
+        setLoginError("Access denied. This portal is for Admin and Super Admin only.");
+        return;
+      }
       if (me?.mustChangePassword) {
         await forcePasswordChange(response.access_token);
       } else {

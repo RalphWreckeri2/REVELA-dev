@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
-import { getAnalyticsOverviewRequest, getFlagsRequest } from "../services/api";
+import { getAnalyticsOverviewRequest, getFlagsRequest, getBarangayHeatmapRequest, getSectorComplianceRequest, getInspectorPerformanceRequest } from "../services/api";
 import Papa from "papaparse";
 import { saveAs } from "file-saver";
 import Swal from "sweetalert2";
@@ -13,6 +13,9 @@ const REPORTS = [
   { id: 1, title: "Weekly Compliance Summary", type: "compliance", desc: "Overview of registered vs. unregistered entities and compliance rate." },
   { id: 2, title: "Top Unregistered Establishments", type: "unregistered", desc: "List of active Red and Yellow flags indicating suspected unregistered businesses." },
   { id: 3, title: "Field Inspector Dispatch Plan", type: "dispatch", desc: "Barangay priority rankings based on the WLC Operational Priority Score (OPS)." },
+  { id: 4, title: "Barangay Heatmap & Compliance Breakdown", type: "barangay-heatmap", desc: "Spatial summary per Barangay: registered businesses, active flags (Red/Yellow), overall compliance rate.", formats: ['PDF', 'CSV'] },
+  { id: 5, title: "Sectoral & Industrial Compliance Audit", type: "sector-compliance", desc: "Classify establishments by sector/industry against their current compliance status.", formats: ['PDF', 'CSV'] },
+  { id: 6, title: "Inspector Performance & Accomplishment Log", type: "inspector-performance", desc: "Field inspector performance: completed inspections, verified flags, deployment timelines.", formats: ['PDF', 'CSV'] },
 ];
 
 export default function ExportReportsPage() {
@@ -67,6 +70,12 @@ export default function ExportReportsPage() {
         await generateUnregisteredReport(format);
       } else if (report.type === "dispatch") {
         await generateDispatchReport(format);
+      } else if (report.type === 'barangay-heatmap') {
+        await generateBarangayHeatmapReport(format);
+      } else if (report.type === 'sector-compliance') {
+        await generateSectorComplianceReport(format);
+      } else if (report.type === 'inspector-performance') {
+        await generateInspectorPerformanceReport(format);
       }
 
       Swal.fire({
@@ -227,6 +236,75 @@ export default function ExportReportsPage() {
         }
       });
     }
+  };
+
+  const generateBarangayHeatmapReport = async (format) => {
+    const data = await getBarangayHeatmapRequest(token);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `Barangay_Heatmap_${dateStr}`;
+
+    if (format === 'csv') {
+      const csv = Papa.unparse(data?.rows || data || []);
+      saveAs(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${filename}.csv`);
+      return;
+    }
+
+    setPrintReport({
+      type: 'barangay-heatmap',
+      title: 'Barangay Heatmap & Compliance Breakdown',
+      subtitle: 'Spatial summary per Barangay',
+      date: new Date().toLocaleString(),
+      preparedBy: user?.fullName || 'BPLO Staff',
+      office: 'BPLO Mataasnakahoy',
+      classification: 'Official Use / Confidential',
+      data: { rows: data?.rows || data || [] }
+    });
+  };
+
+  const generateSectorComplianceReport = async (format) => {
+    const data = await getSectorComplianceRequest(token);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `Sector_Compliance_${dateStr}`;
+
+    if (format === 'csv') {
+      const csv = Papa.unparse(data?.rows || data || []);
+      saveAs(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${filename}.csv`);
+      return;
+    }
+
+    setPrintReport({
+      type: 'sector-compliance',
+      title: 'Sectoral & Industrial Compliance Audit',
+      subtitle: 'Sector and industry compliance breakdown',
+      date: new Date().toLocaleString(),
+      preparedBy: user?.fullName || 'BPLO Staff',
+      office: 'BPLO Mataasnakahoy',
+      classification: 'Official Use / Confidential',
+      data: { rows: data?.rows || data || [] }
+    });
+  };
+
+  const generateInspectorPerformanceReport = async (format) => {
+    const data = await getInspectorPerformanceRequest(token);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `Inspector_Performance_${dateStr}`;
+
+    if (format === 'csv') {
+      const csv = Papa.unparse(data?.rows || data || []);
+      saveAs(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${filename}.csv`);
+      return;
+    }
+
+    setPrintReport({
+      type: 'inspector-performance',
+      title: 'Inspector Performance & Accomplishment Log',
+      subtitle: 'Operational inspector performance summary',
+      date: new Date().toLocaleString(),
+      preparedBy: user?.fullName || 'BPLO Staff',
+      office: 'BPLO Mataasnakahoy',
+      classification: 'Official Use / Confidential',
+      data: { rows: data?.rows || data || [] }
+    });
   };
 
   return (
@@ -427,6 +505,89 @@ export default function ExportReportsPage() {
               <p style={{ fontSize: "11px", color: "#6b7280", fontStyle: "italic", textAlign: "center", marginBottom: "16px", marginTop: "-10px" }}>
                 {printReport.subtitle}
               </p>
+            )}
+
+            {/* ── BARANGAY HEATMAP ── */}
+            {printReport.type === 'barangay-heatmap' && (
+              <div>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Barangay Heatmap & Compliance Breakdown</h3>
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th style={{ background: "#10b981", color: "#fff" }}>Barangay</th>
+                      <th style={{ background: "#10b981", color: "#fff", width: "120px" }}>Registered</th>
+                      <th style={{ background: "#10b981", color: "#fff", width: "100px" }}>Red Flags</th>
+                      <th style={{ background: "#10b981", color: "#fff", width: "100px" }}>Yellow Flags</th>
+                      <th style={{ background: "#10b981", color: "#fff", width: "120px" }}>Compliance Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printReport.data.rows.map((r, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontWeight: "600", color: "#111827" }}>{r.barangay}</td>
+                        <td>{r.registered_count}</td>
+                        <td>{r.red_flags}</td>
+                        <td>{r.yellow_flags}</td>
+                        <td style={{ fontWeight: "600" }}>{r.compliance_rate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── SECTOR COMPLIANCE ── */}
+            {printReport.type === 'sector-compliance' && (
+              <div>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Sectoral & Industrial Compliance Audit</h3>
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th style={{ background: "#6b21a8", color: "#fff" }}>Sector / Industry</th>
+                      <th style={{ background: "#6b21a8", color: "#fff", width: "120px" }}>Registered</th>
+                      <th style={{ background: "#6b21a8", color: "#fff", width: "120px" }}>Non-Compliant</th>
+                      <th style={{ background: "#6b21a8", color: "#fff", width: "120px" }}>Compliance Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printReport.data.rows.map((s, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontWeight: "600", color: "#111827" }}>{s.sector}</td>
+                        <td>{s.registered_count}</td>
+                        <td>{s.non_compliant_count}</td>
+                        <td style={{ fontWeight: "600" }}>{s.compliance_rate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── INSPECTOR PERFORMANCE ── */}
+            {printReport.type === 'inspector-performance' && (
+              <div>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Inspector Performance & Accomplishment Log</h3>
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th style={{ background: "#ef4444", color: "#fff" }}>Inspector</th>
+                      <th style={{ background: "#ef4444", color: "#fff", width: "120px" }}>Inspections Completed</th>
+                      <th style={{ background: "#ef4444", color: "#fff", width: "120px" }}>Flags Verified</th>
+                      <th style={{ background: "#ef4444", color: "#fff", width: "120px" }}>Avg Response (hrs)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printReport.data.rows.map((i, idx) => (
+                      <tr key={idx}>
+                        <td style={{ fontWeight: "600", color: "#111827" }}>{i.inspector_name}</td>
+                        <td>{i.inspections_completed}</td>
+                        <td>{i.flags_verified}</td>
+                        <td>{i.avg_response_hours}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {/* Metadata Section */}

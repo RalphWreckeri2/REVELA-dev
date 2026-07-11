@@ -364,7 +364,7 @@ def run_detection():
 
 # ── Get all flags ─────────────────────────────────────────────────────────────
 
-def get_flags(color=None, barangay_id=None, page=1, per_page=50):
+def get_flags(color=None, barangay_id=None, page=1, per_page=50, reported_by_user_id=None):
     """Return paginated geospatial_logs entries with optional filters."""
     try:
         cursor = mysql.connection.cursor()
@@ -379,6 +379,10 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50):
         if barangay_id:
             conditions.append("g.barangayID = %s")
             params.append(barangay_id)
+
+        if reported_by_user_id:
+            conditions.append("g.reportedByUserID = %s")
+            params.append(reported_by_user_id)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         offset = (page - 1) * per_page
@@ -400,11 +404,13 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50):
                 g.detectedDate,
                 g.nearestLandmark,
                 g.placeID,
+                g.reportedByUserID,
                 b.barangayID,
                 b.barangayName,
-                r.businessSize,                                  
+                r.businessSize,
                 COALESCE(g.nearestLandmark, r.businessAddress) AS resolvedAddress,
                 CASE
+                    WHEN g.reportedByUserID IS NOT NULL AND g.flagColor != 'Green' THEN 'inspector_reported'
                     WHEN g.flagColor = 'Green' AND g.placeID IS NOT NULL AND r.businessID IS NOT NULL THEN 'registry_and_maps'
                     WHEN g.flagColor = 'Green' AND g.placeID IS NULL THEN 'registry_only'
                     ELSE 'maps_only'
@@ -449,22 +455,38 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50):
 
 # ── Insert Yellow Flag ────────────────────────────────────────────────────────
 
-def insert_yellow_flag(business_name, lat, lng, barangay_id, notes=None, flag_color='Yellow'):
+def insert_yellow_flag(business_name, lat, lng, barangay_id, notes=None, flag_color='Yellow', reported_by_user_id=None):
     """Manually insert a Yellow or Orange Flag."""
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("""
             INSERT INTO geospatial_logs
                 (barangayID, reportID, detectedName, latitude, longitude,
-                 flagColor, nearestLandmark)
-            VALUES (%s, NULL, %s, %s, %s, %s, %s)
-        """, (barangay_id, business_name, lat, lng, flag_color, notes))
+                 flagColor, nearestLandmark, reportedByUserID)
+            VALUES (%s, NULL, %s, %s, %s, %s, %s, %s)
+        """, (barangay_id, business_name, lat, lng, flag_color, notes, reported_by_user_id))
         mysql.connection.commit()
         log_id = cursor.lastrowid
         cursor.close()
-        return {"logID": log_id}, None
+
+        # Fire admin notification (non-blocking)
+        if reported_by_user_id:
+            try:
+                from api.notifications.service import notify_yellow_flag_reported
+                notify_yellow_flag_reported(
+                    log_id=log_id,
+                    business_name=business_name,
+                    barangay_id=barangay_id,
+                    reporter_user_id=reported_by_user_id,
+                    flag_color=flag_color,
+                )
+            except Exception as ne:
+                print(f"insert_yellow_flag notification error: {ne}")
+
+        return {"logID": log_id, "lat": lat, "lng": lng}, None
     except Exception as e:
         return None, str(e)
+
 
 
 def update_flag_color(log_id, color):

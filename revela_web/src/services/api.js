@@ -221,6 +221,62 @@ export async function getDiagnosticClustersRequest(token) {
   }
 }
 
+// ── Reports Exports ───────────────────────────────────────────────────────────
+export async function getBarangayHeatmapRequest(token, params = {}) {
+  try {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
+    const res = await fetch(
+      `${BASE_URL}/reports/barangay-heatmap?${qs.toString()}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function getSectorComplianceRequest(token, params = {}) {
+  try {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
+    const res = await fetch(
+      `${BASE_URL}/reports/sector-compliance?${qs.toString()}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function getInspectorPerformanceRequest(token, params = {}) {
+  try {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
+    if (params.inspector_id) qs.set("inspector_id", params.inspector_id);
+    const res = await fetch(
+      `${BASE_URL}/reports/inspector-performance?${qs.toString()}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
 /**
  * Fetch the paginated business list.
  * @param {object} params - { page, limit, search, barangayID, status }

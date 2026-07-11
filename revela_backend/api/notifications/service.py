@@ -308,3 +308,81 @@ def notify_inspection_submitted(
 
     except Exception as e:
         print(f"notify_inspection_submitted error: {e}")
+
+
+def notify_yellow_flag_reported(
+    log_id: int,
+    business_name: str,
+    barangay_id: int,
+    reporter_user_id: int,
+    flag_color: str = "Yellow",
+) -> None:
+    """
+    Notify all admins when an inspector manually flags a suspected / closed business.
+    Inserts in-app notification rows + pushes SSE event to connected admin streams.
+    """
+    try:
+        _ensure_tables()
+        cur = mysql.connection.cursor()
+
+        # Inspector name
+        cur.execute(
+            "SELECT fullName FROM USERS WHERE userID = %s",
+            (reporter_user_id,),
+        )
+        insp_row = cur.fetchone() or {}
+        inspector_name = insp_row.get("fullName") or "An inspector"
+
+        # Barangay name
+        cur.execute(
+            "SELECT barangayName FROM barangays WHERE barangayID = %s",
+            (barangay_id,),
+        )
+        brgy_row = cur.fetchone() or {}
+        barangay_name = brgy_row.get("barangayName") or f"Barangay #{barangay_id}"
+
+        # All admins
+        cur.execute(
+            """
+            SELECT userID FROM USERS
+            WHERE userRole IN ('Admin', 'SUPER_ADMIN', 'System Administrator')
+            """
+        )
+        admins = cur.fetchall() or []
+
+        color_label = "closed" if flag_color == "Orange" else "suspected unregistered"
+        title = f"Yellow Flag — {color_label.title()} Business Reported"
+        body = (
+            f"{inspector_name} flagged \"{business_name}\" in {barangay_name} "
+            f"as a {color_label} business. Open the Map to review (log #{log_id})."
+        )
+        link = "/map"
+
+        for a in admins:
+            aid = int(a["userID"])
+            cur.execute(
+                """
+                INSERT INTO revela_notifications
+                    (recipientUserId, type, title, body, link)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (aid, "yellow_flag_reported", title, body, link),
+            )
+
+        mysql.connection.commit()
+        cur.close()
+
+        hub.publish_to_admins(
+            {
+                "type": "yellow_flag_reported",
+                "logID": log_id,
+                "title": title,
+                "body": body,
+                "link": link,
+                "flagColor": flag_color,
+            }
+        )
+
+    except Exception as e:
+        print(f"notify_yellow_flag_reported error: {e}")
+

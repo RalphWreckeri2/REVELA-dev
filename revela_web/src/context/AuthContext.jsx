@@ -17,6 +17,12 @@ export function AuthProvider({ children }) {
       return data;  // ← LoginPage checks this
     }
 
+    // ── Role gate: block non-admin roles BEFORE the token is ever stored ──
+    const role = data.user?.userRole;
+    if (!["Admin", "SUPER_ADMIN", "System Administrator"].includes(role)) {
+      throw new Error("Access denied. This portal is for Admin and Super Admin only.");
+    }
+
     setToken(data.access_token);
     const me = await getMeRequest(data.access_token);
     setUser(me);
@@ -25,8 +31,12 @@ export function AuthProvider({ children }) {
 
   // Called after 2FA verification succeeds
   async function completeLogin(accessToken) {
-    setToken(accessToken);
     const me = await getMeRequest(accessToken);
+    // Role gate: block non-admin roles from storing a session
+    if (!["Admin", "SUPER_ADMIN", "System Administrator"].includes(me?.role)) {
+      throw new Error("Access denied. This portal is for Admin and Super Admin only.");
+    }
+    setToken(accessToken);
     setUser(me);
     return me;
   }

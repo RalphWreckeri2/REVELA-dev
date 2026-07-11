@@ -24,6 +24,11 @@ def login():
 
     user = find_user_by_email(data["email"])
 
+    # ── Role gate: only Admin / SUPER_ADMIN / System Administrator may use the web portal ──
+    WEB_ALLOWED_ROLES = ("Admin", "SUPER_ADMIN", "System Administrator")
+    if user and user.get("userRole") not in WEB_ALLOWED_ROLES:
+        return jsonify({"error": "Access denied. This portal is for Admin and Super Admin only."}), 403
+
     if user and user.get("is_2fa_enabled"):
         temp_token = create_access_token(
             identity=str(user["userID"]),

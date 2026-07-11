@@ -21,71 +21,71 @@ import {
 const Icon = {
   Upload: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   ),
   Search: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   ),
   Filter: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
     </svg>
   ),
   ChevronLeft: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="15 18 9 12 15 6"/>
+      <polyline points="15 18 9 12 15 6" />
     </svg>
   ),
   ChevronRight: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polyline points="9 18 15 12 9 6"/>
+      <polyline points="9 18 15 12 9 6" />
     </svg>
   ),
   Download: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
     </svg>
   ),
   Import: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 4 23 10 17 10"/>
-      <polyline points="1 20 1 14 7 14"/>
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </svg>
   ),
   Eye: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   ),
   Database: () => (
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <ellipse cx="12" cy="5" rx="9" ry="3"/>
-      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
     </svg>
   ),
   Check: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <polyline points="20 6 9 17 4 12"/>
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   ),
   AlertCircle: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="10"/>
-      <line x1="12" y1="8" x2="12" y2="12"/>
-      <line x1="12" y1="16" x2="12.01" y2="16"/>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
     </svg>
   ),
   X: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   ),
   Edit: () => (
@@ -167,8 +167,8 @@ function EmptyState({ hasFilters, onUpload }) {
 // ── Business Detail Modal ─────────────────────────────────────────────────────
 function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess }) {
   const [business, setBusiness] = useState(null);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({});
@@ -207,7 +207,7 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
       Swal.fire({ icon: 'success', title: 'Saved', text: 'Business details updated.', timer: 1500, showConfirmButton: false });
       setIsEditing(false);
       if (onSuccess) onSuccess();
-      
+
       // Re-fetch to update local modal view
       const updated = await getBusinessByIdRequest(businessId, token);
       setBusiness(updated);
@@ -261,7 +261,7 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
         </div>
 
         {loading && <p style={{ color: "var(--color-muted)", fontSize: 13 }}>Loading…</p>}
-        {error   && <p style={{ color: "var(--color-danger)", fontSize: 13 }}>{error}</p>}
+        {error && <p style={{ color: "var(--color-danger)", fontSize: 13 }}>{error}</p>}
 
         {business && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -281,14 +281,14 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
               <div key={label} style={{ display: "flex", gap: 12, alignItems: isEditing && field ? "center" : "flex-start", minHeight: isEditing && field ? 36 : "auto" }}>
                 <span style={{ minWidth: 150, fontSize: 12, color: "var(--color-muted)", fontWeight: 500, paddingTop: isEditing && field ? 0 : 3 }}>
                   {label}
-                  {isEditing && field === "businessName" && <span style={{color: "var(--color-danger)"}}> *</span>}
+                  {isEditing && field === "businessName" && <span style={{ color: "var(--color-danger)" }}> *</span>}
                 </span>
-                
+
                 {isEditing && field ? (
                   field === "applicationStatus" ? (
-                    <select 
-                      value={formData[field]} 
-                      onChange={(e) => setFormData({...formData, [field]: e.target.value})} 
+                    <select
+                      value={formData[field]}
+                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
                       style={styles.editInput}
                     >
                       <option value="Pending">Pending</option>
@@ -298,9 +298,9 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
                       <option value="Closed">Closed</option>
                     </select>
                   ) : field === "businessSize" ? (
-                    <select 
-                      value={formData[field]} 
-                      onChange={(e) => setFormData({...formData, [field]: e.target.value})} 
+                    <select
+                      value={formData[field]}
+                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
                       style={styles.editInput}
                     >
                       <option value="">Select size...</option>
@@ -310,10 +310,10 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
                       <option value="Large">Large</option>
                     </select>
                   ) : (
-                    <input 
-                      value={formData[field]} 
-                      onChange={(e) => setFormData({...formData, [field]: e.target.value})} 
-                      style={styles.editInput} 
+                    <input
+                      value={formData[field]}
+                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                      style={styles.editInput}
                       placeholder={`Enter ${label.toLowerCase()}`}
                     />
                   )
@@ -382,31 +382,40 @@ export default function RegistryPage() {
   const { token, user } = useContext(AuthContext);
   const isAdmin = user?.role === "Admin" || user?.role === "SUPER_ADMIN";
 
-  const [businesses,    setBusinesses]    = useState([]);
-  const [total,         setTotal]         = useState(0);
-  const [totalPages,    setTotalPages]    = useState(1);
-  const [loading,       setLoading]       = useState(true);
-  const [error,         setError]         = useState("");
+  const [businesses, setBusinesses] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [search,        setSearch]        = useState("");
-  const [barangay,      setBarangay]      = useState("All Barangays");
-  const [status,        setStatus]        = useState("All Status");
-  const [page,          setPage]          = useState(1);
-  const [pageSize,      setPageSize]      = useState(DEFAULT_PAGE_SIZE);
+  const [search, setSearch] = useState("");
+  const [barangay, setBarangay] = useState("All Barangays");
+  const [status, setStatus] = useState("All Status");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  const [showUpload,    setShowUpload]    = useState(false);
-  const [showImport,    setShowImport]    = useState(false);
-  const [detailId,      setDetailId]      = useState(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [detailId, setDetailId] = useState(null);
 
   // Dynamic barangay list loaded from API
-  const [barangays,     setBarangays]     = useState([]);
+  const [barangays, setBarangays] = useState([]);
   useEffect(() => {
     async function loadBarangays() {
       try {
         const data = await getBarangaysRequest(token);
-        setBarangays(data);
+        // The API may return a bare array or a {data: [...]} wrapper —
+        // normalize either shape so `barangays` is always an array and
+        // `.map` below never throws.
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+        setBarangays(list);
       } catch (err) {
         console.error("Failed to load barangays", err);
+        setBarangays([]); // don't leave a stale/bad value in state
       }
     }
     loadBarangays();
@@ -425,13 +434,13 @@ export default function RegistryPage() {
     setError("");
     try {
       const params = { page, limit: pageSize };
-      if (debouncedSearch)                         params.search     = debouncedSearch;
-      if (barangay !== "All Barangays")            params.barangayID = barangay; // sends ID
-      if (status   !== "All Status")               params.status     = status;
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (barangay !== "All Barangays") params.barangayID = barangay; // sends ID
+      if (status !== "All Status") params.status = status;
 
       const result = await getRegistryRequest(params, token);
-      setBusinesses(result.data   ?? []);
-      setTotal(result.total       ?? 0);
+      setBusinesses(result.data ?? []);
+      setTotal(result.total ?? 0);
       setTotalPages(Math.max(1, result.pages ?? Math.ceil((result.total ?? 0) / pageSize)));
     } catch (err) {
       setError(err.message || "Failed to load registry.");
@@ -446,8 +455,8 @@ export default function RegistryPage() {
     try {
       // 1. Fetch data from the existing Python API 
       // We set limit to 10000 to bypass the 10-row page limit
-      const result = await getRegistryRequest({ 
-        limit: 10000, 
+      const result = await getRegistryRequest({
+        limit: 10000,
         status: status !== "All Status" ? status : undefined,
         barangayID: barangay !== "All Barangays" ? barangay : undefined,
         search: debouncedSearch
@@ -461,7 +470,7 @@ export default function RegistryPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `REVELA_Registry_${new Date().toISOString().slice(0,10)}.csv`);
+      link.setAttribute('download', `REVELA_Registry_${new Date().toISOString().slice(0, 10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -521,16 +530,16 @@ export default function RegistryPage() {
           <p className="page-subtitle">Official BPLO-registered establishments in Mataasnakahoy.</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button 
-            className="ghost-btn" 
-            onClick={handleImport} 
+          <button
+            className="ghost-btn"
+            onClick={handleImport}
             disabled={loading}
           >
             <Icon.Import /> Import
           </button>
-          <button 
-            className="ghost-btn" 
-            onClick={handleExport} 
+          <button
+            className="ghost-btn"
+            onClick={handleExport}
             disabled={loading}
           >
             <Icon.Download /> {loading ? "Exporting..." : "Export CSV"}
@@ -546,10 +555,10 @@ export default function RegistryPage() {
       {/* Summary Strip */}
       <div style={styles.summaryStrip}>
         {[
-          { label: "Total Businesses", value: loading ? "—" : total,                            color: "var(--color-ink)" },
-          { label: "Showing",          value: loading ? "—" : businesses.length,                color: "var(--color-primary)" },
-          { label: "Current Page",     value: loading ? "—" : `${page} / ${totalPages}`,        color: "var(--color-muted)" },
-          { label: "Page Size",        value: loading ? "—" : pageSize,                              color: "var(--color-muted)" },
+          { label: "Total Businesses", value: loading ? "—" : total, color: "var(--color-ink)" },
+          { label: "Showing", value: loading ? "—" : businesses.length, color: "var(--color-primary)" },
+          { label: "Current Page", value: loading ? "—" : `${page} / ${totalPages}`, color: "var(--color-muted)" },
+          { label: "Page Size", value: loading ? "—" : pageSize, color: "var(--color-muted)" },
         ].map(s => (
           <div key={s.label} className="frosted-glass saas-card" style={styles.summaryCard}>
             <span style={{ ...styles.summaryValue, color: s.color }}>{s.value}</span>
@@ -794,29 +803,29 @@ export default function RegistryPage() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = {
   summaryStrip: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 },
-  summaryCard:  { display: "flex", flexDirection: "column", gap: 4, padding: "18px 24px", borderRadius: "var(--radius-lg)" },
+  summaryCard: { display: "flex", flexDirection: "column", gap: 4, padding: "18px 24px", borderRadius: "var(--radius-lg)" },
   summaryValue: { fontSize: 28, fontWeight: 800, lineHeight: 1 },
   summaryLabel: { fontSize: 12, color: "var(--color-muted)", fontWeight: 500 },
-  filtersBar:   { display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderRadius: "var(--radius-lg)" },
+  filtersBar: { display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderRadius: "var(--radius-lg)" },
   select: {
     background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: 13,
     color: "var(--color-ink)", fontFamily: "var(--font-base)", cursor: "pointer", outline: "none",
   },
   resultCount: { fontSize: 12, color: "var(--color-muted)", fontWeight: 500, whiteSpace: "nowrap" },
-  table:        { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  thead:        { background: "rgba(248,249,250,0.9)", borderBottom: "1px solid var(--color-border)" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  thead: { background: "rgba(248,249,250,0.9)", borderBottom: "1px solid var(--color-border)" },
   th: {
     padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700,
     color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap",
   },
-  tr:           { borderBottom: "1px solid rgba(226,232,240,0.4)", transition: "background 0.15s" },
-  td:           { padding: "13px 16px", color: "var(--color-muted)", whiteSpace: "nowrap" },
-  emptyCell:    { padding: "48px 16px", textAlign: "center", color: "var(--color-muted)", fontSize: 14 },
+  tr: { borderBottom: "1px solid rgba(226,232,240,0.4)", transition: "background 0.15s" },
+  td: { padding: "13px 16px", color: "var(--color-muted)", whiteSpace: "nowrap" },
+  emptyCell: { padding: "48px 16px", textAlign: "center", color: "var(--color-muted)", fontSize: 14 },
   emptyContent: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4 },
-  viewBtn:      { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 },
-  pagination:   { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderTop: "1px solid var(--color-border-soft)" },
-  pageInfo:     { fontSize: 12, color: "var(--color-muted)" },
+  viewBtn: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 },
+  pagination: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderTop: "1px solid var(--color-border-soft)" },
+  pageInfo: { fontSize: 12, color: "var(--color-muted)" },
   pageBtn: {
     minWidth: 32, height: 32, padding: "0 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)",
     background: "#fff", color: "var(--color-muted)", cursor: "pointer",
@@ -828,10 +837,10 @@ const styles = {
 
   // Modal styles
   modalBackdrop: { position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
-  modalCard:     { background: "#fff", borderRadius: "var(--radius-xl)", padding: 32, boxShadow: "0 24px 60px rgba(15,23,42,0.18)", position: "relative", maxHeight: "90vh", overflowY: "auto" },
-  modalHeader:   { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
-  modalTitle:    { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", margin: 0 },
-  closeBtn:      { background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 },
-  modalFooter:   { display: "flex", justifyContent: "flex-end", gap: 10 },
-  editInput:     { flex: 1, padding: "8px 12px", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: 13, color: "var(--color-ink)", fontFamily: "var(--font-base)", outline: "none", boxSizing: "border-box" },
+  modalCard: { background: "#fff", borderRadius: "var(--radius-xl)", padding: 32, boxShadow: "0 24px 60px rgba(15,23,42,0.18)", position: "relative", maxHeight: "90vh", overflowY: "auto" },
+  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+  modalTitle: { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", margin: 0 },
+  closeBtn: { background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 },
+  modalFooter: { display: "flex", justifyContent: "flex-end", gap: 10 },
+  editInput: { flex: 1, padding: "8px 12px", border: "1px solid var(--color-border)", borderRadius: "var(--radius-sm)", fontSize: 13, color: "var(--color-ink)", fontFamily: "var(--font-base)", outline: "none", boxSizing: "border-box" },
 };

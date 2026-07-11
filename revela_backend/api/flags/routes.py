@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import get_jwt_identity
 from api.flags.service import (
     run_detection,
     get_flags,
@@ -33,10 +34,31 @@ def get_flags_route():
     barangay_id = request.args.get("barangayID", type=int)
     page = request.args.get("page",  1,  type=int)
     per_page = request.args.get("limit", 50, type=int)
+    reported_by_user_id = request.args.get("reportedByUserID", type=int)
 
     result, error = get_flags(
         color=color,
         barangay_id=barangay_id,
+        page=page,
+        per_page=per_page,
+        reported_by_user_id=reported_by_user_id,
+    )
+    if error:
+        return jsonify({"error": error}), 500
+    return jsonify(result), 200
+
+
+# ── GET /api/flags/mine ───────────────────────────────────────────────────────
+@flags_bp.route("/mine", methods=["GET"])
+@jwt_required()
+def get_my_flags_route():
+    """Return all flags reported by the currently authenticated inspector."""
+    user_id = int(get_jwt_identity())
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("limit", 100, type=int)
+
+    result, error = get_flags(
+        reported_by_user_id=user_id,
         page=page,
         per_page=per_page,
     )
@@ -47,9 +69,9 @@ def get_flags_route():
 
 # ── POST /api/flags/yellow ────────────────────────────────────────────────────
 @flags_bp.route("/yellow", methods=["POST"])
-@admin_required()
+@jwt_required()  # inspectors and admins both allowed
 def yellow_flag_route():
-    """Manually insert a Yellow or Orange Flag."""
+    """Manually insert a Yellow or Orange Flag. Open to Inspectors and Admins."""
     data = request.get_json()
 
     required = ["businessName", "lat", "lng", "barangayID"]
@@ -60,6 +82,8 @@ def yellow_flag_route():
     if flag_color not in ("Yellow", "Orange"):
         return jsonify({"error": "Invalid flag color for manual creation"}), 400
 
+    reporter_user_id = int(get_jwt_identity())
+
     result, error = insert_yellow_flag(
         business_name=data["businessName"],
         lat=data["lat"],
@@ -67,6 +91,7 @@ def yellow_flag_route():
         barangay_id=data["barangayID"],
         notes=data.get("notes"),
         flag_color=flag_color,
+        reported_by_user_id=reporter_user_id,
     )
     if error:
         return jsonify({"error": error}), 500

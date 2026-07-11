@@ -264,6 +264,10 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
           window.dispatchEvent(
             new CustomEvent("revela:inspection-update", { detail: data }),
           );
+        } else if (data.type === "yellow_flag_reported") {
+          window.dispatchEvent(
+            new CustomEvent("revela:yellow-flag", { detail: data }),
+          );
         } else if (data.type === "detection_progress") {
           window.dispatchEvent(
             new CustomEvent("revela:detection-progress", { detail: data }),

@@ -11,6 +11,7 @@ import '../component/app_sidebar.dart';
 import '../component/inspection_card.dart';
 import '../component/inspection_modal.dart';
 import '../service/assignment_notifications.dart';
+import '../service/flag_service.dart';
 import '../service/in_app_notifications_service.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
@@ -44,6 +45,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<InspectionTask> _tasks = [];
   bool _loadingTasks = true;
   String? _taskError;
+
+  /// Yellow flags submitted by this inspector (shown as extra map markers).
+  List<MyFlag> _myFlags = [];
 
   int _unreadCount = 0;
 
@@ -92,7 +96,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _primePermissionsAndFetch() async {
     await Permission.locationWhenInUse.request();
-    await Future.wait([_fetchTasks(), _fetchNotifications()]);
+    await Future.wait([_fetchTasks(), _fetchNotifications(), _fetchMyFlags()]);
   }
 
   Future<void> _fetchNotifications({bool silent = false}) async {
@@ -160,6 +164,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         });
       }
     }
+    // Silently refresh own-reported flags alongside every task refresh.
+    _fetchMyFlags();
+  }
+
+  Future<void> _fetchMyFlags() async {
+    try {
+      final flags = await FlagService().fetchMyYellowFlags();
+      if (mounted) setState(() => _myFlags = flags);
+    } catch (e) {
+      debugPrint('_fetchMyFlags: $e');
+    }
   }
 
   void _syncMapToTasks() {
@@ -204,6 +219,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Set<Marker> _buildFlagMarkers() {
     final markers = <Marker>{};
+
+    // ── Assignment-task markers (pinned by the system) ──────────────────
     for (final t in _tasks) {
       if (t.latitude == null || t.longitude == null) continue;
       final hue = switch (t.flagColor) {
@@ -224,6 +241,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       );
     }
+
+    // ── Inspector-reported yellow flag markers ──────────────────────────
+    // These are flags this inspector submitted via the "Flag Business" button.
+    // They use a slightly orange-yellow hue (hueOrange) to visually differ
+    // from system-assigned yellow-flag tasks above, and show a "You flagged"
+    // snippet so the inspector knows it's their own submission.
+    for (final f in _myFlags) {
+      // Skip if this flag is already shown as an assigned task.
+      if (_tasks.any((t) => t.logID == f.logID)) continue;
+      markers.add(
+        Marker(
+          markerId: MarkerId('my_flag_${f.logID}'),
+          position: LatLng(f.lat, f.lng),
+          infoWindow: InfoWindow(
+            title: f.detectedName,
+            snippet: 'You flagged this • ${f.flagColor}',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueOrange,
+          ),
+        ),
+      );
+    }
+
     return markers;
   }
 
@@ -274,6 +315,61 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       backgroundColor: Colors.transparent,
       builder: (_) =>
           InspectionModal(task: task, onSubmitted: () => _fetchTasks()),
+    );
+  }
+
+  // ── Open yellow flag sheet ────────────────────────────────────────────────
+  void _showYellowFlagSheet() {
+    // Grab current map-center position for default lat/lng
+    double? defaultLat;
+    double? defaultLng;
+    try {
+      // Try to use the last known GPS position as default
+      Geolocator.getLastKnownPosition().then((pos) {
+        defaultLat = pos?.latitude;
+        defaultLng = pos?.longitude;
+      });
+    } catch (_) {}
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _YellowFlagSheet(
+        defaultLat: defaultLat,
+        defaultLng: defaultLng,
+        onSuccess: (MyFlag newFlag) {
+          if (!mounted) return;
+          // Optimistically add the new flag to the map before the next poll.
+          setState(() {
+            if (!_myFlags.any((f) => f.logID == newFlag.logID)) {
+              _myFlags = [..._myFlags, newFlag];
+            }
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFD97706),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              content: const Row(
+                children: [
+                  Icon(Icons.flag_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Yellow flag reported successfully.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -663,7 +759,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
 
-          // ── 4. Floating button when docker is closed ─────────────────────
+          // ── 4. Yellow Flag FAB ───────────────────────────────────────────
+          Positioned(
+            bottom: _isDockerExpanded ? screenHeight * 0.5 + 16 : 110,
+            left: 24,
+            child: FloatingActionButton.extended(
+              heroTag: 'yellow_flag',
+              backgroundColor: const Color(0xFFF59E0B),
+              foregroundColor: Colors.white,
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              onPressed: _showYellowFlagSheet,
+              icon: const Icon(Icons.flag_rounded, size: 20),
+              label: const Text(
+                'Flag Business',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+          ),
+
+          // ── 5. Floating button when docker is closed ─────────────────────
           if (!_isDockerExpanded)
             Positioned(
               bottom: 40,
@@ -790,7 +907,9 @@ class _InspectionModalState extends State<_InspectionModal> {
         notes: remarks.isEmpty ? null : remarks,
         verifiedLat: vLat,
         verifiedLng: vLng,
-        evidenceLocalPath: _uploadedPhotoUrl == null ? _evidenceLocalPath : null,
+        evidenceLocalPath: _uploadedPhotoUrl == null
+            ? _evidenceLocalPath
+            : null,
         photoURL: _uploadedPhotoUrl,
       );
 
@@ -866,9 +985,9 @@ class _InspectionModalState extends State<_InspectionModal> {
     } catch (e) {
       debugPrint('uploadEvidence error: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
     } finally {
       if (mounted) setState(() => _uploadingEvidence = false);
     }
@@ -1073,8 +1192,13 @@ class _InspectionModalState extends State<_InspectionModal> {
                     Row(
                       children: [
                         TextButton.icon(
-                          onPressed: _uploadingEvidence ? null : _showPickerOptions,
-                          icon: const Icon(Icons.cameraswitch_outlined, size: 18),
+                          onPressed: _uploadingEvidence
+                              ? null
+                              : _showPickerOptions,
+                          icon: const Icon(
+                            Icons.cameraswitch_outlined,
+                            size: 18,
+                          ),
                           label: const Text('Retake'),
                         ),
                         TextButton.icon(
@@ -1142,8 +1266,8 @@ class _InspectionModalState extends State<_InspectionModal> {
                       width: double.infinity,
                       height: 48,
                       child: OutlinedButton.icon(
-                        onPressed: _uploadingEvidence ||
-                                _uploadedPhotoUrl != null
+                        onPressed:
+                            _uploadingEvidence || _uploadedPhotoUrl != null
                             ? null
                             : _uploadEvidence,
                         icon: _uploadingEvidence
@@ -1239,8 +1363,9 @@ class _InspectionModalState extends State<_InspectionModal> {
                       : _onSubmit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.darkGreen,
-                    disabledBackgroundColor:
-                        AppColors.darkGreen.withOpacity(0.5),
+                    disabledBackgroundColor: AppColors.darkGreen.withOpacity(
+                      0.5,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -1541,6 +1666,749 @@ class _NotificationsPanelState extends State<_NotificationsPanel> {
                       );
                     },
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Yellow Flag Bottom Sheet ─────────────────────────────────────────────────
+
+class _YellowFlagSheet extends StatefulWidget {
+  final double? defaultLat;
+  final double? defaultLng;
+  final void Function(MyFlag) onSuccess;
+
+  const _YellowFlagSheet({
+    this.defaultLat,
+    this.defaultLng,
+    required this.onSuccess,
+  });
+
+  @override
+  State<_YellowFlagSheet> createState() => _YellowFlagSheetState();
+}
+
+class _YellowFlagSheetState extends State<_YellowFlagSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _latCtrl = TextEditingController();
+  final _lngCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+
+  final FlagService _flagService = FlagService();
+
+  List<Barangay> _barangays = [];
+  Barangay? _selectedBarangay;
+  bool _loadingBarangays = true;
+  bool _submitting = false;
+  String? _errorMsg;
+
+  // True once the user has interacted with location in any way (picked from
+  // map, pressed "Current Location", or changed barangay). Guards against
+  // the slow, silent GPS fetch kicked off in initState resolving *after*
+  // the user has already made their own choice and stomping it back to
+  // whatever the device's last-known/simulated GPS fix is.
+  bool _locationTouched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _latCtrl.text = widget.defaultLat?.toStringAsFixed(6) ?? '';
+    _lngCtrl.text = widget.defaultLng?.toStringAsFixed(6) ?? '';
+    _loadBarangays();
+    _autoFillGps(silent: true);
+  }
+
+  Future<void> _autoFillGps({bool silent = false}) async {
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 6),
+        ),
+      );
+      if (!mounted) return;
+      // If this was the automatic background fetch and the user has since
+      // touched location themselves (picked a spot, changed barangay, or
+      // pressed the button directly), don't overwrite their choice.
+      if (silent && _locationTouched) return;
+      setState(() {
+        _latCtrl.text = pos.latitude.toStringAsFixed(6);
+        _lngCtrl.text = pos.longitude.toStringAsFixed(6);
+        _locationTouched = true;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadBarangays() async {
+    try {
+      final list = await _flagService.fetchBarangays();
+      if (mounted) {
+        setState(() {
+          _barangays = list;
+          _loadingBarangays = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadingBarangays = false;
+          _errorMsg = 'Could not load barangays. Check connection.';
+        });
+      }
+    }
+  }
+
+  void _openMapPicker() {
+    showDialog(
+      context: context,
+      builder: (ctx) => _LocationPickerDialog(
+        initialLat: double.tryParse(_latCtrl.text.trim()),
+        initialLng: double.tryParse(_lngCtrl.text.trim()),
+        onLocationPicked: (lat, lng) {
+          setState(() {
+            _latCtrl.text = lat.toStringAsFixed(6);
+            _lngCtrl.text = lng.toStringAsFixed(6);
+            _locationTouched = true;
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_selectedBarangay == null) {
+      setState(() => _errorMsg = 'Please select a barangay.');
+      return;
+    }
+
+    final lat = double.tryParse(_latCtrl.text.trim());
+    final lng = double.tryParse(_lngCtrl.text.trim());
+    if (lat == null || lng == null) {
+      setState(() => _errorMsg = 'Coordinates must be valid numbers.');
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _errorMsg = null;
+    });
+
+    try {
+      final newFlag = await _flagService.reportYellowFlag(
+        businessName: _nameCtrl.text.trim(),
+        lat: lat,
+        lng: lng,
+        barangayID: _selectedBarangay!.id,
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onSuccess(newFlag);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _errorMsg = 'Failed to submit. Please try again.';
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _latCtrl.dispose();
+    _lngCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, bottom + 24),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.flag_rounded,
+                    color: Color(0xFFD97706),
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Flag Suspected Business',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1F2933),
+                        ),
+                      ),
+                      Text(
+                        'Mark an unregistered establishment on the map.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Error banner
+            if (_errorMsg != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFFD97706),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMsg!,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
+
+            // Form
+            Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Business name
+                  TextFormField(
+                    controller: _nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Business Name *',
+                      hintText: 'e.g. Aling Nena\'s Sari-Sari Store',
+                      prefixIcon: const Icon(Icons.storefront_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Barangay dropdown
+                  DropdownButtonFormField<Barangay>(
+                    decoration: InputDecoration(
+                      labelText: 'Barangay *',
+                      prefixIcon: const Icon(Icons.location_city_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    isExpanded: true,
+                    hint: _loadingBarangays
+                        ? const Text('Loading barangays…')
+                        : const Text('Select barangay'),
+                    value: _selectedBarangay,
+                    items: _barangays.map((b) {
+                      return DropdownMenuItem<Barangay>(
+                        value: b,
+                        child: Text(b.name, overflow: TextOverflow.ellipsis),
+                      );
+                    }).toList(),
+                    onChanged: _loadingBarangays
+                        ? null
+                        : (val) => setState(() {
+                            _selectedBarangay = val;
+                            // Clear previously picked coordinates — they
+                            // belonged to the old barangay and are no
+                            // longer valid for the newly selected one.
+                            _latCtrl.clear();
+                            _lngCtrl.clear();
+                            _locationTouched = true;
+                          }),
+                    validator: (v) => v == null ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Location picker section
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on_rounded,
+                              color: AppColors.darkGreen,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Location *',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.darkGreen,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (_latCtrl.text.isEmpty)
+                          const Text(
+                            'No location selected',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Lat: ${_latCtrl.text}, Lng: ${_lngCtrl.text}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF374151),
+                              fontFamily: 'Courier',
+                            ),
+                          ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 44,
+                                child: OutlinedButton.icon(
+                                  onPressed: _openMapPicker,
+                                  icon: const Icon(
+                                    Icons.map_rounded,
+                                    size: 16,
+                                  ),
+                                  label: const Text(
+                                    'Pick from Map',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12.5),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.darkGreen,
+                                    side: const BorderSide(
+                                      color: AppColors.darkGreen,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SizedBox(
+                                height: 44,
+                                child: OutlinedButton.icon(
+                                  onPressed: _autoFillGps,
+                                  icon: const Icon(
+                                    Icons.my_location_rounded,
+                                    size: 16,
+                                  ),
+                                  label: const Text(
+                                    'Current Location',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12.5),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.darkGreen,
+                                    side: const BorderSide(
+                                      color: AppColors.darkGreen,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Notes
+                  TextFormField(
+                    controller: _notesCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Notes (optional)',
+                      hintText: 'Observations, description, landmarks…',
+                      prefixIcon: const Icon(Icons.notes_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignLabelWithHint: true,
+                    ),
+                    maxLines: 3,
+                    minLines: 2,
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                  const SizedBox(height: 22),
+
+                  // Submit button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD97706),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      onPressed: _submitting ? null : _submit,
+                      icon: _submitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.flag_rounded, size: 20),
+                      label: Text(
+                        _submitting ? 'Submitting…' : 'Submit Yellow Flag',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Location Picker Dialog ──────────────────────────────────────────────────
+class _LocationPickerDialog extends StatefulWidget {
+  final double? initialLat;
+  final double? initialLng;
+  final Function(double lat, double lng) onLocationPicked;
+
+  const _LocationPickerDialog({
+    this.initialLat,
+    this.initialLng,
+    required this.onLocationPicked,
+  });
+
+  @override
+  State<_LocationPickerDialog> createState() => _LocationPickerDialogState();
+}
+
+class _LocationPickerDialogState extends State<_LocationPickerDialog> {
+  late GoogleMapController _mapController;
+  LatLng? _selectedLocation;
+
+  static const CameraPosition _initialCamera = CameraPosition(
+    target: LatLng(13.9667, 121.1167),
+    zoom: 15,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialLat != null && widget.initialLng != null) {
+      _selectedLocation = LatLng(widget.initialLat!, widget.initialLng!);
+    }
+  }
+
+  void _onMapTap(LatLng tappedPoint) {
+    setState(() {
+      _selectedLocation = tappedPoint;
+    });
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+    // initialCameraPosition is only honored on the very first frame and is
+    // unreliable inside a Dialog (the map can otherwise fall back to its
+    // default world view centered around the US). Explicitly move the
+    // camera once the map is ready so it always lands on the correct spot —
+    // either the previously picked location, or Mataasnakahoy by default.
+    final target = _selectedLocation ?? _initialCamera.target;
+    controller.moveCamera(
+      CameraUpdate.newLatLngZoom(target, _selectedLocation != null ? 15 : 15),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.darkGreen,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.location_on_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Pick Location',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        'Tap on the map to select a location',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+
+          // Map
+          SizedBox(
+            height: 400,
+            child: GoogleMap(
+              initialCameraPosition: _selectedLocation != null
+                  ? CameraPosition(target: _selectedLocation!, zoom: 15)
+                  : _initialCamera,
+              onMapCreated: _onMapCreated,
+              onTap: _onMapTap,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+              markers: _selectedLocation != null
+                  ? {
+                      Marker(
+                        markerId: const MarkerId('selected'),
+                        position: _selectedLocation!,
+                        infoWindow: InfoWindow(
+                          title:
+                              '${_selectedLocation!.latitude.toStringAsFixed(4)}, ${_selectedLocation!.longitude.toStringAsFixed(4)}',
+                        ),
+                      ),
+                    }
+                  : {},
+            ),
+          ),
+
+          // Info and Actions
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(12),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_selectedLocation != null) ...[
+                  Text(
+                    'Selected Location:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Text(
+                      'Lat: ${_selectedLocation!.latitude.toStringAsFixed(6)}\nLng: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'Courier',
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ] else
+                  Text(
+                    'Tap on the map to select a location',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 46,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.darkGreen,
+                            side: const BorderSide(color: AppColors.darkGreen),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: SizedBox(
+                        height: 46,
+                        child: ElevatedButton(
+                          onPressed: _selectedLocation != null
+                              ? () {
+                                  widget.onLocationPicked(
+                                    _selectedLocation!.latitude,
+                                    _selectedLocation!.longitude,
+                                  );
+                                  Navigator.pop(context);
+                                }
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.darkGreen,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Confirm Location',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),

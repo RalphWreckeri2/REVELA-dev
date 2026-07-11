@@ -33,7 +33,7 @@ class AuthService {
         receiveTimeout: const Duration(seconds: 30),
       ),
     );
-
+  
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest:

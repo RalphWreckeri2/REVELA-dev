@@ -152,4 +152,6 @@ def get_barangays():
         "SELECT barangayID, barangayName FROM barangays ORDER BY barangayName")
     rows = cursor.fetchall()
     cursor.close()
-    return jsonify(rows), 200
+    # Convert cursor results to list of dicts
+    data = [dict(row) for row in rows] if rows else []
+    return jsonify({"data": data}), 200

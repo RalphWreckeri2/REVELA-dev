@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   // Primary greens
@@ -24,7 +25,7 @@ class AppTheme {
   static ThemeData get theme {
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'Roboto',
+      textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.darkGreen,
         brightness: Brightness.light,
@@ -36,11 +37,23 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
-      fontFamily: 'Roboto',
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.darkGreen,
         brightness: Brightness.dark,
       ),
     );
   }
+}
+
+extension ThemeContext on BuildContext {
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
+  Color get adaptiveSurface => isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+  Color get adaptiveBackground => isDarkMode ? const Color(0xFF121212) : AppColors.background;
+  Color get adaptiveTextDark => isDarkMode ? Colors.white : AppColors.textDark;
+  Color get adaptiveTextMid => isDarkMode ? Colors.white70 : AppColors.textMid;
+  Color get adaptiveTextLight => isDarkMode ? Colors.white54 : AppColors.textLight;
+  Color get adaptiveBorder => isDarkMode ? const Color(0xFF424242) : AppColors.borderColor;
+  Color get adaptivePrimary => isDarkMode ? AppColors.lightGreen : AppColors.darkGreen;
 }

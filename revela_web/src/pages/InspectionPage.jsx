@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useContext } from "react";
+import { createPortal } from "react-dom";
 import DashboardLayout from "../components/DashboardLayout";
 import { AuthContext } from "../context/AuthContext";
 import {
@@ -14,7 +15,7 @@ import {
   reassignSubmittedInspectionRequest,
   verifyInspectionRequest,
   getInspectorsRequest,
-  inspectionEvidenceUrl,
+  inspectionEvidenceUrls,
 } from "../services/api";
 import Swal from "sweetalert2";
 
@@ -140,6 +141,10 @@ function AssignModal({ report, token, onClose, onSuccess }) {
 
   const handleAssign = async () => {
     if (!selectedUID) { setError("Select an inspector first."); return; }
+    if (deadline && new Date(deadline) < new Date()) {
+      setError("Deadline cannot be in the past.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -165,7 +170,7 @@ function AssignModal({ report, token, onClose, onSuccess }) {
     }
   };
 
-  return (
+  return createPortal(
     <div style={s.backdrop} onClick={!loading ? onClose : undefined}>
       <div style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
@@ -223,6 +228,7 @@ function AssignModal({ report, token, onClose, onSuccess }) {
           type="datetime-local"
           style={{ ...s.fieldSelect, boxSizing: "border-box", marginTop: 4 }}
           value={deadline}
+          min={new Date().toISOString().slice(0, 16)}
           onChange={e => setDeadline(e.target.value)}
         />
 
@@ -239,7 +245,8 @@ function AssignModal({ report, token, onClose, onSuccess }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -295,22 +302,27 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
           </div>
         )}
 
-        {inspectionEvidenceUrl(report.photoPath) && (
+        {inspectionEvidenceUrls(report.photoPath).length > 0 && (
           <div style={{ marginBottom: 14 }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8, textTransform: "uppercase" }}>
-              Evidence photo
+              Evidence photo{inspectionEvidenceUrls(report.photoPath).length > 1 ? "s" : ""}
             </p>
-            <img
-              src={inspectionEvidenceUrl(report.photoPath)}
-              alt="Inspection evidence"
-              style={{
-                width: "100%",
-                maxHeight: 220,
-                objectFit: "cover",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--color-border)",
-              }}
-            />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", paddingBottom: "8px" }}>
+              {inspectionEvidenceUrls(report.photoPath).map((url, i) => (
+                <img
+                  key={i}
+                  src={url}
+                  alt={`Inspection evidence ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    height: 120,
+                    objectFit: "cover",
+                    borderRadius: "var(--radius-md)",
+                    border: "1px solid var(--color-border)",
+                  }}
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -352,9 +364,9 @@ function InspectionDetailModal({ report, onClose }) {
   const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
   const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
 
-  return (
+  return createPortal(
     <div style={s.backdrop} onClick={onClose}>
-      <div style={{ ...s.modal, width: 520, maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+      <div style={{ ...s.modal, width: 520 }} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>Inspection Details</h3>
           <button style={s.closeBtn} onClick={onClose}><Icon.X /></button>
@@ -415,14 +427,27 @@ function InspectionDetailModal({ report, onClose }) {
           </div>
         )}
 
-        {inspectionEvidenceUrl(report.photoPath) && (
+        {inspectionEvidenceUrls(report.photoPath).length > 0 && (
           <div style={{ marginBottom: 8 }}>
-            <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, marginTop: 0 }}>Evidence Photo</h4>
-            <img
-              src={inspectionEvidenceUrl(report.photoPath)}
-              alt="Evidence"
-              style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 8, border: "1px solid var(--color-border)" }}
-            />
+            <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, marginTop: 0 }}>
+              Evidence Photo{inspectionEvidenceUrls(report.photoPath).length > 1 ? "s" : ""}
+            </h4>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", paddingBottom: "8px" }}>
+              {inspectionEvidenceUrls(report.photoPath).map((url, i) => (
+                <img
+                  key={i}
+                  src={url}
+                  alt={`Evidence ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    height: 120,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    border: "1px solid var(--color-border)",
+                  }}
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -430,7 +455,8 @@ function InspectionDetailModal({ report, onClose }) {
           <button className="ghost-btn" onClick={onClose}>Close</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -439,8 +465,15 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
   const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
   const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
 
+  const isOverdue = report.deadline && new Date(report.deadline) < new Date() && 
+                    (report.verificationStatus === "Assigned" || report.verificationStatus === "Reassigned");
+
+  const cardStyle = isOverdue 
+    ? { ...s.card, border: "2px solid var(--color-danger)" }
+    : s.card;
+
   return (
-    <div style={s.card} onClick={() => onViewDetail(report)}>
+    <div style={cardStyle} onClick={() => onViewDetail(report)}>
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text }}>
@@ -479,19 +512,24 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
         </p>
       )}
 
-      {inspectionEvidenceUrl(report.photoPath) && (
-        <img
-          src={inspectionEvidenceUrl(report.photoPath)}
-          alt="Evidence"
-          style={{
-            width: "100%",
-            height: 72,
-            objectFit: "cover",
-            borderRadius: 8,
-            marginTop: 8,
-            border: "1px solid var(--color-border)",
-          }}
-        />
+      {inspectionEvidenceUrls(report.photoPath).length > 0 && (
+        <div style={{ display: "flex", gap: 4, overflowX: "auto", marginTop: 8 }}>
+          {inspectionEvidenceUrls(report.photoPath).map((url, i) => (
+            <img
+              key={i}
+              src={url}
+              alt={`Evidence ${i + 1}`}
+              style={{
+                width: 72,
+                height: 72,
+                objectFit: "cover",
+                borderRadius: 8,
+                border: "1px solid var(--color-border)",
+                flexShrink: 0
+              }}
+            />
+          ))}
+        </div>
       )}
 
       {/* Remarks preview */}
@@ -508,8 +546,14 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
 
       {/* Deadline */}
       {report.deadline && (
-        <p style={{ fontSize: 11, color: "var(--color-danger)", display: "flex", alignItems: "center", gap: 4, marginTop: 6, fontWeight: 600 }}>
+        <p style={{ 
+          fontSize: 11, 
+          color: isOverdue ? "var(--color-danger)" : "var(--color-muted)", 
+          display: "flex", alignItems: "center", gap: 4, marginTop: 6, 
+          fontWeight: isOverdue ? 700 : 600 
+        }}>
           <Icon.Clock /> Due: {new Date(report.deadline).toLocaleString()}
+          {isOverdue && <span style={{ marginLeft: 4, background: "var(--color-danger)", color: "#fff", padding: "2px 6px", borderRadius: 4, fontSize: 9 }}>OVERDUE</span>}
         </p>
       )}
 
@@ -897,6 +941,8 @@ const s = {
     background: "#fff", borderRadius: "var(--radius-xl)",
     padding: 32, width: 440,
     boxShadow: "0 25px 50px rgba(0,0,0,0.15)",
+    maxHeight: "85vh",
+    overflowY: "auto",
   },
   modalHeader: {
     display: "flex", justifyContent: "space-between",

@@ -15,27 +15,27 @@ class HistoryDetailPage extends StatelessWidget {
 
     if (resolvedTask == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Detail')),
-        body: const Center(child: Text('No inspection data found.')),
+        appBar: AppBar(title: Text('Detail')),
+        body: Center(child: Text('No inspection data found.')),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: context.adaptiveBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: context.adaptiveSurface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
+          icon: Icon(
             Icons.arrow_back_ios_new_rounded,
-            color: AppColors.darkGreen,
+            color: context.adaptivePrimary,
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Inspection Report',
           style: TextStyle(
-            color: AppColors.textDark,
+            color: context.adaptiveTextDark,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
@@ -52,8 +52,9 @@ class HistoryDetailPage extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.adaptiveSurface,
                 borderRadius: BorderRadius.circular(20),
+                border: context.isDarkMode ? Border.all(color: Colors.grey.shade700, width: 1) : null,
                 boxShadow: [
                   BoxShadow(
                     blurRadius: 10,
@@ -71,21 +72,21 @@ class HistoryDetailPage extends StatelessWidget {
                         width: 52,
                         height: 52,
                         decoration: BoxDecoration(
-                          color: AppColors.darkGreen.withValues(alpha: 0.1),
+                          color: context.adaptivePrimary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.storefront_outlined,
-                          color: AppColors.darkGreen,
+                          color: context.adaptivePrimary,
                           size: 28,
                         ),
                       ),
-                      const SizedBox(width: 14),
+                      SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Business Name',
                               style: TextStyle(
                                 fontSize: 11,
@@ -95,10 +96,10 @@ class HistoryDetailPage extends StatelessWidget {
                             ),
                             Text(
                               resolvedTask.detectedName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.textDark,
+                                color: context.adaptiveTextDark,
                               ),
                             ),
                           ],
@@ -114,7 +115,7 @@ class HistoryDetailPage extends StatelessWidget {
                     label: 'Inspector',
                     value: 'Unknown', // Inspector name not available in model
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
 
                   // Row: Inspection Date
                   _DetailRow(
@@ -122,7 +123,7 @@ class HistoryDetailPage extends StatelessWidget {
                     label: 'Inspection Date',
                     value: resolvedTask.irTimestamp,
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
 
                   // Row: Address
                   _DetailRow(
@@ -134,17 +135,18 @@ class HistoryDetailPage extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
 
             // ── Inspection Details ─────────────────────────────────────────
             _SectionHeader(title: 'Inspection Details'),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.adaptiveSurface,
                 borderRadius: BorderRadius.circular(20),
+                border: context.isDarkMode ? Border.all(color: Colors.grey.shade700, width: 1) : null,
                 boxShadow: [
                   BoxShadow(
                     blurRadius: 10,
@@ -159,7 +161,7 @@ class HistoryDetailPage extends StatelessWidget {
                   // Status chip
                   Row(
                     children: [
-                      const Text(
+                      Text(
                         'Status: ',
                         style: TextStyle(
                           color: Colors.grey,
@@ -177,6 +179,7 @@ class HistoryDetailPage extends StatelessWidget {
                               ? Colors.blue.withValues(alpha: 0.1)
                               : Colors.green.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
+                border: context.isDarkMode ? Border.all(color: Colors.grey.shade700, width: 1) : null,
                         ),
                         child: Text(
                           resolvedTask.verificationStatus,
@@ -191,27 +194,27 @@ class HistoryDetailPage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
 
                   if (resolvedTask.inspectionResult != null &&
                       resolvedTask.inspectionResult!.isNotEmpty) ...[
-                    const Text(
+                    Text(
                       'Recorded result',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
-                        color: AppColors.textDark,
+                        color: context.adaptiveTextDark,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8),
                     Text(
                       resolvedTask.inspectionResult!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                   ],
 
                   if (resolvedTask.inspectionResult == 'Given First Notice' ||
@@ -224,7 +227,7 @@ class HistoryDetailPage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.orange.shade300),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
                           Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
                           SizedBox(width: 10),
@@ -246,19 +249,19 @@ class HistoryDetailPage extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                   ],
 
                   // Remarks
-                  const Text(
+                  Text(
                     'Remarks',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
-                      color: AppColors.textDark,
+                      color: context.adaptiveTextDark,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
@@ -280,17 +283,18 @@ class HistoryDetailPage extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
 
             // ── Evidence Section ───────────────────────────────────────────
             _SectionHeader(title: 'Evidence'),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.adaptiveSurface,
                 borderRadius: BorderRadius.circular(20),
+                border: context.isDarkMode ? Border.all(color: Colors.grey.shade700, width: 1) : null,
                 boxShadow: [
                   BoxShadow(
                     blurRadius: 10,
@@ -299,25 +303,32 @@ class HistoryDetailPage extends StatelessWidget {
                   ),
                 ],
               ),
-              child: resolvedTask.photoPath != null &&
-                      InspectionService.mediaAbsoluteUrl(
-                            resolvedTask.photoPath,
-                          ) !=
-                          null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        InspectionService.mediaAbsoluteUrl(
-                          resolvedTask.photoPath,
-                        )!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          color: Colors.grey[200],
-                          child: const Icon(
-                            Icons.broken_image_outlined,
-                            color: Colors.grey,
-                          ),
-                        ),
+              child: resolvedTask.photoPaths.isNotEmpty
+                  ? SizedBox(
+                      height: 180,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: resolvedTask.photoPaths.length,
+                        separatorBuilder: (_, __) => SizedBox(width: 8),
+                        itemBuilder: (ctx, i) {
+                          final absoluteUrl = InspectionService.mediaAbsoluteUrl(resolvedTask.photoPaths[i]);
+                          if (absoluteUrl == null) return const SizedBox();
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              absoluteUrl,
+                              height: 180,
+                              width: 140,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(
+                                height: 180,
+                                width: 140,
+                                color: Colors.grey[200],
+                                child: Icon(Icons.broken_image_outlined, color: Colors.grey),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     )
                   : Center(
@@ -330,7 +341,7 @@ class HistoryDetailPage extends StatelessWidget {
                               size: 40,
                               color: Colors.grey[300],
                             ),
-                            const SizedBox(height: 8),
+                            SizedBox(height: 8),
                             Text(
                               'No evidence photos.',
                               style: TextStyle(
@@ -344,7 +355,7 @@ class HistoryDetailPage extends StatelessWidget {
                     ),
             ),
 
-            const SizedBox(height: 32),
+            SizedBox(height: 32),
           ],
         ),
       ),
@@ -369,26 +380,26 @@ class _DetailRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, size: 16, color: Colors.grey),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.grey,
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textDark,
+                  color: context.adaptiveTextDark,
                 ),
               ),
             ],
@@ -408,10 +419,10 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
-        color: AppColors.textDark,
+        color: context.adaptiveTextDark,
       ),
     );
   }

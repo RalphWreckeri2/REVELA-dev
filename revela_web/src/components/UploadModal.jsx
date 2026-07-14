@@ -20,7 +20,8 @@
 
 import Papa from "papaparse";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { uploadRegistryFile, syncRegistryFile } from "../services/api";
+import Swal from "sweetalert2";
+import { uploadRegistryFile, syncRegistryFile, cancelRegistryImport } from "../services/api";
 
 // ── Icons (self-contained so this file is independently droppable) ─────────────
 const Icon = {
@@ -169,6 +170,7 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
   const [file,          setFile]          = useState(null);
   const [fileRowCount,  setFileRowCount]  = useState(null);
   const [loading,       setLoading]       = useState(false);
+  const [cancelling,    setCancelling]    = useState(false);
   const [summary,       setSummary]       = useState(null);
   const [error,         setError]         = useState("");
 
@@ -224,12 +226,27 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
     }
   };
 
-  const handleCancelUpload = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  const handleCancelUpload = async () => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "Everything loaded will be rolled back.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, cancel it'
+    });
+
+    if (result.isConfirmed) {
+      setCancelling(true);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      await cancelRegistryImport(token);
+      setLoading(false);
+      setCancelling(false);
+      setError("Upload cancelled by user — no data was saved.");
     }
-    setLoading(false);
-    setError("Upload cancelled by user.");
   };
 
   const handleDone = () => {
@@ -361,8 +378,14 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
             </div>
 
             <div style={{ marginTop: 16 }}>
-              <button type="button" className="ghost-btn" style={{ color: "var(--color-danger)", borderColor: "var(--color-danger-light)", display: "flex", alignItems: "center", gap: "6px" }} onClick={handleCancelUpload}>
-                <Icon.X /> Cancel Upload
+              <button 
+                type="button" 
+                className="ghost-btn" 
+                style={{ color: "var(--color-danger)", borderColor: "var(--color-danger-light)", display: "flex", alignItems: "center", gap: "6px", opacity: cancelling ? 0.5 : 1, cursor: cancelling ? "not-allowed" : "pointer" }} 
+                onClick={handleCancelUpload}
+                disabled={cancelling}
+              >
+                <Icon.X /> {cancelling ? "Cancelling..." : "Cancel Upload"}
               </button>
             </div>
 

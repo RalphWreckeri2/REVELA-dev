@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -21,6 +22,7 @@ class InspectionTask {
   final String irTimestamp;
   /// Field result after inspector submits (null while still open).
   final String? inspectionResult;
+  final String? deadline;
 
   InspectionTask({
     required this.reportID,
@@ -36,6 +38,7 @@ class InspectionTask {
     this.longitude,
     required this.irTimestamp,
     this.inspectionResult,
+    this.deadline,
   });
 
   factory InspectionTask.fromJson(Map<String, dynamic> json) {
@@ -58,12 +61,28 @@ class InspectionTask {
           : null,
       irTimestamp: json['irTimestamp']?.toString() ?? '',
       inspectionResult: json['inspectionResult']?.toString(),
+      deadline: json['deadline']?.toString(),
     );
   }
 
   static int _asInt(dynamic v) {
     if (v is int) return v;
     return int.tryParse(v?.toString() ?? '') ?? 0;
+  }
+
+  /// Safely parse legacy single strings or new JSON arrays of photo paths.
+  List<String> get photoPaths {
+    if (photoPath == null || photoPath!.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(photoPath!);
+      if (decoded is List) {
+        return decoded.map((e) => e.toString()).toList();
+      }
+    } catch (_) {
+      // Not a JSON array, treat as legacy single string
+      return [photoPath!];
+    }
+    return [photoPath!];
   }
 }
 
@@ -116,21 +135,28 @@ class InspectionService {
     return response.data['photoURL'] as String?;
   }
 
-  /// POST /api/inspections/submit — dashboard shows **Submitted** until admin verifies.
   Future<void> submitInspection({
     required InspectionTask task,
     required String inspectionResult,
     String? notes,
     double? verifiedLat,
     double? verifiedLng,
-    String? evidenceLocalPath,
-    String? photoURL,
+    List<String>? evidenceLocalPaths,
+    List<String>? photoURLs,
   }) async {
-    String? resolvedPhotoUrl = photoURL;
-    if (resolvedPhotoUrl == null &&
-        evidenceLocalPath != null &&
-        evidenceLocalPath.isNotEmpty) {
-      resolvedPhotoUrl = await uploadEvidence(evidenceLocalPath);
+    List<String> finalUrls = [...(photoURLs ?? [])];
+
+    if (evidenceLocalPaths != null && evidenceLocalPaths.isNotEmpty) {
+      // Upload concurrently
+      final uploaded = await Future.wait(
+        evidenceLocalPaths.map((path) => uploadEvidence(path))
+      );
+      finalUrls.addAll(uploaded.whereType<String>());
+    }
+
+    String? photoUrlPayload;
+    if (finalUrls.isNotEmpty) {
+      photoUrlPayload = jsonEncode(finalUrls);
     }
 
     await _auth.dio.post('/api/inspections/submit', data: {
@@ -139,7 +165,7 @@ class InspectionService {
       'verifiedLat': verifiedLat,
       'verifiedLng': verifiedLng,
       'notes': notes,
-      'photoURL': resolvedPhotoUrl,
+      'photoURL': photoUrlPayload,
     });
   }
 

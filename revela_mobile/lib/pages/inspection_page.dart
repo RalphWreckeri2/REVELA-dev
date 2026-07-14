@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../component/inspection_modal.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/task_card.dart';
 import 'history_detail_page.dart';
 
 class InspectionPage extends StatefulWidget {
-  const InspectionPage({super.key});
+  final ValueChanged<bool>? onDrawerToggled;
+  const InspectionPage({super.key, this.onDrawerToggled});
 
   @override
   State<InspectionPage> createState() => _InspectionPageState();
@@ -18,16 +21,18 @@ class _InspectionPageState extends State<InspectionPage>
   late final TabController _tabController;
 
   List<InspectionTask> _currentTasks = [];
+  List<InspectionTask> _missingTasks = [];
   List<InspectionTask> _historyTasks = [];
   bool _loadingCurrent = true;
   bool _loadingHistory = true;
   String? _currentError;
   String? _historyError;
+  bool _isDrawerOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _fetchCurrent();
     _fetchHistory();
   }
@@ -45,12 +50,29 @@ class _InspectionPageState extends State<InspectionPage>
     });
     try {
       final tasks = await InspectionService().getMyTasks();
-      final currentTasks = tasks
+      final activeTasks = tasks
           .where((t) => _activeStatuses.contains(t.verificationStatus))
           .toList();
+
+      final now = DateTime.now();
+      final currentList = <InspectionTask>[];
+      final missingList = <InspectionTask>[];
+
+      for (var t in activeTasks) {
+        if (t.deadline != null && t.deadline!.isNotEmpty) {
+          final dl = DateTime.tryParse(t.deadline!);
+          if (dl != null && dl.isBefore(now)) {
+            missingList.add(t);
+            continue;
+          }
+        }
+        currentList.add(t);
+      }
+
       if (mounted) {
         setState(() {
-          _currentTasks = currentTasks;
+          _currentTasks = currentList;
+          _missingTasks = missingList;
           _loadingCurrent = false;
         });
       }
@@ -91,8 +113,12 @@ class _InspectionPageState extends State<InspectionPage>
   }
 
   // Tapping a CURRENT item opens the interactive InspectionModal to conduct report
-  void _onCurrentTaskTap(InspectionTask task) {
-    showModalBottomSheet(
+  void _onCurrentTaskTap(InspectionTask task) async {
+    if (_isDrawerOpen) return;
+    setState(() => _isDrawerOpen = true);
+    widget.onDrawerToggled?.call(true);
+
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -104,6 +130,8 @@ class _InspectionPageState extends State<InspectionPage>
         },
       ),
     );
+    widget.onDrawerToggled?.call(false);
+    if (mounted) setState(() => _isDrawerOpen = false);
   }
 
   // Tapping a HISTORY item navigates to HistoryDetailPage
@@ -114,45 +142,60 @@ class _InspectionPageState extends State<InspectionPage>
     );
   }
 
+  Widget _buildShimmerLoader(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(20),
+      itemCount: 4,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 16.0),
+        child: Shimmer.fromColors(
+          baseColor: context.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+          highlightColor: context.isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: context.adaptiveBackground,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: context.adaptiveSurface,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: AppColors.darkGreen,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
+        centerTitle: false,
+        title: Text(
           'Inspections',
           style: TextStyle(
-            color: AppColors.textDark,
+            color: context.adaptiveTextDark,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
         ),
-        centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppColors.darkGreen,
           indicatorWeight: 3,
-          labelColor: AppColors.darkGreen,
-          unselectedLabelColor: Colors.grey,
-          labelStyle: const TextStyle(
+          labelColor: context.isDarkMode ? Colors.white : AppColors.darkGreen,
+          unselectedLabelColor: context.isDarkMode ? Colors.white70 : Colors.grey,
+          labelStyle: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 14,
           ),
-          unselectedLabelStyle: const TextStyle(
+          unselectedLabelStyle: TextStyle(
             fontWeight: FontWeight.w500,
             fontSize: 14,
           ),
           tabs: const [
             Tab(text: 'CURRENT'),
+            Tab(text: 'MISSING'),
             Tab(text: 'HISTORY'),
           ],
         ),
@@ -162,14 +205,10 @@ class _InspectionPageState extends State<InspectionPage>
         children: [
           // ── CURRENT Tab ──────────────────────────────────────────────────
           RefreshIndicator(
-            color: AppColors.darkGreen,
+            color: context.adaptivePrimary,
             onRefresh: _fetchCurrent,
             child: _loadingCurrent
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.darkGreen,
-                    ),
-                  )
+                ? _buildShimmerLoader(context)
                 : _currentError != null
                 ? _ErrorState(message: _currentError!, onRetry: _fetchCurrent)
                 : _currentTasks.isEmpty
@@ -180,7 +219,7 @@ class _InspectionPageState extends State<InspectionPage>
                 : ListView.builder(
                     padding: const EdgeInsets.all(20),
                     itemCount: _currentTasks.length,
-                    itemBuilder: (_, i) => _TaskCard(
+                    itemBuilder: (_, i) => TaskCard(
                       task: _currentTasks[i],
                       isCurrent: true,
                       onTap: () => _onCurrentTaskTap(_currentTasks[i]),
@@ -188,16 +227,37 @@ class _InspectionPageState extends State<InspectionPage>
                   ),
           ),
 
+          // ── MISSING Tab ──────────────────────────────────────────────────
+          RefreshIndicator(
+            color: context.adaptivePrimary,
+            onRefresh: _fetchCurrent,
+            child: _loadingCurrent
+                ? _buildShimmerLoader(context)
+                : _currentError != null
+                ? _ErrorState(message: _currentError!, onRetry: _fetchCurrent)
+                : _missingTasks.isEmpty
+                ? const _EmptyState(
+                    message: 'No missing assignments.',
+                    icon: Icons.check_circle_outline_rounded,
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: _missingTasks.length,
+                    itemBuilder: (_, i) => TaskCard(
+                      task: _missingTasks[i],
+                      isCurrent: true,
+                      isMissing: true,
+                      onTap: () => _onCurrentTaskTap(_missingTasks[i]),
+                    ),
+                  ),
+          ),
+
           // ── HISTORY Tab ──────────────────────────────────────────────────
           RefreshIndicator(
-            color: AppColors.darkGreen,
+            color: context.adaptivePrimary,
             onRefresh: _fetchHistory,
             child: _loadingHistory
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.darkGreen,
-                    ),
-                  )
+                ? _buildShimmerLoader(context)
                 : _historyError != null
                 ? _ErrorState(message: _historyError!, onRetry: _fetchHistory)
                 : _historyTasks.isEmpty
@@ -208,7 +268,7 @@ class _InspectionPageState extends State<InspectionPage>
                 : ListView.builder(
                     padding: const EdgeInsets.all(20),
                     itemCount: _historyTasks.length,
-                    itemBuilder: (_, i) => _TaskCard(
+                    itemBuilder: (_, i) => TaskCard(
                       task: _historyTasks[i],
                       isCurrent: false,
                       onTap: () => _onHistoryTaskTap(_historyTasks[i]),
@@ -216,107 +276,6 @@ class _InspectionPageState extends State<InspectionPage>
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Task Card ────────────────────────────────────────────────────────────────
-class _TaskCard extends StatelessWidget {
-  final InspectionTask task;
-  final bool isCurrent;
-  final VoidCallback onTap;
-
-  const _TaskCard({
-    required this.task,
-    required this.isCurrent,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 8,
-              color: Colors.black.withValues(alpha: 0.08),
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Icon badge
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: isCurrent
-                    ? AppColors.darkGreen.withValues(alpha: 0.1)
-                    : Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                isCurrent
-                    ? Icons.storefront_outlined
-                    : Icons.assignment_turned_in_outlined,
-                color: isCurrent ? AppColors.darkGreen : Colors.orange,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    task.detectedName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    task.barangayName,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: 11,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        task.irTimestamp,
-                        style: TextStyle(fontSize: 11, color: Colors.grey[400]),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              isCurrent ? Icons.map_outlined : Icons.chevron_right_rounded,
-              color: isCurrent ? AppColors.darkGreen : Colors.grey,
-              size: 20,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -335,7 +294,7 @@ class _EmptyState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 56, color: Colors.grey[300]),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Text(
             message,
             style: TextStyle(color: Colors.grey[400], fontSize: 15),
@@ -358,11 +317,11 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off, color: Colors.grey, size: 40),
-          const SizedBox(height: 12),
-          Text(message, style: const TextStyle(color: Colors.grey)),
-          const SizedBox(height: 12),
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          Icon(Icons.wifi_off, color: Colors.grey, size: 40),
+          SizedBox(height: 12),
+          Text(message, style: TextStyle(color: Colors.grey)),
+          SizedBox(height: 12),
+          TextButton(onPressed: onRetry, child: Text('Retry')),
         ],
       ),
     );

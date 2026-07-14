@@ -12,6 +12,15 @@ from api.middleware.decorators import jwt_required, admin_required
 
 registry_bp = Blueprint("registry", __name__)
 
+from api.utils.cancellation import set_cancel
+
+# ── POST /api/registry/cancel ─────────────────────────────────────────────────
+@registry_bp.route("/cancel", methods=["POST"])
+@admin_required()
+def cancel_import():
+    """Cancel an ongoing registry import/sync task."""
+    set_cancel("registry_import", True)
+    return jsonify({"message": "Cancellation requested"}), 200
 
 # ── POST /api/registry/upload ─────────────────────────────────────────────────
 @registry_bp.route("/upload", methods=["POST"])

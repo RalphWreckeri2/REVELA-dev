@@ -19,27 +19,14 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
   final InspectionService _inspectionService = InspectionService();
   List<InspectionTask> _allTasks = [];
   InspectionTask? _selectedTask;
-  String _noticeType =
-      'Inspection Certificate'; // 'Inspection Certificate' or 'Notice of Violation'
   bool _isLoading = true;
 
-  bool get _isNonCompliant {
-    final flag = (_selectedTask?.flagColor ?? 'Green').toLowerCase();
-    return flag == 'red' || flag.contains('non') || flag.contains('violation');
-  }
-
   String get _documentTitle {
-    return _isNonCompliant
-        ? 'NOTICE OF NON-COMPLIANCE'
-        : 'INSPECTION CERTIFICATE';
+    return 'NOTICE OF NON-COMPLIANCE';
   }
 
   String get _certificationText {
-    if (_isNonCompliant) {
-      return "CERTIFICATION: According to the records of this office, your establishment has not yet secured the required BUSINESS AND MAYOR'S PERMIT. Consequently, you are hereby requested to coordinate with our office within five (5) days upon receipt of this notice. Thank you very much.";
-    }
-
-    return 'CERTIFICATION: This is to certify that, based on the records of this office, the establishment has undergone inspection and is hereby acknowledged for compliance with applicable licensing requirements.';
+    return "CERTIFICATION: According to the records of this office, your establishment has not yet secured the required BUSINESS AND MAYOR'S PERMIT. Consequently, you are hereby requested to coordinate with our office within five (5) days upon receipt of this notice. Thank you very much.";
   }
 
   String get _ownerPrefix {
@@ -58,13 +45,19 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
       final active = await _inspectionService.getMyTasks();
       final history = await _inspectionService.getMyReportHistory();
       final combined = [...active, ...history];
+      
+      final uniqueTasks = <int, InspectionTask>{};
+      for (final t in combined) {
+        uniqueTasks[t.reportID] = t;
+      }
+      final deduped = uniqueTasks.values.toList();
 
       if (mounted) {
         setState(() {
-          _allTasks = combined;
+          _allTasks = deduped;
           _selectedTask =
               widget.initialTask ??
-              (combined.isNotEmpty ? combined.first : null);
+              (deduped.isNotEmpty ? deduped.first : null);
           _isLoading = false;
         });
       }
@@ -185,7 +178,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                   style: pw.TextStyle(
                     fontSize: 15,
                     fontWeight: pw.FontWeight.bold,
-                    color: _isNonCompliant ? PdfColors.red : PdfColors.green900,
+                    color: PdfColors.red,
                   ),
                   textAlign: pw.TextAlign.center,
                 ),
@@ -281,123 +274,21 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
     }
   }
 
-  Widget _buildStickyFooter() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFFF4F6F4),
-        border: Border(top: BorderSide(color: Color(0xFFD0DDD0), width: 1)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFE6EAE8)),
-                  boxShadow: [
-                    const BoxShadow(
-                      color: Color(0x08000000),
-                      blurRadius: 14,
-                      offset: Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18.0,
-                        vertical: 16.0,
-                      ),
-                      child: Text(
-                        'Notice: Generate and download operational compliance reports in PDF formats.',
-                        style: TextStyle(
-                          color: const Color(0xFF55616A),
-                          fontSize: 13,
-                          height: 1.45,
-                        ),
-                      ),
-                    ),
-                    const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Color(0xFFE6EAE8),
-                    ),
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 10.0,
-                      ),
-                      title: const Text(
-                        'BPLO Field Inspection Action',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: Color(0xFF1F2933),
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Overview of the field inspection verification and validation status.',
-                        style: TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4CAF50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 12,
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: _handleExportPdf,
-                        child: const Text(
-                          'Download',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final selectedBarangay = _selectedTask?.barangayName ?? '';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Notice & PDF Generator',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : _allTasks.isEmpty
-          ? const Center(
+          ? Center(
               child: Text(
                 'No inspection records available to generate notice.',
               ),
@@ -418,15 +309,15 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Document Options',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: AppColors.textDark,
+                              color: context.adaptiveTextDark,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           DropdownButtonFormField<InspectionTask>(
                             isExpanded: true,
                             initialValue: _selectedTask,
@@ -449,60 +340,31 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             onChanged: (val) =>
                                 setState(() => _selectedTask = val),
                           ),
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            initialValue: _noticeType,
-                            decoration: const InputDecoration(
-                              labelText: 'Notice Template',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.description_outlined),
-                            ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'Inspection Certificate',
-                                child: Text(
-                                  'Official BPLO Inspection Notice',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              DropdownMenuItem(
-                                value: 'Notice of Violation',
-                                child: Text(
-                                  'Notice of Violation / Non-Compliance',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                            onChanged: (val) => setState(
-                              () =>
-                                  _noticeType = val ?? 'Inspection Certificate',
-                            ),
-                          ),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+
+                  SizedBox(height: 20),
 
                   // ── Document Preview Paper ──
-                  const Text(
+                  Text(
                     'Live Document Preview',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: AppColors.textDark,
+                      color: context.adaptiveTextDark,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: context.adaptiveSurface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppColors.borderColor,
+                        color: context.adaptiveBorder,
                         width: 1.5,
                       ),
                       boxShadow: [
@@ -526,7 +388,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             ),
                             Expanded(
                               child: Column(
-                                children: const [
+                                children: [
                                   Text(
                                     'REPUBLIC OF THE PHILIPPINES',
                                     textAlign: TextAlign.center,
@@ -552,7 +414,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.darkGreen,
+                                      color: context.adaptivePrimary,
                                     ),
                                   ),
                                   SizedBox(height: 2),
@@ -562,7 +424,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                                     style: TextStyle(
                                       fontSize: 9,
                                       fontWeight: FontWeight.w500,
-                                      color: AppColors.textMid,
+                                      color: context.adaptiveTextMid,
                                     ),
                                   ),
                                 ],
@@ -575,7 +437,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             ),
                           ],
                         ),
-                        const Divider(height: 20, thickness: 1.2),
+                        Divider(height: 20, thickness: 1.2),
 
                         Text(
                           _documentTitle,
@@ -583,76 +445,74 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
-                            color: _isNonCompliant
-                                ? Colors.red
-                                : AppColors.darkGreen,
+                            color: Colors.red,
                             letterSpacing: 1.05,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12),
 
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'To the Owner/Representative:',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.textDark,
+                                  color: context.adaptiveTextDark,
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                              SizedBox(height: 6),
                               Text(
                                 _ownerPrefix,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10.5,
-                                  color: AppColors.textDark,
+                                  color: context.adaptiveTextDark,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: 2),
                               Text(
                                 _selectedTask?.detectedName ?? 'N/A',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.bold,
-                                  color: AppColors.textDark,
+                                  color: context.adaptiveTextDark,
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              SizedBox(height: 2),
                               Text(
                                 selectedBarangay.isNotEmpty
                                     ? 'Barangay $selectedBarangay, Mataasnakahoy, Batangas'
                                     : 'Barangay IV, Mataasnakahoy, Batangas',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10.5,
-                                  color: AppColors.textMid,
+                                  color: context.adaptiveTextMid,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
 
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.background,
+                            color: context.adaptiveBackground,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             _certificationText,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.textMid,
+                              color: context.adaptiveTextMid,
                               height: 1.35,
                             ),
                             textAlign: TextAlign.justify,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12),
 
                         // Sign-off
                         Column(
@@ -665,8 +525,8 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                                 color: Colors.grey.shade700,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            const Text(
+                            SizedBox(height: 4),
+                            Text(
                               'BPLO Head',
                               style: TextStyle(
                                 fontSize: 10,
@@ -677,13 +537,13 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                         ),
 
                         // Document branding footer
-                        const SizedBox(height: 14),
+                        SizedBox(height: 14),
                         Container(
                           height: 1,
                           color: Colors.grey.shade300,
                         ),
-                        const SizedBox(height: 8),
-                        const Text(
+                        SizedBox(height: 8),
+                        Text(
                           'Health | Opportunity | Peace & Order | Education & Economy',
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -692,8 +552,8 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             color: Color(0xFF0D47A1), // blue900
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        const Text(
+                        SizedBox(height: 2),
+                        Text(
                           'L O V E  M A T A A S N A K A H O Y',
                           textAlign: TextAlign.center,
                           style: TextStyle(
@@ -706,7 +566,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
 
                   // ── Bottom Actions ──
                   Row(
@@ -721,37 +581,36 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          icon: const Icon(Icons.print_rounded),
-                          label: const Text('Print Notice'),
+                          icon: Icon(Icons.print_rounded),
+                          label: Text('Print Notice'),
                           onPressed: _handlePrint,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.darkGreen,
+                            foregroundColor: context.adaptivePrimary,
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: const BorderSide(
-                              color: AppColors.darkGreen,
+                            side: BorderSide(
+                              color: context.adaptivePrimary,
                               width: 1.5,
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          icon: const Icon(Icons.picture_as_pdf),
-                          label: const Text('Export PDF Notice'),
+                          icon: Icon(Icons.picture_as_pdf),
+                          label: Text('Export PDF Notice'),
                           onPressed: _handleExportPdf,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
                 ],
               ),
             ),
-      bottomSheet: _buildStickyFooter(),
     );
   }
 }

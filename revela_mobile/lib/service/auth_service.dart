@@ -75,7 +75,7 @@ class AuthService {
     try {
       final response = await _dio.post(
         '/api/auth/login',
-        data: {'email': email, 'password': password},
+        data: {'email': email, 'password': password, 'source': 'mobile'},
       );
 
       if (response.statusCode == 200) {
@@ -127,6 +127,14 @@ class AuthService {
           e.type == DioExceptionType.sendTimeout) {
         return LoginResult.networkError;
       }
+      
+      if (e.response?.statusCode == 403) {
+        final errorMsg = e.response?.data?['error']?.toString() ?? '';
+        if (errorMsg.contains('Inspectors only')) {
+          return LoginResult.notInspector;
+        }
+      }
+      
       debugPrint('Login Error: ${e.response?.data ?? e.message}');
       return LoginResult.failed;
     }

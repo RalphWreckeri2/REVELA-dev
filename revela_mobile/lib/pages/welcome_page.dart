@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import 'login_page.dart';
@@ -94,7 +95,7 @@ class _WelcomePageState extends State<WelcomePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.adaptiveBackground,
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnim,
@@ -109,10 +110,10 @@ class _WelcomePageState extends State<WelcomePage>
                     padding: const EdgeInsets.only(top: 12, right: 24),
                     child: TextButton(
                       onPressed: _next,
-                      child: const Text(
+                      child: Text(
                         'Skip',
                         style: TextStyle(
-                          color: AppColors.textLight,
+                          color: context.adaptiveTextLight,
                           fontSize: 14,
                         ),
                       ),
@@ -125,26 +126,17 @@ class _WelcomePageState extends State<WelcomePage>
                   margin: const EdgeInsets.only(top: 8, bottom: 32),
                   child: Column(
                     children: [
-                      Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          color: AppColors.darkGreen,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Icon(
-                          Icons.location_on_rounded,
-                          size: 40,
-                          color: AppColors.gold,
-                        ),
+                      Image.asset(
+                        'assets/images/logo.png',
+                        height: 80,
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
+                      SizedBox(height: 12),
+                      Text(
                         'REVELA',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.darkGreen,
+                          color: context.adaptivePrimary,
                           letterSpacing: 3,
                         ),
                       ),
@@ -177,13 +169,13 @@ class _WelcomePageState extends State<WelcomePage>
                       decoration: BoxDecoration(
                         color: active
                             ? AppColors.darkGreen
-                            : AppColors.borderColor,
+                            : context.adaptiveBorder,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     );
                   }),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: 32),
 
                 // CTA Button
                 Padding(
@@ -205,7 +197,7 @@ class _WelcomePageState extends State<WelcomePage>
                         _currentIndex < _slides.length - 1
                             ? 'Next'
                             : 'Get Started',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
@@ -214,7 +206,7 @@ class _WelcomePageState extends State<WelcomePage>
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: 32),
               ],
             ),
           ),
@@ -248,28 +240,28 @@ class _SlideContent extends StatelessWidget {
               borderRadius: BorderRadius.circular(40),
             ),
             child: Icon(slide.icon, size: 72, color: AppColors.gold),
-          ),
-          const SizedBox(height: 40),
+          ).animate().fadeIn(duration: 500.ms).scale(delay: 100.ms).shimmer(delay: 800.ms, duration: 1000.ms),
+          SizedBox(height: 40),
           Text(
             slide.title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
-              color: AppColors.textDark,
+              color: context.adaptiveTextDark,
               height: 1.25,
             ),
-          ),
-          const SizedBox(height: 16),
+          ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2, end: 0),
+          SizedBox(height: 16),
           Text(
             slide.description,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
-              color: AppColors.textMid,
+              color: context.adaptiveTextMid,
               height: 1.6,
             ),
-          ),
+          ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2, end: 0),
         ],
       ),
     );

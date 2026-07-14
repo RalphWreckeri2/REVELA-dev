@@ -22,6 +22,7 @@ import {
   updateFlagLocationRequest,
   deleteFlagRequest,
   updateFlagColorRequest,
+  cancelRunDetection,
 } from "../services/api";
 import Swal from "sweetalert2";
 
@@ -248,6 +249,7 @@ function normalizeFlag(flag) {
     name: flag.detectedName ?? "Unknown Establishment",
     barangay: flag.barangayName ?? "Unknown Barangay",
     address: flag.resolvedAddress ?? flag.nearestLandmark ?? "",
+    notes: flag.notes || "",
     source: flag.flagSource ?? "registry_only",
     size: flag.businessSize ?? "—",
     coords,
@@ -382,22 +384,24 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
               alignItems: "center",
               gap: 4
             }}>
-              📍 {flag.barangay || "Mataasnakahoy"}
+              {flag.barangay || "Mataasnakahoy"}
             </span>
-            <span style={{
-              background: "rgba(124, 58, 237, 0.05)",
-              color: "#6d28d9",
-              padding: "4px 10px",
-              borderRadius: 8,
-              fontSize: 11,
-              fontWeight: 700,
-              border: "1px solid rgba(124, 58, 237, 0.1)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4
-            }}>
-              🏢 {flag.size || "—"} Size
-            </span>
+            {flag.size && (
+              <span style={{
+                background: "rgba(124, 58, 237, 0.05)",
+                color: "#6d28d9",
+                padding: "4px 10px",
+                borderRadius: 8,
+                fontSize: 11,
+                fontWeight: 700,
+                border: "1px solid rgba(124, 58, 237, 0.1)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4
+              }}>
+                {flag.size} Size
+              </span>
+            )}
             {isInspectorReported && (
               <span style={{
                 background: "rgba(217, 119, 6, 0.08)",
@@ -412,7 +416,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                 gap: 5,
                 letterSpacing: "0.02em"
               }}>
-                <span style={{ fontSize: 13 }}>🕵️</span> Inspector Reported
+                <span style={{ fontSize: 13 }}></span> Inspector Reported
               </span>
             )}
           </div>
@@ -421,35 +425,77 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
           <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
 
           {/* Location & Address Row (Seamless) */}
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 18 }}>
-            <div style={{
-              marginTop: 2,
-              color: fc.marker,
-              background: fc.bg,
-              padding: 6,
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: `1px solid ${fc.marker}15`
-            }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <circle cx="12" cy="10" r="3" />
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
-              </svg>
-            </div>
-            <div style={{ flex: 1 }}>
-              <strong style={{ display: "block", color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
-                Location & Address
-              </strong>
-              <span style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, lineHeight: 1.5 }}>
-                {flag.address || "No address description provided."}
-              </span>
-            </div>
-          </div>
+          {flag.address && (
+            <>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 18 }}>
+                <div style={{
+                  marginTop: 2,
+                  color: fc.marker,
+                  background: fc.bg,
+                  padding: 6,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: `1px solid ${fc.marker}15`
+                }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="10" r="3" />
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <strong style={{ display: "block", color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                    Location & Address
+                  </strong>
+                  <span style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, lineHeight: 1.5 }}>
+                    {flag.address}
+                  </span>
+                </div>
+              </div>
 
-          {/* Section Divider */}
-          <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+              {/* Section Divider */}
+              <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+            </>
+          )}
+
+          {/* Notes Row */}
+          {flag.notes && (
+            <>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 18 }}>
+                <div style={{
+                  marginTop: 2,
+                  color: "#eab308",
+                  background: "rgba(253, 224, 71, 0.1)",
+                  padding: 6,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: `1px solid rgba(234, 179, 8, 0.2)`
+                }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                    <polyline points="10 9 9 9 8 9" />
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <strong style={{ display: "block", color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                    Notes
+                  </strong>
+                  <span style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, lineHeight: 1.5 }}>
+                    {flag.notes}
+                  </span>
+                </div>
+              </div>
+
+              {/* Section Divider */}
+              <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+            </>
+          )}
 
           {/* Details Row (Seamless 2-column) */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 18 }}>
@@ -539,26 +585,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
             </>
           )}
 
-          {/* Telemetry Geospatial Section (Seamless Coordinates) */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ color: "#64748b", display: "flex" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="22" y1="12" x2="18" y2="12" />
-                  <line x1="6" y1="12" x2="2" y2="12" />
-                  <line x1="12" y1="6" x2="12" y2="2" />
-                  <line x1="12" y1="22" x2="12" y2="18" />
-                </svg>
-              </div>
-              <span style={{ color: "#64748b", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Geospatial Coordinates
-              </span>
-            </div>
-            <span style={{ fontFamily: "monospace", color: "#0f172a", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em" }}>
-              {flag.latitude ? `${Number(flag.latitude).toFixed(6)}°, ${Number(flag.longitude).toFixed(6)}°` : flag.coords}
-            </span>
-          </div>
+
 
         </div>
 
@@ -929,7 +956,7 @@ function FullFlagListModal({ flags, onClose, onSelectFlag }) {
 }
 
 // ── Map Canvas ────────────────────────────────────────────────────────────────
-function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, barangayRiskLevels, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, detectionProgress, elapsedTime, satellite, clusters, barangayRedFlagCounts, adjustingFlagId, adjustingLatLng, onAdjustDragEnd }) {
+function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, barangayRiskLevels, selectedFlagId, onMarkerClick, onMapClick, isPickingLocation, runDetectionLoading, detectionProgress, elapsedTime, satellite, clusters, barangayRedFlagCounts, adjustingFlagId, adjustingLatLng, onAdjustDragEnd, cancellingDetection, handleCancelDetection }) {
   const markerRefs = useRef(new Map());
   const internalMapRef = useRef(null);
   const clusterRef = useRef(null);
@@ -1502,9 +1529,27 @@ function MapCanvas({ isLoaded, loadError, center, zoom, mapRef, layers, flags, b
 
               {/* Footer with clock and ETR */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#94a3b8", fontSize: 11, fontWeight: 500 }}>
-                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
-                  <span>Elapsed: {elapsedTime}s</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#94a3b8", fontSize: 11, fontWeight: 500 }}>
+                    <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
+                    <span>Elapsed: {elapsedTime}s</span>
+                  </div>
+                  <button
+                    className="ghost-btn"
+                    style={{
+                      color: "#ef4444",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "2px 8px",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      opacity: cancellingDetection ? 0.5 : 1,
+                      cursor: cancellingDetection ? "not-allowed" : "pointer"
+                    }}
+                    onClick={handleCancelDetection}
+                    disabled={cancellingDetection}
+                  >
+                    {cancellingDetection ? "Cancelling..." : "Cancel Detection"}
+                  </button>
                 </div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#e2e8f0", background: "rgba(255,255,255,0.06)", padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.03)" }}>
                   {etrText}
@@ -1830,6 +1875,7 @@ export default function MapPage() {
   const [actionError, setActionError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [runDetectionLoading, setRunDetectionLoading] = useState(false);
+  const [cancellingDetection, setCancellingDetection] = useState(false);
   const [detectionProgress, setDetectionProgress] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const startTimeRef = useRef(null);
@@ -2041,11 +2087,36 @@ export default function MapPage() {
       setActionError(err.message || "Detection failed.");
     } finally {
       setRunDetectionLoading(false);
+      setCancellingDetection(false);
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
       setDetectionProgress(null);
+    }
+  };
+
+  const handleCancelDetection = async () => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "Everything loaded will be rolled back.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, cancel it'
+    });
+
+    if (result.isConfirmed) {
+      setCancellingDetection(true);
+      try {
+        await cancelRunDetection(token);
+        // The background process handles rollback and sends a completion event
+        // to dismiss the overlay naturally.
+      } catch (err) {
+        setActionError("Failed to cancel detection.");
+        setCancellingDetection(false);
+      }
     }
   };
 
@@ -2333,6 +2404,8 @@ export default function MapPage() {
               adjustingFlagId={adjustingFlagId}
               adjustingLatLng={adjustingLatLng}
               onAdjustDragEnd={setAdjustingLatLng}
+              cancellingDetection={cancellingDetection}
+              handleCancelDetection={handleCancelDetection}
             />
             {/* Discrete risk legend — matches HEATMAP_RISK_STYLE on the Data layer */}
             {layers.heatmap && (

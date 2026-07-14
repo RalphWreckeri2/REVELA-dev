@@ -1,23 +1,27 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../component/app_sidebar.dart';
+
 import '../component/inspection_card.dart';
 import '../component/inspection_modal.dart';
+
 import '../service/assignment_notifications.dart';
 import '../service/flag_service.dart';
-import '../service/in_app_notifications_service.dart';
+
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/map_styles.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final ValueChanged<bool>? onDrawerToggled;
+  const HomePage({super.key, this.onDrawerToggled});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -33,9 +37,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Timer? _pollTimer;
   bool _assignmentNotifyPrimed = false;
+  bool _isDrawerOpen = false;
 
   // ── Google Map ─────────────────────────────────────────────────────────────
   GoogleMapController? _mapController;
+  MapType _currentMapType = MapType.normal;
+  bool _is3DView = false;
+  CameraPosition? _currentCameraPosition;
   static const CameraPosition _initialCamera = CameraPosition(
     target: LatLng(13.9667, 121.1167),
     zoom: 12,
@@ -49,7 +57,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// Yellow flags submitted by this inspector (shown as extra map markers).
   List<MyFlag> _myFlags = [];
 
-  int _unreadCount = 0;
+
 
   List<InspectionTask> get _sortedTasks {
     final sorted = List<InspectionTask>.from(_tasks);
@@ -66,18 +74,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _primePermissionsAndFetch();
-    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) {
         _fetchTasks(silent: true);
-        _fetchNotifications(silent: true);
       }
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) setState(() => _isDockerExpanded = true);
-      });
-    });
   }
 
   @override
@@ -96,33 +98,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _primePermissionsAndFetch() async {
     await Permission.locationWhenInUse.request();
-    await Future.wait([_fetchTasks(), _fetchNotifications(), _fetchMyFlags()]);
+    await Future.wait([_fetchTasks(), _fetchMyFlags()]);
   }
 
-  Future<void> _fetchNotifications({bool silent = false}) async {
-    try {
-      final count = await InAppNotificationsService().fetchUnreadCount();
-      if (mounted) setState(() => _unreadCount = count);
-    } catch (e) {
-      debugPrint('_fetchNotifications: $e');
-    }
-  }
 
-  Future<void> _showNotificationsPanel() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _NotificationsPanel(),
-    );
-    if (!mounted) return;
-    try {
-      await InAppNotificationsService().markAllRead();
-      await _fetchNotifications(silent: true);
-    } catch (e) {
-      debugPrint('markAllRead: $e');
-    }
-  }
 
   Future<void> _fetchTasks({bool silent = false}) async {
     final previous = List<InspectionTask>.from(_tasks);
@@ -143,6 +122,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           previous: previous,
           next: currentTasks,
         );
+        await AssignmentNotifications.notifyApproachingDeadlines(currentTasks);
       } else {
         _assignmentNotifyPrimed = true;
       }
@@ -238,6 +218,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             snippet: '${t.barangayName} · ${t.flagColor}',
           ),
           icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+          onTap: () => _onTaskTap(t),
         ),
       );
     }
@@ -269,10 +250,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   void _toggleDocker() {
+    final newState = !_isDockerExpanded;
     setState(() {
-      _isDockerExpanded = !_isDockerExpanded;
+      _isDockerExpanded = newState;
       if (!_isDockerExpanded) _isFirstLoad = false;
     });
+    widget.onDrawerToggled?.call(newState);
   }
 
   Future<void> _goToCurrentLocation() async {
@@ -308,30 +291,35 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   // ── Open inspection modal ─────────────────────────────────────────────────
-  void _showInspectionModal(BuildContext context, InspectionTask task) {
-    showModalBottomSheet(
+  void _onTaskTap(InspectionTask task) async {
+    if (_isDrawerOpen) return;
+    setState(() => _isDrawerOpen = true);
+    widget.onDrawerToggled?.call(true);
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) =>
           InspectionModal(task: task, onSubmitted: () => _fetchTasks()),
     );
+    widget.onDrawerToggled?.call(false);
+    if (mounted) setState(() => _isDrawerOpen = false);
   }
 
   // ── Open yellow flag sheet ────────────────────────────────────────────────
-  void _showYellowFlagSheet() {
-    // Grab current map-center position for default lat/lng
+  void _showYellowFlagSheet() async {
+    if (_isDrawerOpen) return;
+    setState(() => _isDrawerOpen = true);
+    widget.onDrawerToggled?.call(true);
     double? defaultLat;
     double? defaultLng;
     try {
-      // Try to use the last known GPS position as default
-      Geolocator.getLastKnownPosition().then((pos) {
-        defaultLat = pos?.latitude;
-        defaultLng = pos?.longitude;
-      });
+      final pos = await Geolocator.getLastKnownPosition();
+      defaultLat = pos?.latitude;
+      defaultLng = pos?.longitude;
     } catch (_) {}
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -371,6 +359,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         },
       ),
     );
+    widget.onDrawerToggled?.call(false);
+    if (mounted) setState(() => _isDrawerOpen = false);
   }
 
   @override
@@ -378,88 +368,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final screenHeight = MediaQuery.of(context).size.height;
     final paddingTop = MediaQuery.of(context).padding.top;
 
+    // Reactively update map style if theme changes while map is already created
+    _mapController?.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
+
     return Scaffold(
-      drawer: const AppSidebar(),
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: Builder(
-          builder: (ctx) => Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: FloatingActionButton(
-              heroTag: null,
-              mini: true,
-              backgroundColor: Colors.white,
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
-              child: const Icon(Icons.menu, color: AppColors.darkGreen),
-            ),
-          ),
-        ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                FloatingActionButton(
-                  mini: true,
-                  backgroundColor: Colors.white,
-                  heroTag: 'notifications',
-                  onPressed: _showNotificationsPanel,
-                  child: Icon(
-                    _unreadCount > 0
-                        ? Icons.notifications_active_rounded
-                        : Icons.notifications_none_rounded,
-                    color: AppColors.darkGreen,
-                  ),
-                ),
-                if (_unreadCount > 0)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      child: Text(
-                        _unreadCount > 9 ? '9+' : '$_unreadCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          // Refresh
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FloatingActionButton(
               mini: true,
-              backgroundColor: Colors.white,
+              backgroundColor: context.isDarkMode ? Colors.black : Colors.white,
               heroTag: 'refresh',
               onPressed: _loadingTasks ? null : () => _fetchTasks(),
               child: _loadingTasks
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: AppColors.darkGreen,
+                        color: context.isDarkMode ? Colors.white : AppColors.darkGreen,
                       ),
                     )
-                  : const Icon(Icons.refresh, color: AppColors.darkGreen),
+                  : Icon(Icons.refresh, color: context.isDarkMode ? Colors.white : AppColors.darkGreen),
             ),
           ),
         ],
@@ -473,9 +407,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 bottom: _isDockerExpanded ? screenHeight * 0.5 : 0.0,
               ),
               initialCameraPosition: _initialCamera,
+              mapType: _currentMapType,
               markers: _buildFlagMarkers(),
+              onCameraMove: (position) {
+                _currentCameraPosition = position;
+              },
               onMapCreated: (controller) async {
                 _mapController = controller;
+                controller.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
                 await _goToCurrentLocation();
                 _syncMapToTasks();
               },
@@ -518,6 +457,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     _goToCurrentLocation();
                   },
                 ),
+                const SizedBox(height: 6),
+                _MapControlButton(
+                  icon: _currentMapType == MapType.normal ? Icons.satellite_alt_rounded : Icons.map_rounded,
+                  tooltip: 'Toggle Map Type',
+                  active: _currentMapType != MapType.normal,
+                  onTap: () {
+                    setState(() {
+                      _currentMapType = _currentMapType == MapType.normal
+                          ? MapType.hybrid
+                          : MapType.normal;
+                    });
+                  },
+                ),
+                const SizedBox(height: 6),
+                _MapControlButton(
+                  icon: Icons.view_in_ar_rounded,
+                  tooltip: 'Toggle 3D View',
+                  active: _is3DView,
+                  onTap: () {
+                    if (_mapController == null) return;
+                    setState(() {
+                      _is3DView = !_is3DView;
+                    });
+                    final position = _currentCameraPosition ?? _initialCamera;
+                    _mapController!.animateCamera(
+                      CameraUpdate.newCameraPosition(
+                        CameraPosition(
+                          target: position.target,
+                          zoom: position.zoom,
+                          bearing: position.bearing,
+                          tilt: _is3DView ? 60.0 : 0.0,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -532,12 +507,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               curve: Curves.easeInOutQuart,
               offset: _isDockerExpanded ? Offset.zero : const Offset(0, 1.2),
               child: Container(
-                height: screenHeight * 0.5,
                 decoration: const BoxDecoration(
-                  color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                   boxShadow: [BoxShadow(blurRadius: 20, color: Colors.black26)],
                 ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                    child: Container(
+                      height: screenHeight * 0.5,
+                      decoration: BoxDecoration(
+                        color: context.adaptiveSurface.withOpacity(0.85),
+                      ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -580,10 +562,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     _isFirstLoad
                                         ? "Saan ang Sinsay?"
                                         : "My Assignments",
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.adaptiveTextDark,
+                                      ),
                                   ),
                                 ),
                                 // Task count badge
@@ -594,17 +577,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: AppColors.darkGreen.withOpacity(
+                                      color: context.isDarkMode ? Colors.black : AppColors.darkGreen.withOpacity(
                                         0.1,
                                       ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
                                       '${_tasks.length} task${_tasks.length != 1 ? 's' : ''}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
-                                        color: AppColors.darkGreen,
+                                        color: context.isDarkMode ? Colors.white : AppColors.darkGreen,
                                       ),
                                     ),
                                   ),
@@ -623,8 +606,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFF1F5F9),
+                                        color: context.isDarkMode ? Colors.black : const Color(0xFFF1F5F9),
                                         borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: context.isDarkMode ? Colors.white : Colors.transparent),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -634,17 +618,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                 ? Icons.arrow_downward_rounded
                                                 : Icons.arrow_upward_rounded,
                                             size: 12,
-                                            color: const Color(0xFF64748B),
+                                            color: context.isDarkMode ? Colors.white : const Color(0xFF64748B),
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
                                             _sortBy == 'newest'
                                                 ? 'Newest'
                                                 : 'Oldest',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
-                                              color: Color(0xFF64748B),
+                                              color: context.isDarkMode ? Colors.white : const Color(0xFF64748B),
                                             ),
                                           ),
                                         ],
@@ -653,7 +637,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   ),
                                 ],
                                 IconButton(
-                                  icon: const Icon(Icons.close_rounded),
+                                  icon: Icon(Icons.close_rounded, color: context.adaptiveTextDark),
                                   onPressed: _toggleDocker,
                                 ),
                               ],
@@ -663,13 +647,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             // Task list
                             Flexible(
                               child: _loadingTasks
-                                  ? const Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 32,
-                                      ),
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          color: AppColors.darkGreen,
+                                  ? ListView.builder(
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      itemCount: 3,
+                                      padding: EdgeInsets.zero,
+                                      itemBuilder: (context, index) => Padding(
+                                        padding: const EdgeInsets.only(bottom: 12.0),
+                                        child: Shimmer.fromColors(
+                                          baseColor: context.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                                          highlightColor: context.isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+                                          child: Container(
+                                            height: 120,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     )
@@ -741,8 +735,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                         itemBuilder: (context, index) =>
                                             InspectionCard(
                                               task: _sortedTasks[index],
-                                              onTap: () => _showInspectionModal(
-                                                context,
+                                              onTap: () => _onTaskTap(
                                                 _sortedTasks[index],
                                               ),
                                             ),
@@ -755,58 +748,54 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
+                ),
               ),
             ),
           ),
+        ),
+      ),
 
-          // ── 4. Yellow Flag FAB ───────────────────────────────────────────
+          // ── 4. Floating Action Buttons (Tasks & Flag) ───────────────────────────
           Positioned(
-            bottom: _isDockerExpanded ? screenHeight * 0.5 + 16 : 110,
-            left: 24,
-            child: FloatingActionButton.extended(
-              heroTag: 'yellow_flag',
-              backgroundColor: const Color(0xFFF59E0B),
-              foregroundColor: Colors.white,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              onPressed: _showYellowFlagSheet,
-              icon: const Icon(Icons.flag_rounded, size: 20),
-              label: const Text(
-                'Flag Business',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-            ),
-          ),
-
-          // ── 5. Floating button when docker is closed ─────────────────────
-          if (!_isDockerExpanded)
-            Positioned(
-              bottom: 40,
-              left: 24,
-              right: 24,
-              child: SizedBox(
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _toggleDocker,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.darkGreen,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+            bottom: _isDockerExpanded ? screenHeight * 0.5 + 16 : 140,
+            right: 16,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: context.adaptiveSurface.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: context.isDarkMode ? Colors.white24 : Colors.black12,
                     ),
                   ),
-                  child: const Text(
-                    "Inspection Tasks",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
+                  child: Column(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.assignment_rounded),
+                        color: context.adaptiveTextDark,
+                        tooltip: 'Inspection Tasks',
+                        onPressed: _toggleDocker,
+                      ),
+                      Container(
+                        width: 32,
+                        height: 1,
+                        color: context.isDarkMode ? Colors.white24 : Colors.black12,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.flag_rounded),
+                        color: const Color(0xFFF59E0B),
+                        tooltip: 'Flag Business',
+                        onPressed: _showYellowFlagSheet,
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -832,566 +821,43 @@ class _MapControlButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
         child: Container(
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: active ? AppColors.darkGreen : Colors.white,
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(blurRadius: 6, color: Colors.black.withOpacity(0.12)),
             ],
           ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: active ? Colors.white : AppColors.darkGreen,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Inspection Modal ─────────────────────────────────────────────────────────
-class _InspectionModal extends StatefulWidget {
-  final InspectionTask task;
-  final VoidCallback onSubmitted;
-
-  const _InspectionModal({required this.task, required this.onSubmitted});
-
-  @override
-  State<_InspectionModal> createState() => _InspectionModalState();
-}
-
-class _InspectionModalState extends State<_InspectionModal> {
-  final TextEditingController _remarksController = TextEditingController();
-  String? _evidenceLocalPath;
-  String? _uploadedPhotoUrl;
-  bool _uploadingEvidence = false;
-  bool _submitting = false;
-
-  /// API: Red | Yellow | Green
-  String _inspectionResult = 'Green';
-
-  @override
-  void dispose() {
-    _remarksController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _onSubmit() async {
-    if (_inspectionResult.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select an on-site compliance result.')),
-      );
-      return;
-    }
-
-    setState(() => _submitting = true);
-    try {
-      double? vLat;
-      double? vLng;
-      try {
-        final p = await Geolocator.getCurrentPosition();
-        vLat = p.latitude;
-        vLng = p.longitude;
-      } catch (_) {}
-
-      final remarks = _remarksController.text.trim();
-
-      await InspectionService().submitInspection(
-        task: widget.task,
-        inspectionResult: _inspectionResult,
-        notes: remarks.isEmpty ? null : remarks,
-        verifiedLat: vLat,
-        verifiedLng: vLng,
-        evidenceLocalPath: _uploadedPhotoUrl == null
-            ? _evidenceLocalPath
-            : null,
-        photoURL: _uploadedPhotoUrl,
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Submitted. Admin can verify it on the web dashboard (Submitted column).',
-          ),
-        ),
-      );
-      widget.onSubmitted();
-      Navigator.pop(context, true);
-    } catch (e) {
-      debugPrint('submitInspection error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Submit failed: $e')));
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final picker = ImagePicker();
-      final pickedImage = await picker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
-      if (pickedImage != null && mounted) {
-        setState(() {
-          _evidenceLocalPath = pickedImage.path;
-          _uploadedPhotoUrl = null;
-        });
-      }
-    } catch (e) {
-      debugPrint('Image picker error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to pick image.')));
-    }
-  }
-
-  Future<void> _uploadEvidence() async {
-    final path = _evidenceLocalPath;
-    if (path == null || path.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Take or choose a photo first.')),
-      );
-      return;
-    }
-
-    setState(() => _uploadingEvidence = true);
-    try {
-      final photoUrl = await InspectionService().uploadEvidence(path);
-      if (!mounted) return;
-      if (photoUrl == null || photoUrl.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Upload failed. Please try again.')),
-        );
-        return;
-      }
-      setState(() => _uploadedPhotoUrl = photoUrl);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Evidence uploaded. You can submit the inspection.'),
-          backgroundColor: AppColors.darkGreen,
-        ),
-      );
-    } catch (e) {
-      debugPrint('uploadEvidence error: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
-    } finally {
-      if (mounted) setState(() => _uploadingEvidence = false);
-    }
-  }
-
-  void _clearEvidence() {
-    setState(() {
-      _evidenceLocalPath = null;
-      _uploadedPhotoUrl = null;
-    });
-  }
-
-  void _showPickerOptions() {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text('Take a Photo'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _pickImage(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose from Gallery'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _pickImage(ImageSource.gallery);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          children: [
-            // Handle
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Business info header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.darkGreen.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'INFO',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.darkGreen,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          widget.task.detectedName,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on_outlined,
-                              size: 14,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                widget.task.barangayName,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-
-            const Divider(height: 24),
-
-            // Scrollable content
-            Expanded(
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                children: [
-                  const _SectionLabel(
-                    label: 'On-site result',
-                    icon: Icons.flag_outlined,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Choose the flag color to record after your visit (admin verifies on the web).',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _ResultChip(
-                        label: 'Red — Unregistered',
-                        selected: _inspectionResult == 'Red',
-                        color: const Color(0xFFEF4444),
-                        onTap: () => setState(() => _inspectionResult = 'Red'),
-                      ),
-                      _ResultChip(
-                        label: 'Yellow — Suspected',
-                        selected: _inspectionResult == 'Yellow',
-                        color: const Color(0xFFF59E0B),
-                        onTap: () =>
-                            setState(() => _inspectionResult = 'Yellow'),
-                      ),
-                      _ResultChip(
-                        label: 'Green — Compliant',
-                        selected: _inspectionResult == 'Green',
-                        color: const Color(0xFF22C55E),
-                        onTap: () =>
-                            setState(() => _inspectionResult = 'Green'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  const _SectionLabel(
-                    label: 'Evidence',
-                    icon: Icons.photo_library_outlined,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Take a photo, then tap Upload evidence before submitting.',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_evidenceLocalPath != null &&
-                      File(_evidenceLocalPath!).existsSync()) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.file(
-                        File(_evidenceLocalPath!),
-                        height: 180,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TextButton.icon(
-                          onPressed: _uploadingEvidence
-                              ? null
-                              : _showPickerOptions,
-                          icon: const Icon(
-                            Icons.cameraswitch_outlined,
-                            size: 18,
-                          ),
-                          label: const Text('Retake'),
-                        ),
-                        TextButton.icon(
-                          onPressed: _uploadingEvidence ? null : _clearEvidence,
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          label: const Text('Remove'),
-                        ),
-                        const Spacer(),
-                        if (_uploadedPhotoUrl != null)
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle,
-                                color: AppColors.darkGreen,
-                                size: 18,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Uploaded',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.darkGreen,
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ] else
-                    GestureDetector(
-                      onTap: _showPickerOptions,
-                      child: Container(
-                        height: 110,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppColors.darkGreen.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.add_photo_alternate_outlined,
-                              size: 36,
-                              color: AppColors.darkGreen.withOpacity(0.6),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Tap to take or choose a photo',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (_evidenceLocalPath != null) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        onPressed:
-                            _uploadingEvidence || _uploadedPhotoUrl != null
-                            ? null
-                            : _uploadEvidence,
-                        icon: _uploadingEvidence
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.darkGreen,
-                                ),
-                              )
-                            : const Icon(Icons.cloud_upload_outlined),
-                        label: Text(
-                          _uploadedPhotoUrl != null
-                              ? 'Evidence uploaded'
-                              : 'Upload evidence',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.darkGreen,
-                          side: const BorderSide(color: AppColors.darkGreen),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 20),
-
-                  // Remarks
-                  const _SectionLabel(
-                    label: 'Remarks',
-                    icon: Icons.comment_outlined,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _remarksController,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      hintText: 'Optional — notes for BPLO / admin review',
-                      hintStyle: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 13,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(
-                          color: AppColors.darkGreen,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
-
-            // Sticky actions — always visible without scrolling
-            Container(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                12,
-                24,
-                12 + MediaQuery.of(context).padding.bottom,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 8,
-                    color: Colors.black.withOpacity(0.08),
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _submitting || _uploadingEvidence
-                      ? null
-                      : _onSubmit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.darkGreen,
-                    disabledBackgroundColor: AppColors.darkGreen.withOpacity(
-                      0.5,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          'Submit Inspection',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppColors.darkGreen.withOpacity(0.9)
+                      : context.isDarkMode
+                          ? Colors.black.withOpacity(0.5)
+                          : Colors.white.withOpacity(0.7),
+                ),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: active
+                      ? Colors.white
+                      : context.isDarkMode
+                          ? Colors.white
+                          : AppColors.darkGreen,
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1399,279 +865,8 @@ class _InspectionModalState extends State<_InspectionModal> {
 }
 
 // ─── Result chip (modal) ─────────────────────────────────────────────────────
-class _ResultChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
 
-  const _ResultChip({
-    required this.label,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? color.withValues(alpha: 0.15) : Colors.grey.shade100,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? color : Colors.grey.shade300,
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: selected ? color : Colors.grey.shade700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Section Label ────────────────────────────────────────────────────────────
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  final IconData icon;
-
-  const _SectionLabel({required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.darkGreen),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textDark,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── In-app notifications panel (home bell) ───────────────────────────────────
-class _NotificationsPanel extends StatefulWidget {
-  const _NotificationsPanel();
-
-  @override
-  State<_NotificationsPanel> createState() => _NotificationsPanelState();
-}
-
-class _NotificationsPanelState extends State<_NotificationsPanel> {
-  List<InAppNotification> _items = [];
-  bool _loading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final list = await InAppNotificationsService().fetchNotifications();
-      if (mounted) {
-        setState(() {
-          _items = list;
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Could not load notifications.';
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  IconData _iconForType(String type) {
-    switch (type) {
-      case 'inspection_assigned':
-        return Icons.assignment_ind_outlined;
-      default:
-        return Icons.notifications_outlined;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final maxH = MediaQuery.of(context).size.height * 0.55;
-
-    return Container(
-      constraints: BoxConstraints(maxHeight: maxH),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 10),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Notifications',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh, color: AppColors.darkGreen),
-                  onPressed: _loading ? null : _load,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Flexible(
-            child: _loading
-                ? const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.darkGreen,
-                      ),
-                    ),
-                  )
-                : _error != null
-                ? Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                : _items.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Text(
-                      'No notifications yet.\nNew assignments from admin will appear here.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey, height: 1.5),
-                    ),
-                  )
-                : ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: _items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      final n = _items[i];
-                      return Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: n.isUnread
-                              ? AppColors.darkGreen.withOpacity(0.06)
-                              : Colors.grey[50],
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: n.isUnread
-                                ? AppColors.darkGreen.withOpacity(0.25)
-                                : Colors.grey.shade200,
-                          ),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              _iconForType(n.type),
-                              color: AppColors.darkGreen,
-                              size: 22,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    n.title,
-                                    style: TextStyle(
-                                      fontWeight: n.isUnread
-                                          ? FontWeight.w700
-                                          : FontWeight.w600,
-                                      fontSize: 14,
-                                      color: AppColors.textDark,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    n.body,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                  if (n.createdAt.isNotEmpty) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      n.createdAt,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[500],
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Yellow Flag Bottom Sheet ─────────────────────────────────────────────────
 
@@ -1833,9 +1028,9 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.adaptiveSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.fromLTRB(20, 0, 20, bottom + 24),
       child: SingleChildScrollView(
@@ -1874,7 +1069,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1883,14 +1078,14 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                         style: TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF1F2933),
+                          color: context.adaptiveTextDark,
                         ),
                       ),
                       Text(
                         'Mark an unregistered establishment on the map.',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF6B7280),
+                          color: context.adaptiveTextMid,
                         ),
                       ),
                     ],
@@ -1948,10 +1143,17 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                       labelText: 'Business Name *',
                       hintText: 'e.g. Aling Nena\'s Sari-Sari Store',
                       prefixIcon: const Icon(Icons.storefront_outlined),
+                      filled: context.isDarkMode,
+                      fillColor: context.isDarkMode ? Colors.black : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: context.isDarkMode ? Colors.white : Colors.grey),
+                      ),
                     ),
+                    style: TextStyle(color: context.adaptiveTextDark),
                     textCapitalization: TextCapitalization.words,
                     validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Required' : null,
@@ -1963,10 +1165,18 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                     decoration: InputDecoration(
                       labelText: 'Barangay *',
                       prefixIcon: const Icon(Icons.location_city_outlined),
+                      filled: context.isDarkMode,
+                      fillColor: context.isDarkMode ? Colors.black : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: context.isDarkMode ? Colors.white : Colors.grey),
+                      ),
                     ),
+                    dropdownColor: context.adaptiveSurface,
+                    style: TextStyle(color: context.adaptiveTextDark),
                     isExpanded: true,
                     hint: _loadingBarangays
                         ? const Text('Loading barangays…')
@@ -1997,9 +1207,9 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.grey[50],
+                      color: context.isDarkMode ? Colors.black : Colors.grey[50],
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: context.isDarkMode ? Colors.white : Colors.grey.shade300),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2035,9 +1245,9 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                         else
                           Text(
                             'Lat: ${_latCtrl.text}, Lng: ${_lngCtrl.text}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: Color(0xFF374151),
+                              color: context.adaptiveTextDark,
                               fontFamily: 'Courier',
                             ),
                           ),
@@ -2119,11 +1329,18 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                       labelText: 'Notes (optional)',
                       hintText: 'Observations, description, landmarks…',
                       prefixIcon: const Icon(Icons.notes_outlined),
+                      filled: context.isDarkMode,
+                      fillColor: context.isDarkMode ? Colors.black : null,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: context.isDarkMode ? Colors.white : Colors.grey),
+                      ),
                       alignLabelWithHint: true,
                     ),
+                    style: TextStyle(color: context.adaptiveTextDark),
                     maxLines: 3,
                     minLines: 2,
                     textCapitalization: TextCapitalization.sentences,
@@ -2190,7 +1407,7 @@ class _LocationPickerDialog extends StatefulWidget {
 }
 
 class _LocationPickerDialogState extends State<_LocationPickerDialog> {
-  late GoogleMapController _mapController;
+  GoogleMapController? _mapController;
   LatLng? _selectedLocation;
 
   static const CameraPosition _initialCamera = CameraPosition(
@@ -2214,20 +1431,27 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    // initialCameraPosition is only honored on the very first frame and is
-    // unreliable inside a Dialog (the map can otherwise fall back to its
-    // default world view centered around the US). Explicitly move the
-    // camera once the map is ready so it always lands on the correct spot —
-    // either the previously picked location, or Mataasnakahoy by default.
-    final target = _selectedLocation ?? _initialCamera.target;
-    controller.moveCamera(
-      CameraUpdate.newLatLngZoom(target, _selectedLocation != null ? 15 : 15),
-    );
+    controller.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
+    
+    // Wait for the Dialog's entrance animation to completely finish (usually 300-400ms).
+    // The Google Maps SDK on Android often ignores camera updates while scaling.
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        final target = _selectedLocation ?? _initialCamera.target;
+        controller.moveCamera(
+          CameraUpdate.newLatLngZoom(target, 15),
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    // Reactively update map style if theme changes while map is already created
+    _mapController?.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
+
     return Dialog(
+      backgroundColor: context.adaptiveSurface,
       insetPadding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2294,6 +1518,12 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
                       Marker(
                         markerId: const MarkerId('selected'),
                         position: _selectedLocation!,
+                        draggable: true,
+                        onDragEnd: (newPosition) {
+                          setState(() {
+                            _selectedLocation = newPosition;
+                          });
+                        },
                         infoWindow: InfoWindow(
                           title:
                               '${_selectedLocation!.latitude.toStringAsFixed(4)}, ${_selectedLocation!.longitude.toStringAsFixed(4)}',
@@ -2308,7 +1538,7 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.grey[50],
+              color: context.adaptiveSurface,
               borderRadius: const BorderRadius.vertical(
                 bottom: Radius.circular(12),
               ),
@@ -2330,16 +1560,16 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: context.isDarkMode ? Colors.black : Colors.white,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: context.isDarkMode ? Colors.white : Colors.grey.shade300),
                     ),
                     child: Text(
                       'Lat: ${_selectedLocation!.latitude.toStringAsFixed(6)}\nLng: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontFamily: 'Courier',
-                        color: Color(0xFF374151),
+                        color: context.adaptiveTextDark,
                       ),
                     ),
                   ),

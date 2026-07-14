@@ -4,6 +4,7 @@ import io
 import os
 from app import mysql
 from api.models.geospatial import insert_green_flag
+from api.utils.cancellation import is_cancelled, set_cancel
 
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
@@ -189,6 +190,7 @@ def _normalise_status(raw: str) -> str:
 def upload_registry(file, ext: str):
     """Parse CSV/Excel → geocode → insert into OFFICIAL_REGISTRY.
     Returns (summary_dict, error_string)."""
+    set_cancel("registry_import", False)
     try:
         raw = file.read()
 
@@ -211,6 +213,11 @@ def upload_registry(file, ext: str):
         cursor = mysql.connection.cursor()
 
         for idx, row in df.iterrows():
+            if is_cancelled("registry_import"):
+                mysql.connection.rollback()
+                cursor.close()
+                return None, "Import cancelled by user — no data was saved."
+
             business_name = row.get("businessName")
 
             # businessName is required
@@ -331,6 +338,7 @@ def sync_registry(file, ext: str):
     Existing rows match on LOWER(businessName) + barangayID and are overwritten
     with file values; new rows are inserted (same rules as upload).
     Returns (summary_dict, error_string)."""
+    set_cancel("registry_import", False)
     try:
         raw = file.read()
 
@@ -354,6 +362,11 @@ def sync_registry(file, ext: str):
         cursor = mysql.connection.cursor()
 
         for idx, row in df.iterrows():
+            if is_cancelled("registry_import"):
+                mysql.connection.rollback()
+                cursor.close()
+                return None, "Sync cancelled by user — no data was saved."
+
             business_name = row.get("businessName")
 
             if not business_name or str(business_name).strip() == "":

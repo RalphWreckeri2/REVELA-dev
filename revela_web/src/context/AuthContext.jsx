@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { loginRequest, getMeRequest } from "../services/api";
 
 const AuthContext = createContext(null);
@@ -6,8 +6,33 @@ const AuthContext = createContext(null);
 export { AuthContext };
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
+  const [token, setTokenState] = useState(() => localStorage.getItem("revela_token"));
   const [user, setUser] = useState(null);
+
+  const setToken = (newToken) => {
+    setTokenState(newToken);
+    if (newToken) {
+      localStorage.setItem("revela_token", newToken);
+    } else {
+      localStorage.removeItem("revela_token");
+    }
+  };
+
+  useEffect(() => {
+    if (token && !user) {
+      getMeRequest(token)
+        .then(me => {
+          if (!["Admin", "SUPER_ADMIN", "System Administrator"].includes(me?.role)) {
+            setToken(null);
+          } else {
+            setUser(me);
+          }
+        })
+        .catch(() => {
+          setToken(null);
+        });
+    }
+  }, [token, user]);
 
   async function login(email, password) {
     const data = await loginRequest(email, password);

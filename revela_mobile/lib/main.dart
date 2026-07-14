@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'theme/app_theme.dart';
+import 'pages/main_layout.dart';
 import 'pages/welcome_page.dart';
 import 'pages/login_page.dart';
-import 'pages/dashboard_page.dart';
 import 'service/auth_service.dart';
 import 'service/api_config.dart';
 import 'service/assignment_notifications.dart';
@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
           darkTheme: AppTheme.darkTheme,
           themeMode: currentMode,
           home: isLoggedIn
-              ? const DashboardPage()
+              ? const MainLayout()
               : (seenWelcome ? const LoginPage() : const WelcomePage()),
         );
       },

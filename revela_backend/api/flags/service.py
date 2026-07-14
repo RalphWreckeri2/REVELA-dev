@@ -6,6 +6,7 @@ import requests as http
 from geopy.distance import geodesic
 from app import mysql
 from shapely.geometry import shape, Point
+from api.utils.cancellation import is_cancelled, set_cancel
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 
@@ -136,6 +137,9 @@ def _fetch_all_places(progress_cb=None):
 
     # 2. Iterate and query each point
     for idx, (lat, lng) in enumerate(grid_points):
+        if is_cancelled("run_detection"):
+            break
+
         if progress_cb:
             progress_cb(idx, total_steps, lat, lng)
         outside = _fetch_places_for_point(lat, lng, radius_m, places_dict)
@@ -242,8 +246,10 @@ def _insert_red_flag(place_id, place_name, lat, lng, barangay_id, address=None):
              flagColor, placeID, nearestLandmark)
         VALUES (%s, NULL, %s, %s, %s, 'Red', %s, %s)
     """, (barangay_id, place_name, lat, lng, place_id, address))
+    flag_id = cursor.lastrowid
     mysql.connection.commit()
     cursor.close()
+    return flag_id
 
 
 # ── Main detection runner ─────────────────────────────────────────────────────
@@ -256,6 +262,7 @@ def run_detection():
     3. Insert Red Flags for unmatched POIs
     Returns { new_flags, total_checked, outside_boundary }
     """
+    set_cancel("run_detection", False)
     try:
         from api.notifications import hub
 
@@ -271,6 +278,15 @@ def run_detection():
             })
 
         places, outside_count = _fetch_all_places(progress_callback)
+
+        if is_cancelled("run_detection"):
+            hub.publish_to_admins({
+                "type": "detection_progress",
+                "stage": "completed",
+                "percentage": 100,
+                "status": "Detection cancelled by user. No flags were recorded."
+            })
+            return None, "Detection cancelled by user."
 
         hub.publish_to_admins({
             "type": "detection_progress",
@@ -290,7 +306,25 @@ def run_detection():
             "status": f"Cross-referencing {total_checked} detected POIs against official registry..."
         })
 
+        inserted_flag_ids = []
+
         for idx, place in enumerate(places):
+            if is_cancelled("run_detection"):
+                # Rollback all inserted flags during this session
+                if inserted_flag_ids:
+                    cursor = mysql.connection.cursor()
+                    format_strings = ','.join(['%s'] * len(inserted_flag_ids))
+                    cursor.execute(f"DELETE FROM geospatial_logs WHERE logID IN ({format_strings})", tuple(inserted_flag_ids))
+                    mysql.connection.commit()
+                    cursor.close()
+                hub.publish_to_admins({
+                    "type": "detection_progress",
+                    "stage": "completed",
+                    "percentage": 100,
+                    "status": "Detection cancelled by user. Discovered flags rolled back."
+                })
+                return None, "Detection cancelled by user."
+
             place_id = place.get("place_id")
             place_name = place.get("name", "Unknown")
             geometry = place.get("geometry") or {}
@@ -338,8 +372,9 @@ def run_detection():
 
             if nearest is None or dist > THRESHOLD_M:
                 barangay_id = _get_barangay_id_by_coords(lat, lng)
-                _insert_red_flag(place_id, place_name, lat,
+                flag_id = _insert_red_flag(place_id, place_name, lat,
                                  lng, barangay_id, address)
+                inserted_flag_ids.append(flag_id)
                 new_flags += 1
             else:
                 _match_registry_to_google(
@@ -403,6 +438,7 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50, reported_by_use
                 g.flagColor,
                 g.detectedDate,
                 g.nearestLandmark,
+                g.notes,
                 g.placeID,
                 g.reportedByUserID,
                 b.barangayID,
@@ -458,11 +494,15 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50, reported_by_use
 def insert_yellow_flag(business_name, lat, lng, barangay_id, notes=None, flag_color='Yellow', reported_by_user_id=None):
     """Manually insert a Yellow or Orange Flag."""
     try:
+        # Validate that the manual pin falls within the municipality
+        if lat and lng and not _within_municipality(float(lat), float(lng)):
+            return None, "Cannot place a flag outside the official municipality boundaries."
+
         cursor = mysql.connection.cursor()
         cursor.execute("""
             INSERT INTO geospatial_logs
                 (barangayID, reportID, detectedName, latitude, longitude,
-                 flagColor, nearestLandmark, reportedByUserID)
+                 flagColor, notes, reportedByUserID)
             VALUES (%s, NULL, %s, %s, %s, %s, %s, %s)
         """, (barangay_id, business_name, lat, lng, flag_color, notes, reported_by_user_id))
         mysql.connection.commit()

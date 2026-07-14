@@ -89,6 +89,9 @@ class ApiConfig {
       add(saved);
     }
 
+    // Wi-Fi network (Laptop's IP)
+    add('http://192.168.1.2:5000');
+
     // USB + `adb reverse tcp:5000 tcp:5000` (physical device)
     add('http://127.0.0.1:5000');
     // Android emulator → host machine

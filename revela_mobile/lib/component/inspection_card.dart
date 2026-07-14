@@ -1,3 +1,4 @@
+import 'package:revela_mobile/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../service/inspection_service.dart';
 
@@ -97,16 +98,17 @@ class InspectionCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.adaptiveSurface,
           borderRadius: BorderRadius.circular(18),
+          border: context.isDarkMode ? Border.all(color: Colors.grey, width: 1) : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: context.isDarkMode ? Colors.transparent : Colors.black.withOpacity(0.06),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: context.isDarkMode ? Colors.transparent : Colors.black.withOpacity(0.03),
               blurRadius: 4,
               offset: const Offset(0, 1),
             ),
@@ -126,7 +128,7 @@ class InspectionCard extends StatelessWidget {
               child: Icon(_flagIcon, color: _flagColor, size: 24),
             ),
 
-            const SizedBox(width: 14),
+            SizedBox(width: 14),
 
             // ── Middle: main info ───────────────────────────────────────────
             Expanded(
@@ -137,16 +139,16 @@ class InspectionCard extends StatelessWidget {
                   // Business name
                   Text(
                     task.detectedName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
+                      color: context.adaptiveTextDark,
                       letterSpacing: -0.2,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 3),
+                  SizedBox(height: 3),
 
                   // Barangay
                   Row(
@@ -154,15 +156,15 @@ class InspectionCard extends StatelessWidget {
                       Icon(
                         Icons.location_on_outlined,
                         size: 11,
-                        color: Colors.grey[400],
+                        color: context.adaptiveTextMid,
                       ),
-                      const SizedBox(width: 3),
+                      SizedBox(width: 3),
                       Flexible(
                         child: Text(
                           task.barangayName,
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[500],
+                            color: context.adaptiveTextMid,
                             fontWeight: FontWeight.w400,
                           ),
                           maxLines: 1,
@@ -171,7 +173,7 @@ class InspectionCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
 
                   // Bottom row: flag label + timestamp
                   Row(
@@ -195,7 +197,7 @@ class InspectionCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
 
                       // Status pill
                       Container(
@@ -204,15 +206,15 @@ class InspectionCard extends StatelessWidget {
                           vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
+                          color: context.adaptiveBorder,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           task.verificationStatus,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF64748B),
+                            color: context.adaptiveTextMid,
                           ),
                         ),
                       ),
@@ -222,7 +224,7 @@ class InspectionCard extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
 
             // ── Right: ID + time ────────────────────────────────────────────
             Column(
@@ -234,25 +236,25 @@ class InspectionCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Colors.grey[400],
+                    color: context.adaptiveTextMid,
                     fontFamily: 'monospace',
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   _formatDate(task.irTimestamp),
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.grey[400],
+                    color: context.adaptiveTextMid,
                     fontWeight: FontWeight.w400,
                   ),
                   textAlign: TextAlign.right,
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 12,
-                  color: Colors.grey[300],
+                  color: context.adaptiveTextLight,
                 ),
               ],
             ),

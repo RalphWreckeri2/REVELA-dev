@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
+import 'package:flutter/services.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../component/app_sidebar.dart';
+
+import '../component/inspection_modal.dart';
+import '../component/notifications_panel.dart';
 import '../service/inspection_service.dart';
+import '../service/flag_service.dart';
 import '../theme/app_theme.dart';
-import 'home_page.dart';
+import '../widgets/task_card.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'inspection_page.dart';
-import 'pdf_generator_page.dart';
+import '../service/in_app_notifications_service.dart';
+import '../component/inspection_modal.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  final ValueChanged<bool>? onDrawerToggled;
+  const DashboardPage({super.key, this.onDrawerToggled});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -23,7 +32,10 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoading = true;
   List<InspectionTask> _activeTasks = [];
   List<InspectionTask> _historyTasks = [];
+  List<MyFlag> _myFlags = [];
   String? _errorMsg;
+  int _unreadCount = 0;
+  bool _isDrawerOpen = false;
 
   @override
   void initState() {
@@ -31,7 +43,14 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadDashboardData();
   }
 
-  Future<void> _loadDashboardData() async {
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning,';
+    if (hour < 17) return 'Good afternoon,';
+    return 'Good evening,';
+  }
+
+  Future<void> _loadDashboardData({bool silent = false}) async {
     setState(() => _isLoading = true);
     try {
       final name = await _storage.read(key: 'user_fullName') ?? 'Field Inspector';
@@ -39,6 +58,8 @@ class _DashboardPageState extends State<DashboardPage> {
       
       final active = await _inspectionService.getMyTasks();
       final history = await _inspectionService.getMyReportHistory();
+      final flags = await FlagService().fetchMyYellowFlags();
+      final unread = await InAppNotificationsService().fetchUnreadCount();
 
       if (mounted) {
         setState(() {
@@ -46,6 +67,8 @@ class _DashboardPageState extends State<DashboardPage> {
           _inspectorRole = role;
           _activeTasks = active;
           _historyTasks = history;
+          _myFlags = flags;
+          _unreadCount = unread;
           _isLoading = false;
         });
       }
@@ -63,267 +86,337 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final int assignedCount = _activeTasks.length;
     final int redFlagsCount = _activeTasks.where((t) => t.flagColor.toLowerCase() == 'red').length;
+    final int yellowFlagsCount = _activeTasks.where((t) => t.flagColor.toLowerCase() == 'yellow').length;
+    final int greenFlagsCount = _activeTasks.where((t) => t.flagColor.toLowerCase() == 'green').length;
     final int submittedCount = _historyTasks.where((t) => t.verificationStatus.toLowerCase() == 'submitted').length;
     final int verifiedCount = _historyTasks.where((t) => t.verificationStatus.toLowerCase() == 'verified').length;
 
     return Scaffold(
+      backgroundColor: context.adaptiveBackground,
       appBar: AppBar(
-        title: const Text('BPLO Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text('Dashboard', style: TextStyle(fontWeight: FontWeight.bold, color: context.adaptiveTextDark)),
+        backgroundColor: context.adaptiveSurface,
         elevation: 0,
         actions: [
+
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh_rounded, color: context.adaptivePrimary),
             onPressed: _loadDashboardData,
             tooltip: 'Refresh Dashboard',
           ),
         ],
       ),
-      drawer: const AppSidebar(),
       body: RefreshIndicator(
         onRefresh: _loadDashboardData,
+        color: AppColors.gold,
+        backgroundColor: context.adaptiveSurface,
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+                itemCount: 4,
+                itemBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Shimmer.fromColors(
+                    baseColor: context.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                    highlightColor: context.isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+                    child: Container(
+                      height: index == 0 ? 100 : 160,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                  ),
+                ),
+              )
             : SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── Welcome Profile Banner ──
+                    // ── Modern Welcome Banner ──
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(20),
+                      clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                            color: const Color(0xFF0F172A).withValues(alpha: 0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
                           ),
                         ],
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Stack(
                         children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 24,
-                                backgroundColor: AppColors.gold,
-                                child: Text(
-                                  _inspectorName.isNotEmpty ? _inspectorName[0].toUpperCase() : 'I',
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.darkGreen,
+                          // Background pattern/circles
+                          Positioned(
+                            right: -30,
+                            top: -30,
+                            child: Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.05),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 40,
+                            bottom: -40,
+                            child: Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.05),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.gold.withValues(alpha: 0.5), width: 2),
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor: AppColors.gold,
+                                    child: Text(
+                                      _inspectorName.isNotEmpty ? _inspectorName[0].toUpperCase() : 'I',
+                                      style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFF0F3E22),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Welcome back,',
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.8),
-                                        fontSize: 13,
+                                const SizedBox(width: 20),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _getGreeting(),
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.7),
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 0.5,
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      _inspectorName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _inspectorName,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.verified_user_outlined, color: AppColors.gold, size: 16),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _inspectorRole,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.verified_user_rounded, color: AppColors.gold, size: 14),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              _inspectorRole,
+                                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                    ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
+                    const SizedBox(height: 32),
 
-                    // ── Quick Metrics Section ──
-                    const Text(
-                      'Inspection Metrics',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
-                    ),
-                    const SizedBox(height: 12),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 1.45,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: [
-                        _buildMetricCard(
-                          title: 'Assigned Tasks',
-                          value: '$assignedCount',
-                          icon: Icons.assignment_outlined,
-                          color: Colors.blue,
-                        ),
-                        _buildMetricCard(
-                          title: 'High Priority',
-                          value: '$redFlagsCount',
-                          icon: Icons.warning_amber_rounded,
-                          color: Colors.redAccent,
-                        ),
-                        _buildMetricCard(
-                          title: 'Submitted Reports',
-                          value: '$submittedCount',
-                          icon: Icons.hourglass_top_rounded,
-                          color: Colors.orange,
-                        ),
-                        _buildMetricCard(
-                          title: 'Verified Cleared',
-                          value: '$verifiedCount',
-                          icon: Icons.check_circle_outline,
-                          color: Colors.green,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ── Field Actions Shortcuts ──
-                    const Text(
-                      'Field Quick Actions',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
-                    ),
-                    const SizedBox(height: 12),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Expanded(
-                          child: _buildShortcutButton(
-                            label: 'Map View',
-                            icon: Icons.map_outlined,
-                            color: const Color(0xFF2E7D32),
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const HomePage()));
-                            },
-                          ),
+                        Text(
+                          'Overall Progress',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.adaptiveTextDark),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildShortcutButton(
-                            label: 'Tasks List',
-                            icon: Icons.list_alt_rounded,
-                            color: const Color(0xFF0277BD),
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const InspectionPage()));
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildShortcutButton(
-                            label: 'Notice PDF',
-                            icon: Icons.picture_as_pdf_outlined,
-                            color: const Color(0xFFD84315),
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const PdfGeneratorPage()));
-                            },
-                          ),
+                        Builder(
+                          builder: (context) {
+                            final realTotal = assignedCount + submittedCount + verifiedCount;
+                            return Text(
+                              '$realTotal Total Assignments',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: context.adaptiveTextMid),
+                            );
+                          }
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 24),
+                    ).animate().fadeIn(delay: 100.ms),
+                    const SizedBox(height: 16),
+                    Builder(
+                      builder: (context) {
+                        int total = assignedCount + submittedCount + verifiedCount;
+                        if (total == 0) total = 1; // prevent division by zero
+                        return Column(
+                          children: [
+                            Container(
+                              height: 18,
+                              width: double.infinity,
+                              clipBehavior: Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                color: context.isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Row(
+                                children: [
+                                  if (verifiedCount > 0)
+                                    Expanded(flex: verifiedCount, child: Container(color: Colors.teal)),
+                                  if (submittedCount > 0)
+                                    Expanded(flex: submittedCount, child: Container(color: Colors.purple)),
+                                  if (assignedCount > 0)
+                                    Expanded(flex: assignedCount, child: Container(color: Colors.blue)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildProgressLegend('Verified', verifiedCount, Colors.teal),
+                                _buildProgressLegend('Submitted', submittedCount, Colors.purple),
+                                _buildProgressLegend('Assigned', assignedCount, Colors.blue),
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+                    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
+                    const SizedBox(height: 32),
 
-                    // ── Active Tasks Overview ──
+                    // ── Metrics Grid ──
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Assigned Assignments',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const InspectionPage()));
-                          },
-                          child: const Text('View All'),
+                        Text(
+                          'Flag Reports',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.adaptiveTextDark),
                         ),
                       ],
+                    ).animate().fadeIn(delay: 300.ms),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: redFlagsCount > 0 
+                            ? _buildGlassMetricCard('Red Flags', '$redFlagsCount', Icons.flag_rounded, Colors.red, isZero: false)
+                                .animate().boxShadow(begin: BoxShadow(color: Colors.red.withValues(alpha: 0.2), blurRadius: 10), end: BoxShadow(color: Colors.red.withValues(alpha: 0.2), blurRadius: 20))
+                                .fadeIn(delay: 350.ms).scale(begin: const Offset(0.95, 0.95))
+                            : _buildGlassMetricCard('Red Flags', '0', Icons.flag_rounded, Colors.red, isZero: true)
+                                .animate().fadeIn(delay: 350.ms).scale(begin: const Offset(0.95, 0.95))
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildGlassMetricCard('Yellow Flags', '$yellowFlagsCount', Icons.flag_rounded, Colors.orange, isZero: yellowFlagsCount == 0).animate().fadeIn(delay: 400.ms).scale(begin: const Offset(0.95, 0.95))),
+                        const SizedBox(width: 12),
+                        Expanded(child: _buildGlassMetricCard('Green Flags', '$greenFlagsCount', Icons.flag_rounded, Colors.green, isZero: greenFlagsCount == 0).animate().fadeIn(delay: 450.ms).scale(begin: const Offset(0.95, 0.95))),
+                      ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 32),
+
+                    // ── Recent Active Tasks ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Recent Assignments',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.adaptiveTextDark),
+                        ),
+                        InkWell(
+                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InspectionPage())),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.gold.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text('View All', style: TextStyle(color: Color(0xFFC79200), fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                        ),
+                      ],
+                    ).animate().fadeIn(delay: 500.ms),
+                    const SizedBox(height: 16),
                     if (_activeTasks.isEmpty)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.borderColor),
+                          color: context.adaptiveSurface,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: context.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
                         ),
-                        child: const Column(
+                        child: Column(
                           children: [
-                            Icon(Icons.check_circle_outline, size: 48, color: Colors.grey),
-                            SizedBox(height: 8),
-                            Text('No active inspection assignments.', style: TextStyle(color: Colors.grey)),
+                            Icon(Icons.check_circle_outline_rounded, size: 64, color: Colors.grey.withValues(alpha: 0.5)),
+                            const SizedBox(height: 16),
+                            Text("You're all caught up!", style: TextStyle(color: context.adaptiveTextMid, fontSize: 16, fontWeight: FontWeight.w500)),
                           ],
                         ),
-                      )
+                      ).animate().fadeIn(delay: 600.ms)
                     else
                       ListView.builder(
-                        itemCount: _activeTasks.length > 3 ? 3 : _activeTasks.length,
+                        itemCount: _activeTasks.length > 5 ? 5 : _activeTasks.length,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemBuilder: (ctx, index) {
                           final task = _activeTasks[index];
-                          final isRed = task.flagColor.toLowerCase() == 'red';
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            elevation: 1.5,
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: isRed ? Colors.red.shade100 : Colors.green.shade100,
-                                child: Icon(
-                                  isRed ? Icons.priority_high : Icons.storefront,
-                                  color: isRed ? Colors.red : Colors.green,
+                          return TaskCard(
+                            task: task,
+                            isCurrent: true,
+                            onTap: () async {
+                              if (_isDrawerOpen) return;
+                              setState(() => _isDrawerOpen = true);
+                              widget.onDrawerToggled?.call(true);
+                              
+                              await showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => InspectionModal(
+                                  task: task,
+                                  onSubmitted: _loadDashboardData,
                                 ),
-                              ),
-                              title: Text(task.detectedName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('${task.barangayName} • ${task.verificationStatus}'),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () {
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => const InspectionPage()));
-                              },
-                            ),
-                          );
+                              );
+                              
+                              widget.onDrawerToggled?.call(false);
+                              if (mounted) setState(() => _isDrawerOpen = false);
+                            },
+                          ).animate().fadeIn(delay: Duration(milliseconds: 600 + (index * 100))).slideX(begin: 0.05);
                         },
                       ),
                   ],
@@ -333,73 +426,53 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildMetricCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
+  Widget _buildGlassMetricCard(String title, String value, IconData icon, Color color, {bool isZero = false}) {
+    final effectiveColor = isZero ? Colors.grey : color;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderColor.withOpacity(0.6)),
+        color: context.adaptiveSurface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: effectiveColor.withValues(alpha: isZero ? 0.05 : 0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMid)),
-              Icon(icon, color: color, size: 22),
-            ],
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: effectiveColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: effectiveColor, size: 24),
           ),
-          Text(
-            value,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color),
-          ),
+          const SizedBox(height: 16),
+          Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isZero ? Colors.grey[400] : context.adaptiveTextDark)),
+          const SizedBox(height: 4),
+          Text(title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveTextMid)),
         ],
       ),
     );
   }
 
-  Widget _buildShortcutButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+  Widget _buildProgressLegend(String label, int value, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-      ),
+        const SizedBox(width: 6),
+        Text('$value $label', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.adaptiveTextMid)),
+      ],
     );
   }
 }

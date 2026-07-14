@@ -12,6 +12,15 @@ from api.middleware.decorators import jwt_required, admin_required
 
 flags_bp = Blueprint("flags", __name__)
 
+from api.utils.cancellation import set_cancel
+
+# ── POST /api/flags/cancel-detection ──────────────────────────────────────────
+@flags_bp.route("/cancel-detection", methods=["POST"])
+@admin_required()
+def cancel_detection_route():
+    """Cancel an ongoing detection task."""
+    set_cancel("run_detection", True)
+    return jsonify({"message": "Cancellation requested"}), 200
 
 # ── POST /api/flags/run-detection ─────────────────────────────────────────────
 @flags_bp.route("/run-detection", methods=["POST"])

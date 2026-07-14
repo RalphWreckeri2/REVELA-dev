@@ -5,11 +5,29 @@ const BASE_URL = `${API_ORIGIN}/api`;
 /** Absolute URL for inspection evidence (relative path from API). */
 export function inspectionEvidenceUrl(photoPath) {
   if (!photoPath) return null;
-  if (photoPath.startsWith("http")) return photoPath;
+  const urls = inspectionEvidenceUrls(photoPath);
+  return urls.length > 0 ? urls[0] : null;
+}
+
+export function inspectionEvidenceUrls(photoPath) {
+  if (!photoPath) return [];
+  let paths = [];
+  try {
+    const parsed = JSON.parse(photoPath);
+    if (Array.isArray(parsed)) {
+      paths = parsed;
+    } else {
+      paths = [photoPath];
+    }
+  } catch (e) {
+    paths = [photoPath]; // legacy single string
+  }
+
   const base = API_ORIGIN.replace(/\/$/, "");
-  return photoPath.startsWith("/")
-    ? `${base}${photoPath}`
-    : `${base}/${photoPath}`;
+  return paths.map(p => {
+    if (p.startsWith("http")) return p;
+    return p.startsWith("/") ? `${base}${p}` : `${base}/${p}`;
+  });
 }
 
 async function handleResponse(res) {
@@ -258,6 +276,19 @@ export async function getSectorComplianceRequest(token, params = {}) {
   }
 }
 
+export async function cancelRegistryImport(token) {
+  if (!token) throw new Error("Missing authentication token.");
+  try {
+    const res = await fetch(`${BASE_URL}/registry/cancel`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
 export async function getInspectorPerformanceRequest(token, params = {}) {
   try {
     const qs = new URLSearchParams();
@@ -414,6 +445,19 @@ export async function runDetectionRequest(token) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}
+
+export async function cancelRunDetection(token) {
+  if (!token) throw new Error("Missing authentication token.");
+  try {
+    const res = await fetch(`${BASE_URL}/flags/cancel-detection`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
     });
     return await handleResponse(res);
   } catch (err) {

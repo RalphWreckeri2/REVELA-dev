@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_text_field.dart';
 import '../service/auth_service.dart';
-import 'dashboard_page.dart';
+import 'main_layout.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -64,16 +64,16 @@ class _LoginPageState extends State<LoginPage>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(
+            Icon(
               Icons.gpp_bad_rounded,
               color: Colors.redAccent,
               size: 28,
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -83,15 +83,15 @@ class _LoginPageState extends State<LoginPage>
         ),
         content: Text(
           message,
-          style: const TextStyle(fontSize: 14, height: 1.4),
+          style: TextStyle(fontSize: 14, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               'Understood',
               style: TextStyle(
-                color: AppColors.darkGreen,
+                color: context.adaptivePrimary,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -123,7 +123,7 @@ class _LoginPageState extends State<LoginPage>
       case LoginResult.success:
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const DashboardPage()),
+          MaterialPageRoute(builder: (_) => const MainLayout()),
         );
         break;
       case LoginResult.mustChangePassword:
@@ -170,9 +170,9 @@ class _LoginPageState extends State<LoginPage>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: const Row(
+              title: Row(
                 children: [
-                  Icon(Icons.security, color: AppColors.darkGreen, size: 28),
+                  Icon(Icons.security, color: context.adaptivePrimary, size: 28),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -188,11 +188,11 @@ class _LoginPageState extends State<LoginPage>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'Step 2 of 2 — Enter the 6-digit code from your authenticator app to complete sign in.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                        style: TextStyle(fontSize: 13, color: context.adaptiveTextMid),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       if (errorMessage != null) ...[
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -203,10 +203,10 @@ class _LoginPageState extends State<LoginPage>
                           ),
                           child: Text(
                             errorMessage!,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                            style: TextStyle(color: Colors.red, fontSize: 12),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12),
                       ],
                       TextFormField(
                         controller: codeController,
@@ -227,7 +227,7 @@ class _LoginPageState extends State<LoginPage>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
+                  child: Text('Cancel'),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -250,7 +250,7 @@ class _LoginPageState extends State<LoginPage>
                               Navigator.pop(ctx);
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (_) => const DashboardPage()),
+                                MaterialPageRoute(builder: (_) => const MainLayout()),
                               );
                             } else if (res == LoginResult.mustChangePassword) {
                               Navigator.pop(ctx);
@@ -264,7 +264,7 @@ class _LoginPageState extends State<LoginPage>
                           }
                         },
                   child: isSubmitting
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
@@ -272,7 +272,7 @@ class _LoginPageState extends State<LoginPage>
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Verify Code'),
+                      : Text('Verify Code'),
                 ),
               ],
             );
@@ -303,7 +303,7 @@ class _LoginPageState extends State<LoginPage>
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              title: const Row(
+              title: Row(
                 children: [
                   Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
                   SizedBox(width: 8),
@@ -321,11 +321,11 @@ class _LoginPageState extends State<LoginPage>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
+                      Text(
                         'Your administrator requires you to update your temporary password before accessing the system.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textMid),
+                        style: TextStyle(fontSize: 13, color: context.adaptiveTextMid),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       if (errorMessage != null) ...[
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -336,10 +336,10 @@ class _LoginPageState extends State<LoginPage>
                           ),
                           child: Text(
                             errorMessage!,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                            style: TextStyle(color: Colors.red, fontSize: 12),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12),
                       ],
                       TextFormField(
                         controller: oldController,
@@ -356,7 +356,7 @@ class _LoginPageState extends State<LoginPage>
                         ),
                         validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                       TextFormField(
                         controller: newController,
                         obscureText: obscureNew,
@@ -376,7 +376,7 @@ class _LoginPageState extends State<LoginPage>
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                       TextFormField(
                         controller: confirmController,
                         obscureText: obscureConfirm,
@@ -422,7 +422,7 @@ class _LoginPageState extends State<LoginPage>
                                 Navigator.pop(ctx);
                                 Navigator.pushReplacement(
                                   context,
-                                  MaterialPageRoute(builder: (_) => const DashboardPage()),
+                                  MaterialPageRoute(builder: (_) => const MainLayout()),
                                 );
                               }
                             } else {
@@ -434,7 +434,7 @@ class _LoginPageState extends State<LoginPage>
                           }
                         },
                   child: isSubmitting
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
@@ -442,7 +442,7 @@ class _LoginPageState extends State<LoginPage>
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Update & Continue'),
+                      : Text('Update & Continue'),
                 ),
               ],
             );
@@ -455,7 +455,7 @@ class _LoginPageState extends State<LoginPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.adaptiveBackground,
       body: SafeArea(
         child: SingleChildScrollView(
           child: FadeTransition(
@@ -484,25 +484,12 @@ class _LoginPageState extends State<LoginPage>
                     ),
                     child: Column(
                       children: [
-                        Container(
-                          width: 84,
-                          height: 84,
-                          decoration: BoxDecoration(
-                            color: AppColors.darkGreen,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: AppColors.gold.withOpacity(0.5),
-                              width: 2,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.location_on_rounded,
-                            size: 48,
-                            color: AppColors.gold,
-                          ),
+                        Image.asset(
+                          'assets/images/logo.png',
+                          height: 80,
                         ),
-                        const SizedBox(height: 16),
-                        const Text(
+                        SizedBox(height: 16),
+                        Text(
                           'REVELA',
                           style: TextStyle(
                             fontSize: 30,
@@ -511,7 +498,7 @@ class _LoginPageState extends State<LoginPage>
                             letterSpacing: 5,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4),
                         Text(
                           'BPLO Field Inspection Portal',
                           style: TextStyle(
@@ -530,23 +517,23 @@ class _LoginPageState extends State<LoginPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
+                        Text(
                           'Sign in to continue',
                           style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
+                            color: context.adaptiveTextDark,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
+                        SizedBox(height: 4),
+                        Text(
                           'Use your assigned BPLO credentials',
                           style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.textLight,
+                            color: context.adaptiveTextLight,
                           ),
                         ),
-                        const SizedBox(height: 28),
+                        SizedBox(height: 28),
 
                         // Email
                         CustomTextField(
@@ -556,7 +543,7 @@ class _LoginPageState extends State<LoginPage>
                           prefixIcon: Icons.badge_outlined,
                           keyboardType: TextInputType.emailAddress,
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: 14),
 
                         // Password
                         CustomTextField(
@@ -569,7 +556,7 @@ class _LoginPageState extends State<LoginPage>
                               _obscurePassword
                                   ? Icons.visibility_outlined
                                   : Icons.visibility_off_outlined,
-                              color: AppColors.textLight,
+                              color: context.adaptiveTextLight,
                               size: 20,
                             ),
                             onPressed: () {
@@ -579,7 +566,7 @@ class _LoginPageState extends State<LoginPage>
                             },
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: 24),
 
                         // Sign In button
                         SizedBox(
@@ -597,7 +584,7 @@ class _LoginPageState extends State<LoginPage>
                               ),
                             ),
                             child: _isLoading
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 22,
                                     height: 22,
                                     child: CircularProgressIndicator(
@@ -605,7 +592,7 @@ class _LoginPageState extends State<LoginPage>
                                       strokeWidth: 2.5,
                                     ),
                                   )
-                                : const Text(
+                                : Text(
                                     'Sign In',
                                     style: TextStyle(
                                       fontSize: 16,
@@ -615,16 +602,16 @@ class _LoginPageState extends State<LoginPage>
                                   ),
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        SizedBox(height: 32),
 
                         // Footer
-                        const Center(
+                        Center(
                           child: Text(
                             'For access issues, contact your BPLO administrator.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.textLight,
+                              color: context.adaptiveTextLight,
                             ),
                           ),
                         ),

@@ -20,9 +20,9 @@ const COLOR = {
   green:  "#56ab2f",
   red:    "#ef4444",
   yellow: "#f59e0b",
-  black:  "#1a202c",
+  black:  "var(--color-ink)",
   blue:   "#3b82f6",
-  muted:  "#94a3b8",
+  muted:  "var(--color-muted)",
   orange: "#ea580c",
   greenLight: "rgba(86,171,47,0.15)",
   redLight:   "rgba(239,68,68,0.15)",
@@ -51,12 +51,12 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: "rgba(255,255,255,0.97)", border: "1px solid #e2e8f0",
+      background: "var(--color-modal-bg)", border: "1px solid var(--color-border)",
       borderRadius: 10, padding: "10px 14px", fontSize: 13, boxShadow: "0 4px 20px rgba(0,0,0,0.08)"
     }}>
-      <p style={{ fontWeight: 700, color: "#1a202c", marginBottom: 6 }}>{label}</p>
+      <p style={{ fontWeight: 700, color: "var(--color-ink)", marginBottom: 6 }}>{label}</p>
       {payload.map((p, i) => (
-        <p key={i} style={{ color: p.color || "#64748b", margin: "2px 0" }}>
+        <p key={i} style={{ color: p.color || "var(--color-muted)", margin: "2px 0" }}>
           {p.name}: <strong>{typeof p.value === "number" ? p.value.toLocaleString() : p.value}</strong>
         </p>
       ))}
@@ -81,9 +81,9 @@ const SectionHeader = ({ tier, title, subtitle }) => {
         }}>
           {tierColors.label}
         </span>
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1a202c", margin: 0 }}>{title}</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>{title}</h2>
       </div>
-      {subtitle && <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>{subtitle}</p>}
+      {subtitle && <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>{subtitle}</p>}
     </div>
   );
 };
@@ -103,33 +103,33 @@ const ChartInterpretation = ({ type = "info", title = "Analysis & Recommendation
   const styles = {
     info: {
       borderLeft: "4px solid #3b82f6",
-      background: "rgba(239,246,255,0.7)",
-      color: "#1e3a8a",
-      titleColor: "#1e40af",
+      background: "var(--color-hover)",
+      color: "var(--color-muted)",
+      titleColor: "var(--color-ink)",
     },
     success: {
-      borderLeft: "4px solid #22c55e",
-      background: "rgba(240,253,244,0.7)",
-      color: "#166534",
-      titleColor: "#15803d",
+      borderLeft: "4px solid var(--flag-green-text)",
+      background: "var(--color-hover)",
+      color: "var(--color-muted)",
+      titleColor: "var(--flag-green-text)",
     },
     warning: {
-      borderLeft: "4px solid #f59e0b",
-      background: "rgba(254,253,237,0.7)",
-      color: "#78350f",
-      titleColor: "#92400e",
+      borderLeft: "4px solid var(--flag-orange-text)",
+      background: "var(--color-hover)",
+      color: "var(--color-muted)",
+      titleColor: "var(--flag-orange-text)",
     },
     danger: {
-      borderLeft: "4px solid #ef4444",
-      background: "rgba(254,242,242,0.7)",
-      color: "#991b1b",
-      titleColor: "#b91c1c",
+      borderLeft: "4px solid var(--flag-red-text)",
+      background: "var(--color-hover)",
+      color: "var(--color-muted)",
+      titleColor: "var(--flag-red-text)",
     },
   }[type] || {
-    borderLeft: "4px solid #94a3b8",
-    background: "rgba(248,250,252,0.7)",
-    color: "#334155",
-    titleColor: "#1e293b",
+    borderLeft: "4px solid var(--color-muted)",
+    background: "var(--color-hover)",
+    color: "var(--color-muted)",
+    titleColor: "var(--color-ink)",
   };
 
   return (
@@ -157,7 +157,7 @@ const ChartInterpretation = ({ type = "info", title = "Analysis & Recommendation
         {findings.length > 0 && (
           <div>
             <strong style={{ color: styles.titleColor, display: "block", marginBottom: 2 }}>Key Observations:</strong>
-            <ul style={{ margin: 0, paddingLeft: 16, color: "#1a202c" }}>
+            <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
               {findings.map((f, i) => <li key={i} style={{ marginBottom: 2 }}>{f}</li>)}
             </ul>
           </div>
@@ -165,7 +165,7 @@ const ChartInterpretation = ({ type = "info", title = "Analysis & Recommendation
         {actions.length > 0 && (
           <div>
             <strong style={{ color: styles.titleColor, display: "block", marginBottom: 2 }}>Actionable BPLO Strategy:</strong>
-            <ul style={{ margin: 0, paddingLeft: 16, color: "#1a202c" }}>
+            <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
               {actions.map((a, i) => <li key={i} style={{ marginBottom: 2, listStyleType: "square" }}>{a}</li>)}
             </ul>
           </div>
@@ -196,17 +196,17 @@ const filterInputStyle = {
   width: "100%",
   padding: "9px 12px",
   borderRadius: "var(--radius-sm, 8px)",
-  border: "1px solid #cbd5e1",
+  border: "1px solid var(--color-border)",
   fontSize: 13,
-  background: "#f8fafc",
-  color: "#0f172a",
+  background: "var(--color-card-alt)",
+  color: "var(--color-ink)",
   outline: "none",
   fontFamily: "var(--font-base)",
   transition: "border-color 0.15s ease",
 };
 
 const filterLabelStyle = { 
-  display: "block", fontSize: 11, fontWeight: 700, color: "#475569", 
+  display: "block", fontSize: 11, fontWeight: 700, color: "var(--color-muted)", 
   marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" 
 };
 
@@ -332,10 +332,10 @@ export default function AnalyticsPage() {
   const flagsByColorData = [
     { name: "Active Business",        value: totalGreen,  fill: FLAG_COLORS.Green  || COLOR.green },
     { name: "Suspected Unregistered", value: totalYellow, fill: FLAG_COLORS.Yellow || COLOR.yellow },
-    { name: "Closed Business",        value: totalOrange, fill: FLAG_COLORS.Orange || COLOR.orange },
+    { name: "1st/2nd Warning / Closure",    value: totalOrange, fill: FLAG_COLORS.Orange || COLOR.orange },
     { name: "Detected Unregistered",  value: totalRed,    fill: FLAG_COLORS.Red    || COLOR.red },
-    { name: "Critical Violation",     value: totalBlack,  fill: FLAG_COLORS.Black  || COLOR.black },
-  ].filter(item => item.value > 0 || item.name === "Closed Business");
+    { name: "Closed / Nonconforming", value: totalBlack,  fill: FLAG_COLORS.Black  || COLOR.slate },
+  ].filter(item => item.value > 0 || item.name === "1st/2nd Warning / Closure");
 
   // ── Sectoral distribution pie ─────────────────────────────────────────────
   const SECTOR_COLORS = [
@@ -412,11 +412,11 @@ export default function AnalyticsPage() {
   const clearedCount   = auditBreakdown.find(r => r.inspectionResult === 'Green' || r.inspectionResult === 'Compliant')?.count || Math.floor(inspectedCount * 0.8);
 
   const funnelData = [
-    { step: "Total Detected", value: kpiTotalBiz + kpiTotalFlagged, color: "#475569" },
-    { step: "Registered",     value: kpiTotalBiz,                   color: "#2563eb" },
-    { step: "Active",         value: kpiActive,                     color: "#d97706" },
-    { step: "Inspected",      value: inspectedCount,                color: "#7c3aed" },
-    { step: "Cleared",        value: clearedCount,                  color: "#059669" },
+    { step: "Total Detected", value: kpiTotalBiz + kpiTotalFlagged, color: "var(--color-ink)" },
+    { step: "Registered",     value: kpiTotalBiz,                   color: "#3b82f6" },
+    { step: "Active",         value: kpiActive,                     color: "#f59e0b" },
+    { step: "Inspected",      value: inspectedCount,                color: "#8b5cf6" },
+    { step: "Cleared",        value: clearedCount,                  color: "#10b981" },
   ];
 
   const ahp_w1 = Math.max(1, wlcConfig.w1_risk);
@@ -472,12 +472,23 @@ export default function AnalyticsPage() {
     setAppliedFilters(empty);
   };
 
+  const formatResultName = (val) => {
+    switch (val) {
+      case 'Green': return 'Registered';
+      case 'Yellow': return 'Suspected (Needs Verification)';
+      case 'Orange': return 'Warned / Non-Compliant';
+      case 'Red': return 'Unregistered';
+      case 'Black': return 'Closed / Blacklisted';
+      default: return val;
+    }
+  };
+
   const fm = filterMeta || {};
-  const sel = (value, onChange, options, placeholder) => (
+  const sel = (value, onChange, options, placeholder, isResult = false) => (
     <select value={value} onChange={onChange} style={filterInputStyle}>
       <option value="">{placeholder}</option>
       {(options || []).map((opt) => (
-        <option key={String(opt)} value={String(opt)}>{String(opt)}</option>
+        <option key={String(opt)} value={String(opt)}>{isResult ? formatResultName(String(opt)) : String(opt)}</option>
       ))}
     </select>
   );
@@ -494,7 +505,7 @@ export default function AnalyticsPage() {
           padding: 8px 18px;
           border-radius: 8px;
           border: 1px solid rgba(226,232,240,0.8);
-          background: rgba(255,255,255,0.6);
+          background: "var(--color-input-bg)";
           color: #64748b;
           font-size: 13px;
           font-weight: 600;
@@ -507,10 +518,10 @@ export default function AnalyticsPage() {
           border-color: #1a202c;
         }
         .analytics-tab-btn:hover:not(.active) {
-          background: rgba(255,255,255,0.95);
+          background: "var(--color-modal-bg)";
           color: #1a202c;
         }
-        .ops-row:hover { background: rgba(255,255,255,0.9) !important; }
+        .ops-row:hover { background: "var(--color-modal-bg)" !important; }
         .ops-score-bar {
           height: 6px;
           border-radius: 3px;
@@ -529,7 +540,7 @@ export default function AnalyticsPage() {
       <div style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
         <div>
           <h1 className="page-title">System Analytics</h1>
-          <p className="page-subtitle" style={{ color: "#64748b" }}>
+          <p className="page-subtitle" style={{ color: "var(--color-muted)" }}>
             Descriptive · Diagnostic · Prescriptive — All 16 Barangays of Mataasnakahoy
           </p>
         </div>
@@ -547,10 +558,10 @@ export default function AnalyticsPage() {
             style={{ cursor: "pointer", display: "flex", flexDirection: "column", flex: 1 }} 
             onClick={() => setShowFilters(!showFilters)}
           >
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#1a202c", display: "flex", alignItems: "center", gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 8 }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
               Data filters
-              <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--color-muted)", marginLeft: 4 }}>
                 {showFilters ? "▲" : "▼"}
               </span>
               {!showFilters && activeFilterCount > 0 && (
@@ -560,12 +571,12 @@ export default function AnalyticsPage() {
               )}
             </h3>
             {showFilters ? (
-              <p style={{ margin: "6px 0 0", fontSize: 12, color: "#64748b", maxWidth: 720 }}>
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--color-muted)", maxWidth: 720 }}>
                 Registry (status, sector, type, size, renewal window), geospatial flags (color, detection window),
                 and inspections (result, verification, timestamp window). Barangay selection limits spatial and joined aggregates.
               </p>
             ) : (
-              <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--color-muted)" }}>
                 Click to expand and filter analytics data.
               </p>
             )}
@@ -646,11 +657,11 @@ export default function AnalyticsPage() {
                   style={filterInputStyle}
                 >
                   <option value="">All statuses</option>
-                  <option value="Green">Active Business</option>
-                  <option value="Orange">Closed Business</option>
-                  <option value="Yellow">Suspected Unregistered</option>
-                  <option value="Red">Detected Unregistered</option>
-                  <option value="Black">Critical Violation</option>
+                  <option value="Green">Registered</option>
+                  <option value="Yellow">Suspected</option>
+                  <option value="Red">Unregistered</option>
+                  <option value="Orange">1st/2nd Warning / 3rd Notice Closure</option>
+                  <option value="Black">3rd Warning / Closed / Nonconforming</option>
                 </select>
               </div>
 
@@ -692,7 +703,7 @@ export default function AnalyticsPage() {
                   
                   {/* Advanced Location Multi-Select */}
                   <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                       Location (Multi-Select)
                     </h4>
@@ -717,7 +728,7 @@ export default function AnalyticsPage() {
 
                   {/* Advanced Business Profile */}
                   <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                       Business Profile
                     </h4>
@@ -745,7 +756,7 @@ export default function AnalyticsPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
                   {/* Advanced Geospatial Dates */}
                   <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
                       Flag Timelines
                     </h4>
@@ -763,14 +774,14 @@ export default function AnalyticsPage() {
 
                   {/* Advanced Inspection Audits */}
                   <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
+                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                       Inspection Details
                     </h4>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <div>
                         <label style={filterLabelStyle}>Result</label>
-                        {sel(draftFilters.inspection_result, (e) => setDraftFilters((d) => ({ ...d, inspection_result: e.target.value })), fm.inspection_results, "All results")}
+                        {sel(draftFilters.inspection_result, (e) => setDraftFilters((d) => ({ ...d, inspection_result: e.target.value })), fm.inspection_results, "All results", true)}
                       </div>
                       <div>
                         <label style={filterLabelStyle}>Verification</label>
@@ -862,7 +873,7 @@ export default function AnalyticsPage() {
 
           {/* COMPLIANCE FUNNEL */}
           <div className="saas-card frosted-glass" style={{ marginBottom: 32 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 16px 0" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>
               Enforcement Pipeline
             </h3>
             {loading ? <Skeleton h={110} /> : (
@@ -874,18 +885,18 @@ export default function AnalyticsPage() {
                       <div key={item.step} style={{ 
                         flex: 1, 
                         minWidth: 140,
-                        background: item.color, 
+                        background: "var(--color-hover)",
+                        border: `1px solid ${item.color.startsWith('var') ? 'var(--color-border)' : item.color + '40'}`,
                         borderRadius: 12, 
                         padding: "16px 20px",
-                        color: "#fff",
                         position: "relative",
                         display: "flex",
                         flexDirection: "column",
                         justifyContent: "space-between",
                         boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
                       }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.9, marginBottom: 12 }}>{item.step}</span>
-                        <span style={{ fontSize: 28, fontWeight: 800 }}>{item.value.toLocaleString()}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 12 }}>{item.step}</span>
+                        <span style={{ fontSize: 28, fontWeight: 800, color: item.color }}>{item.value.toLocaleString()}</span>
                         
                         {i < funnelData.length - 1 && (
                           <div style={{ 
@@ -894,9 +905,9 @@ export default function AnalyticsPage() {
                             top: "50%", 
                             transform: "translate(50%, -50%)", 
                             zIndex: 2,
-                            background: "#fff",
-                            color: "#1a202c",
-                            border: "1px solid #e2e8f0",
+                            background: "var(--color-modal-bg)",
+                            color: "var(--color-ink)",
+                            border: "1px solid var(--color-border)",
                             borderRadius: 20,
                             padding: "4px 8px",
                             fontSize: 11,
@@ -936,9 +947,9 @@ export default function AnalyticsPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
             {/* Donut — Flags by Color Breakdown */}
             <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 48%", minWidth: 320 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
                 Flags by Color Breakdown
-                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
                   — Total active pin distribution
                 </span>
               </h3>
@@ -972,9 +983,9 @@ export default function AnalyticsPage() {
                       return (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
                           <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
-                          <span style={{ color: "#64748b", flex: 1 }}>{s.name}</span>
-                          <span style={{ fontSize: 11, color: "#94a3b8", marginRight: 8 }}>{pct}%</span>
-                          <strong style={{ color: "#1a202c" }}>{s.value}</strong>
+                          <span style={{ color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
+                          <span style={{ fontSize: 11, color: "var(--color-muted)", marginRight: 8 }}>{pct}%</span>
+                          <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
                         </div>
                       );
                     })}
@@ -984,12 +995,12 @@ export default function AnalyticsPage() {
                     title="Business Status Breakdown Insights"
                     findings={[
                       `Active Businesses (Green) make up ${totalGreen} locations.`,
-                      `Detected Unregistered (Red: ${totalRed}) and Suspected Unregistered (Yellow: ${totalYellow}) indicate potential tax and zoning compliance leaks.`,
-                      `Closed Businesses (Orange: ${totalOrange}) represent inactive entries ready for official registry updates.`
+                      `1st/2nd Warning / Closures (Orange: ${totalOrange}) represent businesses requiring immediate compliance follow-ups.`,
+                      `Detected Unregistered (Red: ${totalRed}) and Suspected Unregistered (Yellow: ${totalYellow}) indicate potential tax and zoning compliance leaks.`
                     ]}
                     actions={[
                       totalRed > 0 ? "Initiate standard notice sequences for Detected Unregistered establishments." : "Unregistered counts are low. Focus on maintaining registration renewals.",
-                      "Perform formal business registry database updates for Closed Businesses (Orange) to archive their licenses."
+                      "Perform formal business registry database updates for Closed Businesses to archive their licenses."
                     ]}
                   />
                 </>
@@ -998,7 +1009,7 @@ export default function AnalyticsPage() {
 
             {/* Pie — Sectoral Distribution */}
             <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 48%", minWidth: 320 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
                 Sectoral Distribution
               </h3>
               {loading ? <Skeleton h={300} /> : sectoralData.length === 0 ? (
@@ -1019,8 +1030,8 @@ export default function AnalyticsPage() {
                     {sectoralData.slice(0, 5).map((s, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
                         <span style={{ width: 10, height: 10, borderRadius: 2, background: s.fill, flexShrink: 0 }} />
-                        <span style={{ color: "#64748b", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-                        <strong style={{ color: "#1a202c" }}>{s.value}</strong>
+                        <span style={{ color: "var(--color-muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                        <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
                       </div>
                     ))}
                   </div>
@@ -1051,13 +1062,13 @@ export default function AnalyticsPage() {
           {/* BARANGAY COMPLIANCE LEADERBOARD */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
             <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 100%", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 6px 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 6px 0" }}>
                 Barangay Compliance Leaderboard
-                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
                   — Ranked compliance rates based on registered vs flagged entities
                 </span>
               </h3>
-              <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px 0" }}>
+              <p style={{ fontSize: 13, color: "var(--color-muted)", margin: "0 0 20px 0" }}>
                 Compliance rate measures official active registrations (Green) as a percentage of all local business activities.
               </p>
 
@@ -1068,7 +1079,7 @@ export default function AnalyticsPage() {
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: 24 }}>
                   {/* Top 5 Compliant */}
-                  <div style={{ background: "rgba(240,253,244,0.4)", borderRadius: 12, padding: 18, border: "1px solid rgba(34,197,94,0.12)" }}>
+                  <div style={{ background: "var(--color-input-bg)", borderRadius: 12, padding: 18, border: "1px solid rgba(34,197,94,0.12)" }}>
                     <h4 style={{ margin: "0 0 14px 0", fontSize: 13, fontWeight: 800, color: "#15803d", display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                       Top Performing Zones (Highest Compliance)
@@ -1077,17 +1088,17 @@ export default function AnalyticsPage() {
                       {topCompliant.map((b, idx) => (
                         <div key={b.barangayName}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>
                               {idx + 1}. {b.barangayName}
                             </span>
                             <span style={{ fontSize: 12, fontWeight: 800, color: "#166534" }}>
                               {b.rate}% compliance
                             </span>
                           </div>
-                          <div style={{ height: 6, background: "rgba(226,232,240,0.6)", borderRadius: 3, overflow: "hidden" }}>
-                            <div style={{ width: `${b.rate}%`, height: "100%", background: "#22c55e", borderRadius: 3 }} />
+                          <div style={{ height: 6, background: "var(--color-hover)", borderRadius: 3, overflow: "hidden" }}>
+                            <div style={{ width: `${b.rate}%`, height: "100%", background: "var(--flag-green-text)", borderRadius: 3 }} />
                           </div>
-                          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
+                          <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
                             <span>Active Registered: <strong>{b.activeCount}</strong></span>
                             <span>Total Flags: {b.totalFlags}</span>
                           </div>
@@ -1097,29 +1108,29 @@ export default function AnalyticsPage() {
                   </div>
 
                   {/* Bottom 3 Non-Compliant */}
-                  <div style={{ background: "rgba(254,242,242,0.4)", borderRadius: 12, padding: 18, border: "1px solid rgba(239,68,68,0.12)" }}>
-                    <h4 style={{ margin: "0 0 14px 0", fontSize: 13, fontWeight: 800, color: "#b91c1c", display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <div style={{ background: "var(--color-input-bg)", borderRadius: 12, padding: 18, border: "1px solid rgba(239,68,68,0.12)" }}>
+                    <h4 style={{ margin: "0 0 14px 0", fontSize: 13, fontWeight: 800, color: "var(--flag-red-text)", display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                       Urgent Action Areas (Lowest Compliance)
                     </h4>
                     {bottomCompliant.length === 0 ? (
-                      <p style={{ fontSize: 12, color: "#64748b", textAlign: "center", padding: "20px 0" }}>All active zones have high compliance levels!</p>
+                      <p style={{ fontSize: 12, color: "var(--color-muted)", textAlign: "center", padding: "20px 0" }}>All active zones have high compliance levels!</p>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                         {bottomCompliant.map((b, idx) => (
                           <div key={b.barangayName}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>
                                 {idx + 1}. {b.barangayName}
                               </span>
                               <span style={{ fontSize: 12, fontWeight: 800, color: "#991b1b" }}>
                                 {b.rate}% compliance
                               </span>
                             </div>
-                            <div style={{ height: 6, background: "rgba(226,232,240,0.6)", borderRadius: 3, overflow: "hidden" }}>
-                              <div style={{ width: `${b.rate}%`, height: "100%", background: "#ef4444", borderRadius: 3 }} />
+                            <div style={{ height: 6, background: "var(--color-hover)", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${b.rate}%`, height: "100%", background: "var(--flag-red-text)", borderRadius: 3 }} />
                             </div>
-                            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
+                            <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
                               <span>Active Registered: <strong>{b.activeCount}</strong></span>
                               <span>Total Flags: {b.totalFlags}</span>
                             </div>
@@ -1160,9 +1171,9 @@ export default function AnalyticsPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
             {/* Stacked Bar — Enforcement Progress */}
             <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 100%", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
                 Enforcement Progress Tracker
-                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
                   — Flag distribution across all 16 barangays
                 </span>
               </h3>
@@ -1171,15 +1182,15 @@ export default function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={enforcementData} margin={{ top: 0, right: 10, left: -20, bottom: 60 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} angle={-45} textAnchor="end" interval={0} />
-                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--color-muted)" }} angle={-45} textAnchor="end" interval={0} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Bar dataKey="Green"  name="Active Business"  stackId="a" fill={COLOR.green}  radius={[0,0,0,0]} />
                       <Bar dataKey="Yellow" name="Suspected Unregistered" stackId="a" fill={COLOR.yellow} />
-                      <Bar dataKey="Orange" name="Closed Business" stackId="a" fill={COLOR.orange} />
-                      <Bar dataKey="Red"    name="Detected Unregistered"    stackId="a" fill={COLOR.red} />
-                      <Bar dataKey="Black"  name="Critical Violation"  stackId="a" fill={COLOR.black}  radius={[4,4,0,0]} />
+                      <Bar dataKey="Orange" name="1st/2nd Warning / Closure" stackId="a" fill={COLOR.orange} />
+                      <Bar dataKey="Red"    name="Unregistered"    stackId="a" fill={COLOR.red} />
+                      <Bar dataKey="Black"  name="Closed / Nonconforming"  stackId="a" fill={COLOR.black}  radius={[4,4,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                   {/* Dynamic Stacked Tracker Interpretation */}
@@ -1217,9 +1228,9 @@ export default function AnalyticsPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 0 }}>
             {/* Line — Compliance Conversion Timeline */}
             <div className="saas-card frosted-glass" style={{ flex: "2 1 400px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 20px 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
                 Compliance Conversion Timeline
-                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 500, marginLeft: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
                   — Last 12 months
                 </span>
               </h3>
@@ -1232,8 +1243,8 @@ export default function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={timelineData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Line type="monotone" dataKey="Active"      stroke={COLOR.green}  strokeWidth={2.5} dot={{ r: 4 }} />
@@ -1260,7 +1271,7 @@ export default function AnalyticsPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 20, flex: "1 1 300px", minWidth: 0 }}>
               {/* Business Size */}
               <div className="saas-card frosted-glass" style={{ flex: 1 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1a202c", margin: "0 0 14px 0" }}>Business Size Profile</h3>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 14px 0" }}>Business Size Profile</h3>
                 {loading ? <Skeleton h={100} /> : sizeData.length === 0 ? (
                   <p style={{ fontSize: 12, color: COLOR.muted }}>No data</p>
                 ) : (
@@ -1268,8 +1279,8 @@ export default function AnalyticsPage() {
                     {sizeData.map((s, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ width: 10, height: 10, borderRadius: 2, background: s.fill, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: "#64748b", flex: 1 }}>{s.name}</span>
-                        <strong style={{ fontSize: 13, color: "#1a202c" }}>{s.value}</strong>
+                        <span style={{ fontSize: 12, color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
+                        <strong style={{ fontSize: 13, color: "var(--color-ink)" }}>{s.value}</strong>
                       </div>
                     ))}
                   </div>
@@ -1278,7 +1289,7 @@ export default function AnalyticsPage() {
 
               {/* Audit Summary */}
               <div className="saas-card frosted-glass" style={{ flex: 1 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1a202c", margin: "0 0 14px 0" }}>Audit Summary</h3>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 14px 0" }}>Audit Summary</h3>
                 {loading ? <Skeleton h={100} /> : auditData.length === 0 ? (
                   <p style={{ fontSize: 12, color: COLOR.muted }}>No inspection results yet</p>
                 ) : (
@@ -1290,8 +1301,8 @@ export default function AnalyticsPage() {
                           background: `${a.fill}22`, display: "flex", alignItems: "center", justifyContent: "center",
                           fontSize: 11, fontWeight: 700, color: a.fill,
                         }}>{a.name?.[0]}</span>
-                        <span style={{ fontSize: 12, color: "#64748b", flex: 1 }}>{a.name}</span>
-                        <strong style={{ fontSize: 14, color: "#1a202c" }}>{a.value}</strong>
+                        <span style={{ fontSize: 12, color: "var(--color-muted)", flex: 1 }}>{a.name}</span>
+                        <strong style={{ fontSize: 14, color: "var(--color-ink)" }}>{a.value}</strong>
                       </div>
                     ))}
                   </div>
@@ -1317,7 +1328,7 @@ export default function AnalyticsPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 24, marginBottom: 24 }}>
             
             {/* DBSCAN NARRATIVE */}
-            <div className="saas-card frosted-glass" style={{ margin: 0, borderLeft: `4px solid ${COLOR.red}`, background: "rgba(254,242,242,0.6)" }}>
+            <div className="saas-card frosted-glass" style={{ margin: 0, borderLeft: `4px solid ${COLOR.red}`, background: "var(--color-hover)" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                 <div style={{ marginTop: 2, color: COLOR.red }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1330,15 +1341,15 @@ export default function AnalyticsPage() {
                   <h3 style={{ fontSize: 13, fontWeight: 800, color: "#991b1b", margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                     High-Risk Area Detection
                   </h3>
-                  <p style={{ fontSize: 14, color: "#1a202c", margin: 0, lineHeight: 1.5 }}>
-                    {loading ? <span style={{ color: "#64748b" }}>Analyzing local map patterns...</span> : (diag?.dbscan_insight || "Hotspot detection temporarily unavailable.")}
+                  <p style={{ fontSize: 14, color: "var(--color-ink)", margin: 0, lineHeight: 1.5 }}>
+                    {loading ? <span style={{ color: "var(--color-muted)" }}>Analyzing local map patterns...</span> : (diag?.dbscan_insight || "Hotspot detection temporarily unavailable.")}
                   </p>
                 </div>
               </div>
             </div>
 
             {/* MORAN'S I NARRATIVE */}
-            <div className="saas-card frosted-glass" style={{ margin: 0, borderLeft: `4px solid #7c3aed`, background: "rgba(243,232,255,0.6)" }}>
+            <div className="saas-card frosted-glass" style={{ margin: 0, borderLeft: `4px solid #7c3aed`, background: "var(--color-hover)" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                 <div style={{ marginTop: 2, color: "#7c3aed" }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1353,8 +1364,8 @@ export default function AnalyticsPage() {
                   <h3 style={{ fontSize: 13, fontWeight: 800, color: "#5b21b6", margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                     Regional Risk Patterns
                   </h3>
-                  <p style={{ fontSize: 14, color: "#1a202c", margin: 0, lineHeight: 1.5 }}>
-                    {loading ? <span style={{ color: "#64748b" }}>Evaluating broader geographic patterns...</span> : (diag?.morans_insight || "Regional analysis temporarily unavailable.")}
+                  <p style={{ fontSize: 14, color: "var(--color-ink)", margin: 0, lineHeight: 1.5 }}>
+                    {loading ? <span style={{ color: "var(--color-muted)" }}>Evaluating broader geographic patterns...</span> : (diag?.morans_insight || "Regional analysis temporarily unavailable.")}
                   </p>
                 </div>
               </div>
@@ -1365,10 +1376,10 @@ export default function AnalyticsPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
             {/* Stacked bar — Barangay Risk Heatmap */}
             <div className="saas-card frosted-glass" style={{ flex: "1.4 1 400px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 8px 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>
                 Barangay Priority Map
               </h3>
-              <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 16px 0" }}>
+              <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>
                 Stacked flag severity per barangay — sorted by total flagged count
               </p>
               {loading ? <Skeleton h={300} /> : riskBarData.length === 0 ? (
@@ -1380,14 +1391,14 @@ export default function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={riskBarData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.4)" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} width={90} />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={90} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="Yellow" name="Suspected Unregistered" stackId="a" fill={COLOR.yellow} />
-                      <Bar dataKey="Orange" name="Closed Business" stackId="a" fill={COLOR.orange} />
-                      <Bar dataKey="Red"    name="Detected Unregistered"    stackId="a" fill={COLOR.red}    />
-                      <Bar dataKey="Black"  name="Critical Violation"  stackId="a" fill={COLOR.black}  radius={[0,4,4,0]} />
+                      <Bar dataKey="Yellow" name="Suspected" stackId="a" fill={COLOR.yellow} />
+                      <Bar dataKey="Orange" name="1st/2nd Warning / Closure" stackId="a" fill={COLOR.orange} />
+                      <Bar dataKey="Red"    name="Unregistered"    stackId="a" fill={COLOR.red}    />
+                      <Bar dataKey="Black"  name="Closed / Nonconforming"  stackId="a" fill={COLOR.black}  radius={[0,4,4,0]} />
                     </BarChart>
                   </ResponsiveContainer>
                   {/* Dynamic Priority Interpretation */}
@@ -1417,10 +1428,10 @@ export default function AnalyticsPage() {
 
             {/* Horizontal bar — Category Non-Compliance */}
             <div className="saas-card frosted-glass" style={{ flex: "1 1 300px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 8px 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>
                 Category Non-Compliance
               </h3>
-              <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 16px 0" }}>
+              <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>
                 Sector-specific patterns — top 10 flagged lines of business
               </p>
               {loading ? <Skeleton h={300} /> : categoryData.length === 0 ? (
@@ -1431,8 +1442,8 @@ export default function AnalyticsPage() {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={categoryData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.4)" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} width={110} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--color-muted)" }} width={110} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="count" fill={COLOR.yellow} radius={[0,4,4,0]} name="Flagged" />
                   </BarChart>
@@ -1443,10 +1454,10 @@ export default function AnalyticsPage() {
 
           {/* Weekly Red Flag Trend */}
           <div className="saas-card frosted-glass">
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 8px 0" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>
               Weekly Red Flag Emergence — Last 8 Weeks
             </h3>
-            <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 16px 0" }}>
+            <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>
               Tracks new unregistered business detections from Places API cross-referencing
             </p>
             {loading ? <Skeleton h={200} /> : trendData.length === 0 ? (
@@ -1457,8 +1468,8 @@ export default function AnalyticsPage() {
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={trendData} margin={{ top: 0, right: 20, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#64748b" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
                   <Tooltip content={<CustomTooltip />} />
                   <Line type="monotone" dataKey="New Red Flags" stroke={COLOR.red} strokeWidth={2.5} dot={{ r: 5, fill: COLOR.red }} activeDot={{ r: 7 }} />
                 </LineChart>
@@ -1486,26 +1497,26 @@ export default function AnalyticsPage() {
           </div>
           
           {showWlcConfig && (
-            <div className="saas-card" style={{ background: "rgba(248,249,250,0.8)", marginBottom: 24, padding: "20px 24px" }}>
-              <h4 style={{ margin: "0 0 20px 0", fontSize: 15, color: "#1a202c" }}>WLC & AHP Weight Configuration</h4>
+            <div className="saas-card" style={{ background: "var(--color-hover)", marginBottom: 24, padding: "20px 24px" }}>
+              <h4 style={{ margin: "0 0 20px 0", fontSize: 15, color: "var(--color-ink)" }}>WLC & AHP Weight Configuration</h4>
               
               <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 {/* Sliders */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 24 }}>
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8 }}>
                       Risk Severity (W1): <span style={{ color: COLOR.red }}>{wlcConfig.w1_risk}%</span>
                     </label>
                     <input type="range" min="0" max="100" value={wlcConfig.w1_risk} onChange={e => setWlcConfig({...wlcConfig, w1_risk: Number(e.target.value)})} style={{ width: "100%", accentColor: COLOR.red }} />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8 }}>
                       Sector Impact (W2): <span style={{ color: COLOR.yellow }}>{wlcConfig.w2_sector}%</span>
                     </label>
                     <input type="range" min="0" max="100" value={wlcConfig.w2_sector} onChange={e => setWlcConfig({...wlcConfig, w2_sector: Number(e.target.value)})} style={{ width: "100%", accentColor: COLOR.yellow }} />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8 }}>
                       Travel Distance (W3): <span style={{ color: COLOR.blue }}>{wlcConfig.w3_distance}%</span>
                     </label>
                     <input type="range" min="0" max="100" value={wlcConfig.w3_distance} onChange={e => setWlcConfig({...wlcConfig, w3_distance: Number(e.target.value)})} style={{ width: "100%", accentColor: COLOR.blue }} />
@@ -1513,41 +1524,41 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* AHP Matrix Panel */}
-                <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: 16, overflowX: "auto" }}>
-                  <h5 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 10px 0", color: "#1a202c" }}>AHP Pairwise Comparison Matrix</h5>
+                <div style={{ background: "var(--color-modal-bg)", border: "1px solid var(--color-border)", borderRadius: 8, padding: 16, overflowX: "auto" }}>
+                  <h5 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 10px 0", color: "var(--color-ink)" }}>AHP Pairwise Comparison Matrix</h5>
                   <table style={{ width: "100%", fontSize: 11, textAlign: "center", borderCollapse: "collapse", marginBottom: 12 }}>
                     <thead>
                       <tr style={{ background: "rgba(226,232,240,0.4)" }}>
-                        <th style={{ padding: 6, border: "1px solid #e2e8f0" }}>Criteria</th>
-                        <th style={{ padding: 6, border: "1px solid #e2e8f0" }}>W1</th>
-                        <th style={{ padding: 6, border: "1px solid #e2e8f0" }}>W2</th>
-                        <th style={{ padding: 6, border: "1px solid #e2e8f0" }}>W3</th>
+                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>Criteria</th>
+                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>W1</th>
+                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>W2</th>
+                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>W3</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0", fontWeight: 600 }}>Risk (W1)</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>1.00</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>{ahpVal(ahp_w1, ahp_w2)}</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>{ahpVal(ahp_w1, ahp_w3)}</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)", fontWeight: 600 }}>Risk (W1)</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>1.00</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w1, ahp_w2)}</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w1, ahp_w3)}</td>
                       </tr>
                       <tr>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0", fontWeight: 600 }}>Sector (W2)</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>{ahpVal(ahp_w2, ahp_w1)}</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>1.00</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>{ahpVal(ahp_w2, ahp_w3)}</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)", fontWeight: 600 }}>Sector (W2)</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w2, ahp_w1)}</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>1.00</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w2, ahp_w3)}</td>
                       </tr>
                       <tr>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0", fontWeight: 600 }}>Distance (W3)</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>{ahpVal(ahp_w3, ahp_w1)}</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>{ahpVal(ahp_w3, ahp_w2)}</td>
-                        <td style={{ padding: 6, border: "1px solid #e2e8f0" }}>1.00</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)", fontWeight: 600 }}>Distance (W3)</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w3, ahp_w1)}</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w3, ahp_w2)}</td>
+                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>1.00</td>
                       </tr>
                     </tbody>
                   </table>
                   <div style={{ padding: "8px 12px", background: COLOR.greenLight, color: "#166534", borderRadius: 6, fontSize: 11, border: `1px solid ${COLOR.green}` }}>
                     <strong style={{ display: "block", marginBottom: 4 }}>Analytic Hierarchy Process (AHP) Diagnostics</strong>
-                    Principal Eigenvalue (λmax): <strong>3.000</strong> <span style={{ color: "#64748b", margin: "0 8px" }}>|</span>
+                    Principal Eigenvalue (λmax): <strong>3.000</strong> <span style={{ color: "var(--color-muted)", margin: "0 8px" }}>|</span>
                     Consistency Index (CI): <strong>0.000</strong> <br/>
                     Consistency Ratio (CR): <strong style={{ color: "#065f46" }}>0.000 &lt; 0.10</strong> <span style={{ marginLeft: 8 }}>✓ Methodologically Valid</span>
                     <p style={{ margin: "6px 0 0 0", color: "#166534", opacity: 0.8, fontSize: 10, lineHeight: 1.4 }}>
@@ -1571,7 +1582,7 @@ export default function AnalyticsPage() {
           {/* Dispatch Recommendations */}
           {presc?.dispatch_recommendations && presc.dispatch_recommendations.length > 0 && (
             <div className="saas-card frosted-glass" style={{ marginBottom: 24, borderLeft: `4px solid ${COLOR.blue}` }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a202c", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: 8 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: 8 }}>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: COLOR.blue }}>
                   <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                 </svg>
@@ -1579,11 +1590,11 @@ export default function AnalyticsPage() {
               </h3>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {presc.dispatch_recommendations.map((rec, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "rgba(255,255,255,0.6)", padding: "12px 16px", borderRadius: 8, border: "1px solid rgba(226,232,240,0.8)" }}>
+                  <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--color-input-bg)", padding: "12px 16px", borderRadius: 8, border: "1px solid rgba(226,232,240,0.8)" }}>
                     <span style={{ background: COLOR.blue, color: "#fff", fontWeight: 800, fontSize: 12, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0, marginTop: 2 }}>
                       {rec.rank}
                     </span>
-                    <p style={{ margin: 0, fontSize: 14, color: "#1a202c", lineHeight: 1.5 }}>
+                    <p style={{ margin: 0, fontSize: 14, color: "var(--color-ink)", lineHeight: 1.5 }}>
                       {rec.recommendation}
                     </p>
                   </div>
@@ -1595,7 +1606,7 @@ export default function AnalyticsPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
             {/* Radar chart — top 8 */}
             <div className="saas-card frosted-glass" style={{ flex: "1 1 300px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1a202c", margin: "0 0 16px 0" }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>
                 OPS Radar — Top 8 Barangays
               </h3>
               {loading ? <Skeleton h={280} /> : radarData.length === 0 ? (
@@ -1606,7 +1617,7 @@ export default function AnalyticsPage() {
                 <ResponsiveContainer width="100%" height={280}>
                   <RadarChart data={radarData}>
                     <PolarGrid stroke="rgba(226,232,240,0.6)" />
-                    <PolarAngleAxis dataKey="barangay" tick={{ fontSize: 10, fill: "#64748b" }} />
+                    <PolarAngleAxis dataKey="barangay" tick={{ fontSize: 10, fill: "var(--color-muted)" }} />
                     <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 9 }} />
                     <Radar name="OPS Score" dataKey="OPS" stroke={COLOR.red} fill={COLOR.red} fillOpacity={0.18} strokeWidth={2} />
                     <Radar name="Non-Compliance %" dataKey="Non-Compliance %" stroke={COLOR.yellow} fill={COLOR.yellow} fillOpacity={0.12} strokeWidth={2} />
@@ -1620,10 +1631,10 @@ export default function AnalyticsPage() {
             {/* Full WLC Rankings Table */}
             <div className="saas-card frosted-glass" style={{ flex: "1.6 1 400px", minWidth: 0 }}>
               <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1a202c", margin: "0 0 4px 0" }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>
                   Inspector Deployment Priority Table
                 </h3>
-                <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: 0 }}>
                   All 16 barangays ranked by OPS — deploy inspectors top-down
                 </p>
               </div>
@@ -1632,7 +1643,7 @@ export default function AnalyticsPage() {
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                     <thead>
-                      <tr style={{ borderBottom: "2px solid rgba(226,232,240,0.6)", color: "#94a3b8", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <tr style={{ borderBottom: "2px solid rgba(226,232,240,0.6)", color: "var(--color-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>#</th>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>Barangay</th>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>OPS</th>
@@ -1649,17 +1660,17 @@ export default function AnalyticsPage() {
                           className="ops-row"
                           style={{ borderBottom: "1px solid rgba(226,232,240,0.35)", transition: "background 0.15s" }}
                         >
-                          <td style={{ padding: "12px", fontWeight: 700, color: "#94a3b8", fontSize: 13 }}>
+                          <td style={{ padding: "12px", fontWeight: 700, color: "var(--color-muted)", fontSize: 13 }}>
                             {row.rank <= 3
                               ? <span style={{ color: row.rank === 1 ? COLOR.red : row.rank === 2 ? COLOR.yellow : COLOR.green, fontWeight: 800 }}>#{row.rank}</span>
                               : `#${row.rank}`}
                           </td>
-                          <td style={{ padding: "12px", fontWeight: 600, color: "#1a202c", fontSize: 13 }}>
+                          <td style={{ padding: "12px", fontWeight: 600, color: "var(--color-ink)", fontSize: 13 }}>
                             {row.barangayName}
                           </td>
                           <td style={{ padding: "12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <strong style={{ fontSize: 14, color: "#1a202c", minWidth: 36 }}>{row.ops_score}</strong>
+                              <strong style={{ fontSize: 14, color: "var(--color-ink)", minWidth: 36 }}>{row.ops_score}</strong>
                               <div className="ops-score-bar">
                                 <div
                                   className="ops-score-fill"
@@ -1673,7 +1684,7 @@ export default function AnalyticsPage() {
                               </div>
                             </div>
                           </td>
-                          <td style={{ padding: "12px", color: "#64748b", fontSize: 13 }}>{row.flagged_count}</td>
+                          <td style={{ padding: "12px", color: "var(--color-muted)", fontSize: 13 }}>{row.flagged_count}</td>
                           <td style={{ padding: "12px", fontSize: 12 }}>
                             <span style={{ color: COLOR.red }}>{row.red_count}</span>
                             {" / "}
@@ -1681,7 +1692,7 @@ export default function AnalyticsPage() {
                             {" / "}
                             <span style={{ color: COLOR.black, fontWeight: 700 }}>{row.black_count}</span>
                           </td>
-                          <td style={{ padding: "12px", color: "#64748b", fontSize: 13 }}>{row.non_compliance_rate}%</td>
+                          <td style={{ padding: "12px", color: "var(--color-muted)", fontSize: 13 }}>{row.non_compliance_rate}%</td>
                           <td style={{ padding: "12px" }}>
                             <span style={{
                               padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,

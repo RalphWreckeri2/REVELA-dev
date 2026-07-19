@@ -3,7 +3,7 @@ from flask_jwt_extended import get_jwt_identity
 from api.middleware.decorators import admin_required
 from api.models.user import (get_all_users, find_user_by_email,
                              find_user_by_id, create_user, update_user,
-                             delete_user, update_password)
+                             delete_user, update_password, set_reset_requested)
 import bcrypt
 import re
 import secrets
@@ -173,6 +173,7 @@ def reset_user_password_route(user_id):
         # NOTE: These two operations should ideally be in a single transaction
         # in the model layer to ensure atomicity.
         update_password(user_id, hashed, must_change_password=True)
+        set_reset_requested(user_id, False)
 
         return jsonify({
             "message": f"Password for user {user_to_reset['fullName']} has been reset.",

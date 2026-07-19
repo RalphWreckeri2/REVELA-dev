@@ -1,6 +1,7 @@
 import 'package:revela_mobile/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../service/inspection_service.dart';
+import '../widgets/scale_tap.dart';
 
 class InspectionCard extends StatelessWidget {
   final InspectionTask task;
@@ -14,6 +15,8 @@ class InspectionCard extends StatelessWidget {
         return const Color(0xFFEF4444);
       case 'Yellow':
         return const Color(0xFFF59E0B);
+      case 'Orange':
+        return const Color(0xFFE65100);
       case 'Black':
         return const Color(0xFF1E293B);
       default:
@@ -27,6 +30,8 @@ class InspectionCard extends StatelessWidget {
         return const Color(0xFFFFEDED);
       case 'Yellow':
         return const Color(0xFFFFF8E7);
+      case 'Orange':
+        return const Color(0xFFFFF3E0);
       case 'Black':
         return const Color(0xFFF1F5F9);
       default:
@@ -40,6 +45,8 @@ class InspectionCard extends StatelessWidget {
         return Icons.warning_rounded;
       case 'Yellow':
         return Icons.help_rounded;
+      case 'Orange':
+        return Icons.notification_important_rounded;
       case 'Black':
         return Icons.block_rounded;
       default:
@@ -53,6 +60,8 @@ class InspectionCard extends StatelessWidget {
         return 'Unregistered';
       case 'Yellow':
         return 'Suspected';
+      case 'Orange':
+        return 'Warned';
       case 'Black':
         return 'Non-Responsive';
       default:
@@ -92,7 +101,7 @@ class InspectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return ScaleTap(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -176,7 +185,9 @@ class InspectionCard extends StatelessWidget {
                   SizedBox(height: 8),
 
                   // Bottom row: flag label + timestamp
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       // Flag pill
                       Container(
@@ -197,7 +208,6 @@ class InspectionCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      SizedBox(width: 6),
 
                       // Status pill
                       Container(

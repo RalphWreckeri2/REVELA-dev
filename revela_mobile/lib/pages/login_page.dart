@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../theme/app_theme.dart';
-import '../widgets/custom_text_field.dart';
+import '../service/api_config.dart';
+import '../widgets/floating_mascot.dart';
 import '../service/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_layout.dart';
 
 class LoginPage extends StatefulWidget {
@@ -11,46 +16,82 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage>
-    with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
   final AuthService _authService = AuthService();
   bool _isLoading = false;
-
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
+  bool _canUseBiometrics = false;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-    _animController.forward();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isEnabledInSettings = prefs.getBool('biometric_enabled') ?? false;
+    
+    if (!isEnabledInSettings) {
+      if (mounted) setState(() => _canUseBiometrics = false);
+      return;
+    }
+
+    final canUse = await _authService.canUseBiometrics();
+    final hasCreds = await _authService.hasSavedCredentials();
+    if (mounted) {
+      setState(() => _canUseBiometrics = canUse && hasCreds);
+    }
+    
+    // Auto prompt if possible
+    if (canUse && hasCreds) {
+      // Small delay so UI renders first
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) _handleBiometricLogin();
+      });
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    setState(() => _isLoading = true);
+    final result = await _authService.biometricLogin();
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result == LoginResult.canceled) {
+      // User dismissed the biometric prompt. Just let them use the manual login form.
+      return;
+    }
+
+    if (result == LoginResult.failed) {
+      // Biometrics failed. It could be because the password was changed or reset.
+      _showErrorDialog(
+        'Biometric Login Failed',
+        'Your saved credentials have expired or your password was reset. Please log in manually with your new password.',
+      );
+      // Clear saved credentials so it doesn't keep prompting on start
+      await _authService.logout(); // The auth service logout also clears secure storage
+      _checkBiometrics(); // Re-evaluates _canUseBiometrics
+      return;
+    }
+
+    _handleLoginResult(result);
   }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _animController.dispose();
     super.dispose();
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, {Color backgroundColor = Colors.redAccent}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.redAccent,
+        backgroundColor: backgroundColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -119,12 +160,13 @@ class _LoginPageState extends State<LoginPage>
 
     setState(() => _isLoading = false);
 
+    _handleLoginResult(result);
+  }
+
+  void _handleLoginResult(LoginResult result) {
     switch (result) {
       case LoginResult.success:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainLayout()),
-        );
+        _showWelcomeGreetingAndNavigate();
         break;
       case LoginResult.mustChangePassword:
         _showForcePasswordChangeDialog();
@@ -139,19 +181,143 @@ class _LoginPageState extends State<LoginPage>
         );
         break;
       case LoginResult.failed:
-        _showSnackBar('Login failed. Please check your credentials.');
+        _showSnackBar('Incorrect email or password. Please try again.');
         break;
       case LoginResult.networkError:
         _showErrorDialog(
           'Cannot Reach Server',
-          'The app could not connect to the REVELA backend.\n\n'
-          '• Start the API: python app.py (in revela_backend)\n'
-          '• USB device: run adb reverse tcp:5000 tcp:5000, or use '
-          'DEVELOPMENT/scripts/run-mobile-usb.ps1\n'
-          '• Wi‑Fi device: flutter run --dart-define=API_BASE=http://YOUR_PC_IP:5000',
+          'Unable to connect to the server. Please check your internet connection and try again.',
         );
         break;
+      case LoginResult.canceled:
+        // Do nothing, user just dismissed a prompt.
+        break;
     }
+  }
+
+  void _showWelcomeGreetingAndNavigate() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const FloatingMascot(
+                  imagePath: 'assets/images/standing.png',
+                  height: 180,
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  'Welcome Back!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkGreen,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Preparing your dashboard...',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 40),
+                CircularProgressIndicator(
+                  color: AppColors.darkGreen,
+                  strokeWidth: 3,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainLayout()),
+          (route) => false,
+        );
+      }
+    });
+  }
+
+  void _showForgotPasswordDialog() {
+    final emailController = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Reset Password'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Enter your registered email address. Your request will be sent directly to the administrator for a secure manual reset.'),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final email = emailController.text.trim();
+                          if (email.isEmpty) return;
+
+                          setDialogState(() => isSubmitting = true);
+                          
+                          final authService = AuthService();
+                          await authService.requestManualPasswordReset(email);
+                          
+                          if (mounted) {
+                            Navigator.pop(ctx);
+                            _showSnackBar(
+                              'If your email is registered, the administrator has been notified.',
+                              backgroundColor: Colors.green.shade600,
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.adaptivePrimary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isSubmitting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Request Reset'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _show2FALoginDialog() {
@@ -245,7 +411,7 @@ class _LoginPageState extends State<LoginPage>
                             final res = await _authService.verify2FALogin(
                               codeController.text.trim(),
                             );
-                            if (!mounted) return;
+                            if (!context.mounted || !ctx.mounted) return;
                             if (res == LoginResult.success) {
                               Navigator.pop(ctx);
                               Navigator.pushReplacement(
@@ -418,7 +584,7 @@ class _LoginPageState extends State<LoginPage>
                               newController.text,
                             );
                             if (res['success'] == true) {
-                              if (mounted) {
+                              if (context.mounted && ctx.mounted) {
                                 Navigator.pop(ctx);
                                 Navigator.pushReplacement(
                                   context,
@@ -428,7 +594,7 @@ class _LoginPageState extends State<LoginPage>
                             } else {
                               setDialogState(() {
                                 isSubmitting = false;
-                                errorMessage = res['error']?.toString() ?? 'Failed to change password';
+                                errorMessage = res['error']?.toString() ?? 'We couldn\'t update your password. Please try again.';
                               });
                             }
                           }
@@ -455,173 +621,254 @@ class _LoginPageState extends State<LoginPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.adaptiveBackground,
+      backgroundColor: const Color(0xFF1B5E20), // Dark green background
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ── Green header ──
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 52,
-                      horizontal: 28,
-                    ),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                      borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(36),
-                        bottomRight: Radius.circular(36),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Image.asset(
-                          'assets/images/logo.png',
-                          height: 80,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'REVELA',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.white,
-                            letterSpacing: 5,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'BPLO Field Inspection Portal',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.white.withOpacity(0.7),
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ],
-                    ),
+        bottom: false, // Let the white card go to the bottom
+        child: Column(
+          children: [
+            const SizedBox(height: 40), // Top spacing (reduced)
+
+            // Logo Container
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF388E3C).withValues(alpha: 0.5), // Lighter green glow
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Center(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  height: 44,
+                ),
+              ),
+            ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack),
+            
+            const SizedBox(height: 12),
+            
+            // App Name
+            const Text(
+              'REVELA',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: 4,
+              ),
+            ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
+            
+            const SizedBox(height: 2),
+            
+            // Subtitle
+            Text(
+              'Field Inspection Platform',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white.withValues(alpha: 0.8),
+                letterSpacing: 1.2,
+              ),
+            ).animate().fadeIn(delay: 400.ms),
+
+            const SizedBox(height: 24), // Reduced from 40
+
+            // White Card
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(32, 32, 32, 24), // Reduced top padding
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(32),
+                    topRight: Radius.circular(32),
                   ),
-
-                  // ── Form ──
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(28, 36, 28, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Sign in to continue',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: context.adaptiveTextDark,
-                          ),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Welcome',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black87,
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Use your assigned BPLO credentials',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: context.adaptiveTextLight,
-                          ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Please login to continue',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
                         ),
-                        SizedBox(height: 28),
+                      ),
+                      const SizedBox(height: 32),
 
-                        // Email
-                        CustomTextField(
+                      // Email Field
+                      const Text(
+                        'Email',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: TextField(
+                          style: const TextStyle(color: Colors.black87),
                           controller: _emailController,
-                          label: 'Email Address',
-                          hint: 'inspector@bplo.gov.ph',
-                          prefixIcon: Icons.badge_outlined,
                           keyboardType: TextInputType.emailAddress,
-                        ),
-                        SizedBox(height: 14),
-
-                        // Password
-                        CustomTextField(
-                          controller: _passwordController,
-                          label: 'Password',
-                          prefixIcon: Icons.lock_outline,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                              color: context.adaptiveTextLight,
-                              size: 20,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
+                          decoration: InputDecoration(
+                            hintText: 'Enter your email',
+                            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                            prefixIcon: Icon(Icons.email_outlined, color: Colors.grey.shade400, size: 20),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           ),
                         ),
-                        SizedBox(height: 24),
+                      ),
+                      const SizedBox(height: 16), // Reduced from 20
 
-                        // Sign In button
+                      // Password Field
+                      const Text(
+                        'Password',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: TextField(
+                          style: const TextStyle(color: Colors.black87),
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          decoration: InputDecoration(
+                            hintText: 'Enter your password',
+                            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                            prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade400, size: 20),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                color: Colors.green.shade600,
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      // Forgot Password Button
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _showForgotPasswordDialog,
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF1B5E20),
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Forgot Password?',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24), // Reduced from 32
+
+                      // Login Button
+                      SizedBox(
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _handleLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1B5E20),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'Login',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    Icon(Icons.arrow_forward_rounded, size: 20),
+                                  ],
+                                ),
+                        ),
+                      ),
+                      if (_canUseBiometrics) ...[
+                        const SizedBox(height: 16),
                         SizedBox(
                           height: 54,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.darkGreen,
-                              foregroundColor: AppColors.white,
-                              disabledBackgroundColor: AppColors.lightGreen
-                                  .withOpacity(0.5),
-                              elevation: 0,
+                          child: OutlinedButton.icon(
+                            onPressed: _isLoading ? null : _handleBiometricLogin,
+                            icon: const Icon(Icons.fingerprint_rounded, size: 24),
+                            label: const Text(
+                              'Login with Biometrics',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.darkGreen,
+                              side: BorderSide(color: AppColors.darkGreen.withValues(alpha: 0.3), width: 1.5),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
                             ),
-                            child: _isLoading
-                                ? SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      color: AppColors.white,
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : Text(
-                                    'Sign In',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
                           ),
-                        ),
-                        SizedBox(height: 32),
-
-                        // Footer
-                        Center(
-                          child: Text(
-                            'For access issues, contact your BPLO administrator.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: context.adaptiveTextLight,
-                            ),
-                          ),
-                        ),
+                        ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.1),
                       ],
-                    ),
-                  ),
-                ],
+                    ],
+                  ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1),
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

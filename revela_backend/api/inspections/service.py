@@ -34,6 +34,7 @@ def get_inspector_tasks(user_id):
                 ir.nearestLandmark,
                 g.detectedName,
                 g.flagColor,
+                g.noticeLevel        AS currentNoticeLevel,
                 g.latitude,
                 g.longitude,
                 b.barangayName
@@ -81,6 +82,7 @@ def get_inspector_reports_history(user_id):
                 ir.nearestLandmark,
                 g.detectedName,
                 g.flagColor,
+                g.noticeLevel        AS currentNoticeLevel,
                 g.latitude,
                 g.longitude,
                 b.barangayName
@@ -189,6 +191,7 @@ def assign_inspection(log_id, inspector_user_id, deadline, assigned_by):
 # ── Submit inspection ─────────────────────────────────────────────────────────
 
 def submit_inspection(log_id, user_id, inspection_result,
+                      notice_level=0,
                       verified_lat=None, verified_lng=None,
                       notes=None, photo_url=None):
     """
@@ -231,6 +234,7 @@ def submit_inspection(log_id, user_id, inspection_result,
         cursor.execute("""
             UPDATE inspection_reports
             SET inspectionResult    = %s,
+                noticeLevel         = %s,
                 verificationStatus  = 'Submitted',
                 remarks             = %s,
                 photoPath           = %s,
@@ -239,6 +243,7 @@ def submit_inspection(log_id, user_id, inspection_result,
             WHERE reportID = %s
         """, (
             inspection_result,
+            notice_level,
             notes,
             photo_url,
             landmark,
@@ -345,7 +350,7 @@ def verify_inspection(report_id):
         cursor = mysql.connection.cursor()
 
         cursor.execute("""
-            SELECT reportID, targetID, inspectionResult, verificationStatus
+            SELECT reportID, targetID, inspectionResult, noticeLevel, verificationStatus
             FROM inspection_reports
             WHERE reportID = %s
         """, (report_id,))
@@ -373,9 +378,10 @@ def verify_inspection(report_id):
         # Propagate result → geospatial_logs
         cursor.execute("""
             UPDATE geospatial_logs
-            SET flagColor = %s
+            SET flagColor = %s,
+                noticeLevel = %s
             WHERE logID = %s
-        """, (report["inspectionResult"], report["targetID"]))
+        """, (report["inspectionResult"], report["noticeLevel"], report["targetID"]))
 
         mysql.connection.commit()
         cursor.close()
@@ -419,6 +425,11 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
             f"""
             SELECT COUNT(*) AS total
             FROM inspection_reports ir
+            JOIN (
+                SELECT targetID, MAX(reportID) AS maxReportID
+                FROM inspection_reports
+                GROUP BY targetID
+            ) latest_ir ON ir.reportID = latest_ir.maxReportID
             JOIN geospatial_logs g ON ir.targetID = g.logID
             {where}
             """,
@@ -433,6 +444,7 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
                 ir.targetID          AS logID,
                 ir.inspectionResult,
                 ir.verificationStatus,
+                ir.noticeLevel,
                 ir.remarks,
                 ir.photoPath,
                 ir.irTimestamp,
@@ -447,6 +459,11 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
                 u.fullName           AS inspectorName,
                 u.userID             AS inspectorID
             FROM inspection_reports ir
+            JOIN (
+                SELECT targetID, MAX(reportID) AS maxReportID
+                FROM inspection_reports
+                GROUP BY targetID
+            ) latest_ir ON ir.reportID = latest_ir.maxReportID
             JOIN geospatial_logs g  ON ir.targetID  = g.logID
             LEFT JOIN barangays b   ON g.barangayID = b.barangayID
             LEFT JOIN users u       ON ir.userID    = u.userID

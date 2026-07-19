@@ -1,15 +1,15 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dashboard_page.dart';
 import 'home_page.dart';
 import 'inspection_page.dart';
 import 'notifications_page.dart';
-import 'pdf_generator_page.dart';
 import 'settings_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_background.dart';
 import '../service/in_app_notifications_service.dart';
+import '../widgets/scale_tap.dart';
 import 'dart:async';
 
 class MainLayout extends StatefulWidget {
@@ -42,6 +42,7 @@ class _MainLayoutState extends State<MainLayout> {
             _isNavBarVisible = !expanded;
           });
         },
+        onSwitchTab: _onItemTapped,
       ),
       HomePage(
         onDrawerToggled: (expanded) {
@@ -64,7 +65,6 @@ class _MainLayoutState extends State<MainLayout> {
           });
         },
       ),
-      const PdfGeneratorPage(),
       const SettingsScreen(),
     ];
     _fetchUnreadCount();
@@ -101,9 +101,11 @@ class _MainLayoutState extends State<MainLayout> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true, // Allows the body to flow underneath the bottom nav bar
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
+      body: AppBackground(
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: _pages,
+        ),
       ),
       bottomNavigationBar: AnimatedSlide(
         duration: const Duration(milliseconds: 300),
@@ -112,31 +114,39 @@ class _MainLayoutState extends State<MainLayout> {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.only(left: 20, right: 20, bottom: 24, top: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: context.adaptiveSurface.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              scale: _isDragging ? 0.96 : 1.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.adaptiveSurface.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _isDragging 
+                            ? AppColors.darkGreen.withValues(alpha: 0.3) 
+                            : Colors.black.withValues(alpha: 0.1),
+                          blurRadius: _isDragging ? 30 : 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: _isDragging 
+                          ? AppColors.darkGreen.withValues(alpha: 0.5) 
+                          : (context.isDarkMode ? Colors.white24 : Colors.black12),
+                        width: 1,
+                      ),
                     ),
-                  ],
-                  border: Border.all(
-                    color: context.isDarkMode ? Colors.white24 : Colors.black12,
-                    width: 1,
-                  ),
-                ),
-                child: Padding(
+                    child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final tabWidth = constraints.maxWidth / 6;
+                      final tabWidth = constraints.maxWidth / 5;
                       final currentLeft = _isDragging && _dragOffset != null
                           ? _dragOffset!
                           : _selectedIndex * tabWidth;
@@ -189,25 +199,24 @@ class _MainLayoutState extends State<MainLayout> {
                             ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: List.generate(6, (index) {
+                              children: List.generate(5, (index) {
                                 IconData iconData;
                                 bool hasAlert = false;
                                 switch (index) {
                                   case 0: iconData = Icons.dashboard_rounded; break;
                                   case 1: iconData = Icons.map_rounded; break;
                                   case 2: iconData = Icons.assignment_rounded; break;
-                                  case 3: 
-                                    iconData = Icons.notifications_rounded; 
+                                  case 3:
+                                    iconData = Icons.notifications_rounded;
                                     hasAlert = _unreadAlerts > 0;
                                     break;
-                                  case 4: iconData = Icons.picture_as_pdf_rounded; break;
-                                  case 5: iconData = Icons.settings_rounded; break;
+                                  case 4: iconData = Icons.settings_rounded; break;
                                   default: iconData = Icons.circle;
                                 }
                                 final isSelected = effectiveSelectedIndex == index;
-                                return GestureDetector(
+                                return ScaleTap(
+                                  scaleMinValue: 0.80,
                                   onTap: () => _onItemTapped(index),
-                                  behavior: HitTestBehavior.opaque,
                                   child: SizedBox(
                                     width: tabWidth,
                                     child: Padding(
@@ -216,24 +225,36 @@ class _MainLayoutState extends State<MainLayout> {
                                         alignment: Alignment.center,
                                         clipBehavior: Clip.none,
                                         children: [
-                                          Icon(
-                                            iconData,
-                                            size: 24,
-                                            color: isSelected ? Colors.white : context.adaptiveTextMid,
+                                          AnimatedScale(
+                                            scale: isSelected ? 1.25 : 1.0,
+                                            duration: const Duration(milliseconds: 300),
+                                            curve: Curves.easeOutBack,
+                                            child: Icon(
+                                              iconData,
+                                              size: 24,
+                                              color: isSelected ? Colors.white : context.adaptiveTextMid,
+                                            ),
                                           ),
                                           if (hasAlert)
                                             Positioned(
-                                              right: (tabWidth / 2) - 16,
-                                              top: -2,
+                                              right: (tabWidth / 2) - 20,
+                                              top: -4,
                                               child: Container(
-                                                padding: const EdgeInsets.all(2),
-                                                decoration: const BoxDecoration(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                                decoration: BoxDecoration(
                                                   color: Colors.redAccent,
-                                                  shape: BoxShape.circle,
+                                                  borderRadius: BorderRadius.circular(10),
                                                 ),
-                                                constraints: const BoxConstraints(
-                                                  minWidth: 8,
-                                                  minHeight: 8,
+                                                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                                child: Text(
+                                                  _unreadAlerts > 9 ? '9+' : '$_unreadAlerts',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.bold,
+                                                    height: 1.4,
+                                                  ),
+                                                  textAlign: TextAlign.center,
                                                 ),
                                               ),
                                             ),
@@ -254,6 +275,7 @@ class _MainLayoutState extends State<MainLayout> {
             ),
           ),
         ),
+      ),
       ),
       ),
     );

@@ -132,6 +132,7 @@ function EmptyState({ hasFilters, onUpload }) {
       <tr>
         <td colSpan={REGISTRY_TABLE_COL_COUNT} style={styles.emptyCell}>
           <div style={styles.emptyContent}>
+            <img src="/searching.png" alt="No businesses found" style={{ height: 100, objectFit: "contain", opacity: 0.9, marginBottom: 16 }} />
             <span style={{ color: "var(--color-muted)", fontSize: 13 }}>
               No businesses match your current filters.
             </span>
@@ -144,9 +145,7 @@ function EmptyState({ hasFilters, onUpload }) {
     <tr>
       <td colSpan={REGISTRY_TABLE_COL_COUNT} style={{ ...styles.emptyCell, paddingTop: 64, paddingBottom: 64 }}>
         <div style={styles.emptyContent}>
-          <div style={{ color: "var(--color-muted)", marginBottom: 16, opacity: 0.4 }}>
-            <Icon.Database />
-          </div>
+          <img src="/searching.png" alt="Registry Empty" style={{ height: 120, objectFit: "contain", opacity: 0.9, marginBottom: 20 }} />
           <p style={{ fontWeight: 700, fontSize: 15, color: "var(--color-ink)", marginBottom: 6 }}>
             No businesses in the registry yet
           </p>
@@ -225,7 +224,7 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#64748b',
+      cancelButtoncolor: "var(--color-muted)",
       confirmButtonText: 'Yes, delete it'
     });
 
@@ -667,7 +666,7 @@ export default function RegistryPage() {
                 businesses.map((b, i) => (
                   <tr
                     key={b.businessID}
-                    style={{ ...styles.tr, background: i % 2 === 0 ? "rgba(255,255,255,0.5)" : "transparent" }}
+                    style={{ ...styles.tr, background: i % 2 === 0 ? "var(--color-input-bg)" : "transparent" }}
                   >
                     <td style={{ ...styles.td, fontFamily: "monospace", fontSize: 12, color: "var(--color-muted)" }}>
                       #{b.businessID}
@@ -808,13 +807,13 @@ const styles = {
   summaryLabel: { fontSize: 12, color: "var(--color-muted)", fontWeight: 500 },
   filtersBar: { display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderRadius: "var(--radius-lg)" },
   select: {
-    background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)",
+    background: "var(--color-hover)", border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: 13,
     color: "var(--color-ink)", fontFamily: "var(--font-base)", cursor: "pointer", outline: "none",
   },
   resultCount: { fontSize: 12, color: "var(--color-muted)", fontWeight: 500, whiteSpace: "nowrap" },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  thead: { background: "rgba(248,249,250,0.9)", borderBottom: "1px solid var(--color-border)" },
+  thead: { background: "var(--color-input-bg)", borderBottom: "1px solid var(--color-border)" },
   th: {
     padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 700,
     color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap",
@@ -828,7 +827,7 @@ const styles = {
   pageInfo: { fontSize: 12, color: "var(--color-muted)" },
   pageBtn: {
     minWidth: 32, height: 32, padding: "0 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)",
-    background: "#fff", color: "var(--color-muted)", cursor: "pointer",
+    background: "var(--color-modal-bg)", color: "var(--color-muted)", cursor: "pointer",
     display: "flex", alignItems: "center", justifyContent: "center",
     gap: 6, fontSize: 13, fontWeight: 600, fontFamily: "var(--font-base)", transition: "all 0.15s",
   },
@@ -837,7 +836,7 @@ const styles = {
 
   // Modal styles
   modalBackdrop: { position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
-  modalCard: { background: "#fff", borderRadius: "var(--radius-xl)", padding: 32, boxShadow: "0 24px 60px rgba(15,23,42,0.18)", position: "relative", maxHeight: "90vh", overflowY: "auto" },
+  modalCard: { background: "var(--color-modal-bg)", borderRadius: "var(--radius-xl)", padding: 32, boxShadow: "0 24px 60px rgba(15,23,42,0.18)", position: "relative", maxHeight: "90vh", overflowY: "auto" },
   modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
   modalTitle: { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", margin: 0 },
   closeBtn: { background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", display: "flex", alignItems: "center", justifyContent: "center", padding: 4 },

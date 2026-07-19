@@ -19,6 +19,18 @@ import {
 } from "../services/api";
 import Swal from "sweetalert2";
 
+const formatResult = (val) => {
+  if (!val) return val;
+  switch (val) {
+    case 'Green': return 'Registered';
+    case 'Yellow': return 'Suspected / Needs Verification';
+    case 'Orange': return 'Warned / Non-Compliant';
+    case 'Red': return 'Unregistered';
+    case 'Black': return 'Closed / Blacklisted';
+    default: return val;
+  }
+};
+
 // ── Icons ──────────────────────────────────────────────────────────────────────
 const Icon = {
   MapPin: () => (
@@ -73,6 +85,20 @@ const Icon = {
       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </svg>
   ),
+  AlignJustify: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  ),
+  Archive: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  ),
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -89,12 +115,11 @@ const FLAG_COLOR = {
 
 const getFriendlyFlagLabel = (color) => {
   return {
-    Green:  "Active Business",
-    Orange: "Closed Business",
-    Yellow: "Suspected Unregistered",
-    Red:    "Detected Unregistered",
-    Black:  "Critical Violation",
-    "Given First Notice": "First Compliance Notice Issued",
+    Green:  "Registered",
+    Yellow: "Suspected",
+    Red:    "Unregistered",
+    Orange: "1st/2nd Warning / 3rd Notice Closure",
+    Black:  "Closed / Nonconforming",
   }[color] || color;
 };
 
@@ -102,7 +127,7 @@ const STATUS_COLOR = {
   Assigned:   { bg: "#eff6ff", text: "#3b82f6" },
   Reassigned: { bg: "#fefce8", text: "#ca8a04" },
   Submitted:  { bg: "#f0fdf4", text: "#16a34a" },
-  Verified:   { bg: "#f8fafc", text: "#64748b" },
+  Verified:   { bg: "#f8fafc", text: "var(--color-muted)" },
 };
 
 // ── Assign Modal ───────────────────────────────────────────────────────────────
@@ -142,7 +167,12 @@ function AssignModal({ report, token, onClose, onSuccess }) {
   const handleAssign = async () => {
     if (!selectedUID) { setError("Select an inspector first."); return; }
     if (deadline && new Date(deadline) < new Date()) {
-      setError("Deadline cannot be in the past.");
+      Swal.fire({
+        icon: 'error',
+        title: 'Invalid Deadline',
+        text: 'It is no longer possible to select any date or time in the past when assigning a task to an inspector.',
+        confirmButtonColor: 'var(--color-primary)'
+      });
       return;
     }
     setLoading(true);
@@ -228,7 +258,7 @@ function AssignModal({ report, token, onClose, onSuccess }) {
           type="datetime-local"
           style={{ ...s.fieldSelect, boxSizing: "border-box", marginTop: 4 }}
           value={deadline}
-          min={new Date().toISOString().slice(0, 16)}
+          min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
           onChange={e => setDeadline(e.target.value)}
         />
 
@@ -281,7 +311,7 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
           <span style={{
             ...s.flagPill,
             background: FLAG_COLOR[report.inspectionResult]?.bg ?? "#f1f5f9",
-            color: FLAG_COLOR[report.inspectionResult]?.text ?? "#64748b",
+            color: FLAG_COLOR[report.inspectionResult]?.text ?? "var(--color-muted)",
           }}>{report.inspectionResult ?? "No result"}</span>
           <div>
             <p style={{ fontWeight: 700, fontSize: 14, color: "var(--color-ink)", marginBottom: 2 }}>
@@ -332,7 +362,7 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
           </p>
         )}
 
-        {report.resolutionTime && (
+        {report.resolutionTime != null && (
           <p style={{ fontSize: 12, color: "var(--color-muted)", marginBottom: 16, display: "flex", alignItems: "center", gap: 5 }}>
             <Icon.Clock /> Resolved in {report.resolutionTime} min
           </p>
@@ -390,20 +420,25 @@ function InspectionDetailModal({ report, onClose }) {
             Status: {report.verificationStatus}
           </span>
           {report.inspectionResult && (
-            <span style={{ ...s.statusPill, background: "var(--color-ink)", color: "#fff", fontSize: 12, padding: "4px 10px" }}>
-              Result: {report.inspectionResult}
+            <span style={{ ...s.statusPill, background: "var(--color-ink)", color: "var(--color-modal-bg)", fontSize: 12, padding: "4px 10px" }}>
+              Result: {formatResult(report.inspectionResult)}
+            </span>
+          )}
+          {report.noticeLevel > 0 && (
+            <span style={{ ...s.statusPill, background: report.noticeLevel === 4 ? "var(--color-ink)" : "#ea580c", color: report.noticeLevel === 4 ? "var(--color-modal-bg)" : "#fff", fontSize: 12, padding: "4px 10px" }}>
+              {report.noticeLevel === 1 ? "1st Notice Issued" : report.noticeLevel === 2 ? "2nd Notice Issued" : report.noticeLevel === 3 ? "3rd Notice Issued" : "Escalated to Black"}
             </span>
           )}
         </div>
 
-        <div style={{ background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "16px", marginBottom: 20 }}>
+        <div style={{ background: "var(--color-hover)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "16px", marginBottom: 20 }}>
           <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12, marginTop: 0 }}>Assignment Info</h4>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
             <div>
               <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Inspector</span>
               <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600 }}>{report.inspectorName ?? "Unassigned"}</span>
             </div>
-            {report.resolutionTime && (
+            {report.resolutionTime != null && (
               <div>
                 <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Resolution Time</span>
                 <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock /> {report.resolutionTime} min</span>
@@ -421,7 +456,7 @@ function InspectionDetailModal({ report, onClose }) {
         {report.remarks && (
           <div style={{ marginBottom: 20 }}>
             <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, marginTop: 0 }}>Inspector Remarks</h4>
-            <p style={{ fontSize: 14, color: "var(--color-ink)", lineHeight: 1.6, background: "rgba(248,249,250,0.5)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--color-border-soft)", margin: 0 }}>
+            <p style={{ fontSize: 14, color: "var(--color-ink)", lineHeight: 1.6, background: "var(--color-input-bg)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--color-border-soft)", margin: 0 }}>
               {report.remarks}
             </p>
           </div>
@@ -451,6 +486,21 @@ function InspectionDetailModal({ report, onClose }) {
           </div>
         )}
 
+        {report.verificationStatus === "Verified" && report.noticeLevel > 0 && report.noticeLevel < 4 && (
+          <div style={{ marginTop: 12, marginBottom: 20 }}>
+            <button
+              className="primary-btn"
+              style={{ width: "100%", height: 44, fontSize: 13, background: "#e65100", borderColor: "#e65100" }}
+              onClick={() => {
+                onClose();
+                // trigger assign by simulating a click on the card's button, or we can just assume they will do it from the card.
+              }}
+            >
+              <Icon.Send /> Close to Schedule Follow-up
+            </button>
+          </div>
+        )}
+
         <div style={{ ...s.modalFooter, marginTop: "auto", paddingTop: 20 }}>
           <button className="ghost-btn" onClick={onClose}>Close</button>
         </div>
@@ -460,109 +510,134 @@ function InspectionDetailModal({ report, onClose }) {
   );
 }
 
-// ── Inspection Card ────────────────────────────────────────────────────────────
-function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
-  const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
-  const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
+// ── Column Focus Modal (Grid View) ─────────────────────────────────────────────
+function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onViewDetail, onClose }) {
+  const [search, setSearch] = useState("");
+  const [filterFlag, setFilterFlag] = useState("");
 
-  const isOverdue = report.deadline && new Date(report.deadline) < new Date() && 
-                    (report.verificationStatus === "Assigned" || report.verificationStatus === "Reassigned");
+  const statusMeta = STATUS_COLOR[status] ?? STATUS_COLOR.Assigned;
+
+  const filteredReports = reports.filter(r => {
+    if (filterFlag && r.flagColor !== filterFlag) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const hay = [
+        r.detectedName, r.barangayName, r.reportID, r.logID, r.inspectorName
+      ].join(" ").toLowerCase();
+      return hay.includes(q);
+    }
+    return true;
+  });
+
+  return (
+    <div style={{...s.backdrop, zIndex: 50}} onClick={onClose}>
+      <div style={{...s.modal, width: "90vw", maxWidth: 1200, height: "85vh", display: "flex", flexDirection: "column", padding: "24px 32px"}} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid var(--color-border-soft)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 12, height: 12, borderRadius: "50%", background: statusMeta.text, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }} />
+            <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--color-ink)", letterSpacing: "-0.02em" }}>{status} Backlog <span style={{ color: "var(--color-muted)", fontSize: 18, fontWeight: 600 }}>({reports.length})</span></h2>
+          </div>
+          
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <select
+              style={{ ...s.filterSelect, width: 160 }}
+              value={filterFlag}
+              onChange={e => setFilterFlag(e.target.value)}
+            >
+              <option value="">All Flags</option>
+              {Object.keys(FLAG_COLOR).map(f => (
+                <option key={f} value={f}>{getFriendlyFlagLabel(f)}</option>
+              ))}
+            </select>
+            
+            <div className="search-bar" style={{ width: 240, margin: 0 }}>
+              <Icon.Search />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+
+            <button style={{ ...s.closeBtn, background: "var(--color-hover)", padding: 8, borderRadius: "50%", marginLeft: 8 }} onClick={onClose}><Icon.X /></button>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 24, overflowY: "auto", padding: "8px 4px 32px" }}>
+          {filteredReports.map(r => (
+            <InspectionCard
+              key={r.reportID ?? `log-${r.logID}`}
+              report={r}
+              isAdmin={isAdmin}
+              onAssign={onAssign}
+              onVerify={onVerify}
+              onViewDetail={onViewDetail}
+            />
+          ))}
+          {filteredReports.length === 0 && (
+            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "60px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+              <img src="/searching.png" alt="No reports" style={{ height: 120, objectFit: "contain", opacity: 0.9 }} />
+              <p style={{ color: "var(--color-muted)", fontSize: 14, margin: 0 }}>No reports match your filters.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Inspection Card ────────────────────────────────────────────────────────────
+function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail, isCompact }) {
+  const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
+  const flagMeta = FLAG_COLOR[report.flagColor] ?? FLAG_COLOR.Green;
+  const isOverdue = report.deadline && new Date(report.deadline) < new Date();
 
   const cardStyle = isOverdue 
-    ? { ...s.card, border: "2px solid var(--color-danger)" }
-    : s.card;
+    ? { ...s.card, border: "2px solid var(--color-danger)", padding: "12px 16px" }
+    : { ...s.card, padding: "12px 16px" };
 
   return (
     <div style={cardStyle} onClick={() => onViewDetail(report)}>
       {/* Header row */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
         <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text }}>
           <Icon.Flag /> {getFriendlyFlagLabel(report.flagColor)}
         </span>
-        <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 600 }}>
-          #{report.reportID ?? report.logID}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>
+            #{report.reportID ?? report.logID}
+          </span>
+          {report.noticeLevel > 0 && (
+            <span style={{ fontSize: 10, fontWeight: 800, padding: "3px 6px", borderRadius: 4, background: report.noticeLevel === 4 ? "var(--color-ink)" : "#ea580c", color: report.noticeLevel === 4 ? "var(--color-modal-bg)" : "#fff" }}>
+              {report.noticeLevel === 1 ? "1st Notice" : report.noticeLevel === 2 ? "2nd Notice" : report.noticeLevel === 3 ? "3rd Notice" : "Escalated"}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Business name */}
-      <p style={s.cardName}>{report.detectedName}</p>
-      <p style={s.cardMeta}>
+      {/* Business name & Address */}
+      <p style={{ fontSize: 15, fontWeight: 800, color: "var(--color-ink)", marginBottom: 6, lineHeight: 1.3 }}>
+        {report.detectedName}
+      </p>
+      <p style={{ fontSize: 12, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
         <Icon.MapPin /> {report.barangayName ?? "Unknown barangay"}
       </p>
 
-      {/* Inspector */}
-      <div style={s.cardInspector}>
-        <div style={{
-          ...s.avatar,
-          background: report.inspectorName ? "var(--color-primary)" : "var(--color-border)",
-        }}>
-          {report.inspectorName ? report.inspectorName.charAt(0).toUpperCase() : "?"}
+      {/* Result Context */}
+      {report.inspectionResult && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: FLAG_COLOR[report.inspectionResult]?.text || "var(--color-modal-bg)", background: FLAG_COLOR[report.inspectionResult]?.bg || "var(--color-ink)", padding: "4px 10px", borderRadius: 12 }}>
+            Result: {formatResult(report.inspectionResult)}
+          </span>
         </div>
-        <span style={{ fontSize: 12, color: report.inspectorName ? "var(--color-ink)" : "var(--color-muted)", fontWeight: 600 }}>
-          {report.inspectorName ?? "Unassigned"}
-        </span>
-        <span style={{ ...s.statusPill, background: statusMeta.bg, color: statusMeta.text, marginLeft: "auto" }}>
-          {report.verificationStatus}
-        </span>
-      </div>
-
-      {report.verificationStatus === "Submitted" && report.inspectionResult && (
-        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--color-ink)", marginTop: 4 }}>
-          Result: {report.inspectionResult}
-        </p>
-      )}
-
-      {inspectionEvidenceUrls(report.photoPath).length > 0 && (
-        <div style={{ display: "flex", gap: 4, overflowX: "auto", marginTop: 8 }}>
-          {inspectionEvidenceUrls(report.photoPath).map((url, i) => (
-            <img
-              key={i}
-              src={url}
-              alt={`Evidence ${i + 1}`}
-              style={{
-                width: 72,
-                height: 72,
-                objectFit: "cover",
-                borderRadius: 8,
-                border: "1px solid var(--color-border)",
-                flexShrink: 0
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Remarks preview */}
-      {report.remarks && (
-        <p style={s.remarksPreview}>"{report.remarks}"</p>
-      )}
-
-      {/* Resolution time */}
-      {report.resolutionTime && (
-        <p style={{ fontSize: 11, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
-          <Icon.Clock /> {report.resolutionTime} min
-        </p>
-      )}
-
-      {/* Deadline */}
-      {report.deadline && (
-        <p style={{ 
-          fontSize: 11, 
-          color: isOverdue ? "var(--color-danger)" : "var(--color-muted)", 
-          display: "flex", alignItems: "center", gap: 4, marginTop: 6, 
-          fontWeight: isOverdue ? 700 : 600 
-        }}>
-          <Icon.Clock /> Due: {new Date(report.deadline).toLocaleString()}
-          {isOverdue && <span style={{ marginLeft: 4, background: "var(--color-danger)", color: "#fff", padding: "2px 6px", borderRadius: 4, fontSize: 9 }}>OVERDUE</span>}
-        </p>
       )}
 
       {/* Actions */}
       {isAdmin && (
-        <div style={s.cardActions}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(report.verificationStatus === "Assigned" ||
             report.verificationStatus === "Reassigned") && (
-            <button className="ghost-btn" style={{ fontSize: 12, padding: "7px 12px" }}
+            <button className="ghost-btn" style={{ fontSize: 12, padding: "6px 12px", flex: 1 }}
               onClick={(e) => { e.stopPropagation(); onAssign(report); }}>
               Reassign
             </button>
@@ -571,32 +646,98 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail }) {
             <>
               <button
                 className="ghost-btn"
-                style={{ fontSize: 12, padding: "7px 12px" }}
+                style={{ fontSize: 12, padding: "6px 12px", flex: 1 }}
                 onClick={(e) => { e.stopPropagation(); onAssign(report); }}
               >
-                Reassign for redo
+                Send back
               </button>
               <button
                 className="primary-btn"
-                style={{ fontSize: 12, padding: "7px 14px" }}
+                style={{ fontSize: 12, padding: "6px 12px", flex: 1 }}
                 onClick={(e) => { e.stopPropagation(); onVerify(report); }}
               >
                 <Icon.Check /> Verify
               </button>
             </>
           )}
+          {report.verificationStatus === "Verified" && report.noticeLevel > 0 && report.noticeLevel < 4 && (
+            <button
+              className="primary-btn"
+              style={{ fontSize: 12, padding: "6px 12px", flex: 1, background: "#e65100", borderColor: "#e65100" }}
+              onClick={(e) => { e.stopPropagation(); onAssign(report); }}
+            >
+              <Icon.Send /> Follow-up
+            </button>
+          )}
         </div>
       )}
+
+      {/* Bleeding Assignee Footer */}
+      <div style={{ 
+        display: "flex", justifyContent: "space-between", alignItems: "center", 
+        marginTop: 16, padding: "12px 20px", 
+        background: "var(--color-hover)", // Subtle tint
+        margin: "16px -20px -16px -20px", 
+        borderTop: "1px solid var(--color-border-soft)",
+        borderBottomLeftRadius: "var(--radius-lg)",
+        borderBottomRightRadius: "var(--radius-lg)"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: "50%",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10, fontWeight: 800, color: "#fff",
+            background: report.inspectorName ? "var(--color-primary)" : "var(--color-border)",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+          }}>
+            {report.inspectorName ? report.inspectorName.charAt(0).toUpperCase() : "?"}
+          </div>
+          <span style={{ fontSize: 12, color: report.inspectorName ? "var(--color-ink)" : "var(--color-muted)", fontWeight: 700 }}>
+            {report.inspectorName ? report.inspectorName.split(" ")[0] : "Unassigned"}
+          </span>
+        </div>
+
+        {report.deadline && (
+          <span style={{ 
+            fontSize: 11, 
+            color: isOverdue ? "var(--color-danger)" : "var(--color-muted)", 
+            display: "flex", alignItems: "center", gap: 4,
+            fontWeight: isOverdue ? 800 : 600,
+            background: isOverdue ? "rgba(239, 68, 68, 0.1)" : "transparent",
+            padding: isOverdue ? "2px 8px" : 0,
+            borderRadius: 12
+          }}>
+            <Icon.Clock />
+            {isOverdue ? "OVERDUE" : new Date(report.deadline).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Column ─────────────────────────────────────────────────────────────────────
-function KanbanColumn({ status, reports, isAdmin, onAssign, onVerify, onViewDetail }) {
+function KanbanColumn({ status, reports, isAdmin, onAssign, onVerify, onViewDetail, isCompact, isCollapsed, onToggleCollapse, onFocusColumn }) {
   const statusMeta = STATUS_COLOR[status] ?? STATUS_COLOR.Assigned;
+
+  const visibleReports = reports.slice(0, 5);
+  const hasMore = reports.length > 5;
+
+  if (isCollapsed) {
+    return (
+      <div style={{ ...s.column, flex: "0 0 60px", minWidth: 60, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 8px" }} onClick={onToggleCollapse}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusMeta.text, marginBottom: 16 }} />
+        <span style={{ ...s.columnTitle, writingMode: "vertical-rl", transform: "rotate(180deg)", letterSpacing: "0.1em", marginBottom: 16 }}>{status}</span>
+        <span style={{ ...s.statusPill, background: statusMeta.bg, color: statusMeta.text }}>
+          {reports.length}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div style={s.column}>
-      <div style={s.columnHeader}>
+      <div style={{ ...s.columnHeader, cursor: "pointer" }} onClick={onToggleCollapse}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: statusMeta.text }} />
           <span style={s.columnTitle}>{status}</span>
@@ -607,17 +748,39 @@ function KanbanColumn({ status, reports, isAdmin, onAssign, onVerify, onViewDeta
       </div>
       <div style={s.columnBody}>
         {reports.length === 0 ? (
-          <div style={s.emptyCol}>No reports</div>
-        ) : reports.map(r => (
-          <InspectionCard
-            key={r.reportID ?? `log-${r.logID}`}
-            report={r}
-            isAdmin={isAdmin}
-            onAssign={onAssign}
-            onVerify={onVerify}
-            onViewDetail={onViewDetail}
-          />
-        ))}
+          <div style={{ ...s.emptyCol, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <img src="/searching.png" alt="Empty" style={{ height: 80, objectFit: "contain", opacity: 0.8 }} />
+            No reports
+          </div>
+        ) : (
+          <>
+            {visibleReports.map(r => (
+              <InspectionCard
+                key={r.reportID ?? `log-${r.logID}`}
+                report={r}
+                isAdmin={isAdmin}
+                onAssign={onAssign}
+                onVerify={onVerify}
+                onViewDetail={onViewDetail}
+                isCompact={isCompact}
+              />
+            ))}
+            {hasMore && (
+              <button 
+                className="ghost-btn" 
+                style={{ 
+                  width: "100%", padding: "12px", fontSize: 12, fontWeight: 800, 
+                  color: "var(--color-primary)", marginTop: 4, background: "rgba(0,0,0,0.02)",
+                  border: "1px dashed var(--color-primary-light)", borderRadius: "var(--radius-sm)",
+                  cursor: "pointer", transition: "all 0.2s"
+                }}
+                onClick={(e) => { e.stopPropagation(); onFocusColumn(status); }}
+              >
+                View all {reports.length} reports in Grid
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -632,6 +795,18 @@ export default function InspectionPage() {
   const [total,    setTotal]    = useState(0);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState("");
+
+  // Kanban View Optimization State
+  const isCompact = true;
+  const [collapsedCols, setCollapsedCols] = useState(new Set());
+  const [focusColumn, setFocusColumn] = useState(null);
+
+  const toggleCollapse = (status) => {
+    const next = new Set(collapsedCols);
+    if (next.has(status)) next.delete(status);
+    else next.add(status);
+    setCollapsedCols(next);
+  };
 
   // Modal state
   const [assignTarget, setAssignTarget] = useState(null);
@@ -697,8 +872,14 @@ export default function InspectionPage() {
       })
     : reports;
 
-  const byStatus = (status) =>
-    filteredReports.filter((r) => r.verificationStatus === status);
+  const byStatus = (status) => {
+    let list = filteredReports.filter((r) => r.verificationStatus === status);
+    if (status === "Verified") {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      list = list.filter(r => new Date(r.irTimestamp) >= sevenDaysAgo);
+    }
+    return list;
+  };
 
   // Admin sees all 4 columns; inspectors only see Assigned + Reassigned
   const visibleCols = isAdmin
@@ -757,6 +938,7 @@ export default function InspectionPage() {
         </div>
       </div>
 
+
       {/* Error */}
       {error && (
         <div style={s.errorBanner}>
@@ -775,9 +957,13 @@ export default function InspectionPage() {
               status={status}
               reports={byStatus(status)}
               isAdmin={isAdmin}
-              onAssign={setAssignTarget}
-              onVerify={setVerifyTarget}
-              onViewDetail={setDetailTarget}
+              onAssign={r => setAssignTarget(r)}
+              onVerify={r => setVerifyTarget(r)}
+              onViewDetail={r => setDetailTarget(r)}
+              isCompact={isCompact}
+              isCollapsed={collapsedCols.has(status)}
+              onToggleCollapse={() => toggleCollapse(status)}
+              onFocusColumn={setFocusColumn}
             />
           ))}
         </div>
@@ -817,6 +1003,19 @@ export default function InspectionPage() {
         />
       )}
 
+      {/* Grid View Modal */}
+      {focusColumn && (
+        <ColumnFocusModal
+          status={focusColumn}
+          reports={byStatus(focusColumn)}
+          isAdmin={isAdmin}
+          onAssign={r => setAssignTarget(r)}
+          onVerify={r => setVerifyTarget(r)}
+          onViewDetail={r => setDetailTarget(r)}
+          onClose={() => setFocusColumn(null)}
+        />
+      )}
+
     </DashboardLayout>
   );
 }
@@ -825,45 +1024,49 @@ export default function InspectionPage() {
 const s = {
   board: {
     display: "grid",
-    gap: 16,
+    gap: 20,
     alignItems: "start",
   },
   column: {
-    background: "rgba(248,249,250,0.7)",
+    background: "var(--color-input-bg)",
     border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-lg)",
+    borderRadius: "var(--radius-xl)",
     overflow: "hidden",
+    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.05)",
   },
   columnHeader: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "14px 16px",
-    borderBottom: "1px solid var(--color-border)",
-    background: "rgba(255,255,255,0.6)",
+    padding: "16px 20px",
+    borderBottom: "1px solid var(--color-border-soft)",
+    background: "var(--color-input-bg)",
+    backdropFilter: "blur(12px)",
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
   },
   columnTitle: {
-    fontSize: 13, fontWeight: 700, color: "var(--color-ink)",
-    textTransform: "uppercase", letterSpacing: "0.05em",
+    fontSize: 13, fontWeight: 800, color: "var(--color-ink)",
+    textTransform: "uppercase", letterSpacing: "0.08em",
+    display: "flex", alignItems: "center", gap: 8
   },
   columnBody: {
-    padding: 12, display: "flex", flexDirection: "column", gap: 10,
+    padding: "16px", display: "flex", flexDirection: "column", gap: 14,
     minHeight: 120,
-    maxHeight: "calc(100vh - 240px)",
-    overflowY: "auto",
   },
   emptyCol: {
-    textAlign: "center", padding: "24px 0",
-    fontSize: 12, color: "var(--color-muted)",
+    textAlign: "center", padding: "32px 0",
+    fontSize: 13, color: "var(--color-muted)", fontWeight: 500
   },
 
   // Card
   card: {
-    background: "rgba(255,255,255,0.85)",
+    background: "var(--color-modal-bg)",
     border: "1px solid var(--color-border)",
-    borderRadius: "var(--radius-md)",
-    padding: 14,
-    backdropFilter: "blur(8px)",
+    borderRadius: "var(--radius-lg)",
+    padding: "16px 20px",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
     cursor: "pointer",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+    transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
   },
   cardName: {
     fontSize: 14, fontWeight: 700, color: "var(--color-ink)",
@@ -906,7 +1109,7 @@ const s = {
   },
   totalPill: {
     fontSize: 12, fontWeight: 600, color: "var(--color-muted)",
-    background: "rgba(248,249,250,0.9)",
+    background: "var(--color-input-bg)",
     border: "1px solid var(--color-border)",
     padding: "6px 12px", borderRadius: 20,
   },
@@ -916,7 +1119,7 @@ const s = {
     padding: "8px 12px", borderRadius: "var(--radius-sm)",
     border: "1px solid var(--color-border)", fontSize: 13,
     fontFamily: "var(--font-base)", color: "var(--color-ink)",
-    background: "#fff", cursor: "pointer",
+    background: "var(--color-modal-bg)", cursor: "pointer",
   },
 
   // Loading / error
@@ -938,7 +1141,7 @@ const s = {
     alignItems: "center", justifyContent: "center", zIndex: 100,
   },
   modal: {
-    background: "#fff", borderRadius: "var(--radius-xl)",
+    background: "var(--color-modal-bg)", borderRadius: "var(--radius-xl)",
     padding: 32, width: 440,
     boxShadow: "0 25px 50px rgba(0,0,0,0.15)",
     maxHeight: "85vh",
@@ -959,7 +1162,7 @@ const s = {
   },
   flagPreview: {
     display: "flex", alignItems: "center", gap: 12,
-    background: "rgba(248,249,250,0.8)",
+    background: "var(--color-hover)",
     border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 20,
   },
@@ -973,10 +1176,10 @@ const s = {
     border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-sm)", fontSize: 14,
     fontFamily: "var(--font-base)", color: "var(--color-ink)",
-    background: "#fff", cursor: "pointer", marginBottom: 4,
+    background: "var(--color-modal-bg)", cursor: "pointer", marginBottom: 4,
   },
   remarksBox: {
-    background: "rgba(248,249,250,0.8)",
+    background: "var(--color-hover)",
     border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-sm)",
     padding: "10px 14px", marginBottom: 14,

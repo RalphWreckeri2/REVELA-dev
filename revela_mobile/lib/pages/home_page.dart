@@ -139,7 +139,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           _taskError =
-              'Failed to load tasks. Ensure the backend is running (python app.py) and the device can reach it (USB: adb reverse tcp:5000 tcp:5000).';
+              'Unable to connect to the server. Please check your internet connection and try again.';
           _loadingTasks = false;
         });
       }
@@ -206,6 +206,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final hue = switch (t.flagColor) {
         'Red' => BitmapDescriptor.hueRed,
         'Yellow' => BitmapDescriptor.hueYellow,
+        'Orange' => 15.0,  // deep orange hue — distinct from hueYellow (60) and hueOrange (30)
         'Black' => BitmapDescriptor.hueViolet,
         _ => BitmapDescriptor.hueGreen,
       };
@@ -372,6 +373,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _mapController?.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -1008,7 +1010,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
       if (mounted) {
         setState(() {
           _submitting = false;
-          _errorMsg = 'Failed to submit. Please try again.';
+          _errorMsg = 'We couldn\'t submit your report. Please try again.';
         });
       }
     }

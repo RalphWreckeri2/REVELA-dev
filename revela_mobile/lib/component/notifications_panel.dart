@@ -188,7 +188,7 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
                               }
                             }
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task no longer active or found.')));
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You have already completed this inspection, or it was reassigned.')));
                             }
                           }
                         },

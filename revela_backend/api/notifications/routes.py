@@ -56,6 +56,24 @@ def mark_read_route():
     return jsonify(result), 200
 
 
+# ── DELETE /api/notifications ─────────────────────────────────────────────────
+@notifications_bp.route("", methods=["DELETE", "OPTIONS"])
+@notifications_bp.route("/", methods=["DELETE", "OPTIONS"])
+@jwt_required()
+def delete_notifications_route():
+    if request.method == "OPTIONS":
+        return "", 204
+    uid = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids")
+    if ids is not None and not isinstance(ids, list):
+        return jsonify({"error": "ids must be an array"}), 400
+    result, err = notif_service.delete_notifications(uid, ids)
+    if err:
+        return jsonify({"error": err}), 500
+    return jsonify(result), 200
+
+
 # ── GET /api/notifications/stream?token=JWT ───────────────────────────────────
 # EventSource cannot set Authorization header in all browsers.
 @notifications_bp.route("/stream", methods=["GET"])

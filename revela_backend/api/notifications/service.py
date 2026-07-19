@@ -139,6 +139,32 @@ def mark_notifications_read(user_id: int, notif_ids: Optional[List[int]] = None)
     return {"updated": affected}, None
 
 
+def delete_notifications(user_id: int, notif_ids: Optional[List[int]] = None) -> Tuple[Dict[str, Any], None]:
+    _ensure_tables()
+    cur = mysql.connection.cursor()
+    if notif_ids:
+        placeholders = ",".join(["%s"] * len(notif_ids))
+        cur.execute(
+            f"""
+            DELETE FROM revela_notifications
+            WHERE recipientUserId = %s AND id IN ({placeholders})
+            """,
+            (user_id, *notif_ids),
+        )
+    else:
+        cur.execute(
+            """
+            DELETE FROM revela_notifications
+            WHERE recipientUserId = %s
+            """,
+            (user_id,),
+        )
+    mysql.connection.commit()
+    affected = cur.rowcount
+    cur.close()
+    return {"deleted": affected}, None
+
+
 def _send_resend_email(to_email: str, subject: str, text_body: str) -> bool:
     key = os.getenv("RESEND_API_KEY")
     from_addr = os.getenv("RESEND_FROM")
@@ -211,9 +237,52 @@ def notify_inspection_assigned(
             ),
         )
         mysql.connection.commit()
+        mysql.connection.commit()
         cur.close()
     except Exception as e:
         print(f"notify_inspection_assigned error: {e}")
+
+def notify_password_reset_request(inspector_name: str) -> None:
+    """In-app notification for all admins when an inspector requests a manual password reset."""
+    try:
+        _ensure_tables()
+        cur = mysql.connection.cursor()
+
+        cur.execute(
+            """
+            SELECT userID FROM USERS
+            WHERE userRole IN ('Admin', 'SUPER_ADMIN', 'System Administrator')
+            """
+        )
+        admins = cur.fetchall() or []
+
+        title = "Password Reset Requested"
+        body = f"{inspector_name} has requested a manual password reset. Open User Management to generate a temporary password."
+        link = "/users"
+
+        for a in admins:
+            aid = int(a["userID"])
+            cur.execute(
+                """
+                INSERT INTO revela_notifications
+                    (recipientUserId, type, title, body, link)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (aid, "password_reset_requested", title, body, link),
+            )
+
+        mysql.connection.commit()
+        cur.close()
+
+        # Push real-time event to all connected admins
+        hub.publish_to_admins({
+            "type": "password_reset_requested",
+            "title": title,
+            "body": body,
+            "link": link
+        })
+    except Exception as e:
+        print(f"notify_password_reset_request error: {e}")
 
 
 def notify_inspection_submitted(

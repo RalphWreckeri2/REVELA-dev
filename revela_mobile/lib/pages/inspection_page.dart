@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../component/inspection_modal.dart';
+import '../widgets/floating_mascot.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/task_card.dart';
+import '../widgets/modern_segmented_filter.dart';
 import 'history_detail_page.dart';
+import 'pdf_generator_page.dart';
 
 class InspectionPage extends StatefulWidget {
   final ValueChanged<bool>? onDrawerToggled;
@@ -18,7 +21,9 @@ class _InspectionPageState extends State<InspectionPage>
     with SingleTickerProviderStateMixin {
   static const Set<String> _activeStatuses = {'Assigned', 'Reassigned'};
 
-  late final TabController _tabController;
+  final InspectionService _inspectionService = InspectionService();
+  late TabController _tabController;
+  int _currentFilterIndex = 0;
 
   List<InspectionTask> _currentTasks = [];
   List<InspectionTask> _missingTasks = [];
@@ -33,6 +38,14 @@ class _InspectionPageState extends State<InspectionPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!mounted) return;
+      if (_currentFilterIndex != _tabController.index) {
+        setState(() {
+          _currentFilterIndex = _tabController.index;
+        });
+      }
+    });
     _fetchCurrent();
     _fetchHistory();
   }
@@ -79,7 +92,7 @@ class _InspectionPageState extends State<InspectionPage>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _currentError = 'Failed to load current tasks.';
+          _currentError = 'Unable to load your tasks. Please pull down to refresh.';
           _loadingCurrent = false;
         });
       }
@@ -105,7 +118,7 @@ class _InspectionPageState extends State<InspectionPage>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _historyError = 'Failed to load history.';
+          _historyError = 'Unable to load your inspection history. Please pull down to refresh.';
           _loadingHistory = false;
         });
       }
@@ -135,11 +148,20 @@ class _InspectionPageState extends State<InspectionPage>
   }
 
   // Tapping a HISTORY item navigates to HistoryDetailPage
-  void _onHistoryTaskTap(InspectionTask task) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => HistoryDetailPage(task: task)),
+  void _onHistoryTaskTap(InspectionTask task) async {
+    if (_isDrawerOpen) return;
+    setState(() => _isDrawerOpen = true);
+    widget.onDrawerToggled?.call(true);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => HistoryDetailPage(task: task),
     );
+    
+    widget.onDrawerToggled?.call(false);
+    if (mounted) setState(() => _isDrawerOpen = false);
   }
 
   Widget _buildShimmerLoader(BuildContext context) {
@@ -166,44 +188,60 @@ class _InspectionPageState extends State<InspectionPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.adaptiveBackground,
-      appBar: AppBar(
-        backgroundColor: context.adaptiveSurface,
-        elevation: 0,
-        centerTitle: false,
-        title: Text(
-          'Inspections',
-          style: TextStyle(
-            color: context.adaptiveTextDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.darkGreen,
-          indicatorWeight: 3,
-          labelColor: context.isDarkMode ? Colors.white : AppColors.darkGreen,
-          unselectedLabelColor: context.isDarkMode ? Colors.white70 : Colors.grey,
-          labelStyle: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-          ),
-          unselectedLabelStyle: TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
-          tabs: const [
-            Tab(text: 'CURRENT'),
-            Tab(text: 'MISSING'),
-            Tab(text: 'HISTORY'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // ── CURRENT Tab ──────────────────────────────────────────────────
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
+              child: Row(
+                children: [
+                  if (Navigator.of(context).canPop())
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: IconButton(
+                        icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.adaptiveTextDark),
+                        onPressed: () => Navigator.pop(context),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      'Inspections',
+                      style: TextStyle(
+                        color: context.adaptiveTextDark,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 28,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.picture_as_pdf_rounded, color: AppColors.darkGreen, size: 24),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PdfGeneratorPage()),
+                    ),
+                    tooltip: 'Generate Notice PDF',
+                  ),
+                ],
+              ),
+            ),
+            ModernSegmentedFilter(
+              options: const ['Current', 'Missing', 'History'],
+              selectedIndex: _currentFilterIndex,
+              onSelected: (index) {
+                _tabController.animateTo(index);
+              },
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+          // ── CURRENT Tab
           RefreshIndicator(
             color: context.adaptivePrimary,
             onRefresh: _fetchCurrent,
@@ -214,7 +252,7 @@ class _InspectionPageState extends State<InspectionPage>
                 : _currentTasks.isEmpty
                 ? const _EmptyState(
                     message: 'No current assignments.',
-                    icon: Icons.assignment_turned_in_outlined,
+                    imagePath: 'assets/images/searching.png',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(20),
@@ -238,7 +276,7 @@ class _InspectionPageState extends State<InspectionPage>
                 : _missingTasks.isEmpty
                 ? const _EmptyState(
                     message: 'No missing assignments.',
-                    icon: Icons.check_circle_outline_rounded,
+                    imagePath: 'assets/images/searching.png',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(20),
@@ -263,7 +301,7 @@ class _InspectionPageState extends State<InspectionPage>
                 : _historyTasks.isEmpty
                 ? const _EmptyState(
                     message: 'No inspection history yet.',
-                    icon: Icons.history_rounded,
+                    imagePath: 'assets/images/searching.png',
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(20),
@@ -276,6 +314,10 @@ class _InspectionPageState extends State<InspectionPage>
                   ),
           ),
         ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -284,8 +326,9 @@ class _InspectionPageState extends State<InspectionPage>
 // ─── Empty State ──────────────────────────────────────────────────────────────
 class _EmptyState extends StatelessWidget {
   final String message;
-  final IconData icon;
-  const _EmptyState({required this.message, required this.icon});
+  final String? imagePath;
+  final IconData? icon;
+  const _EmptyState({required this.message, this.imagePath, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -293,11 +336,14 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 56, color: Colors.grey[300]),
-          SizedBox(height: 14),
+          if (imagePath != null)
+            FloatingMascot(imagePath: imagePath!, height: 160)
+          else if (icon != null)
+            Icon(icon, size: 56, color: Colors.grey[300]),
+          const SizedBox(height: 16),
           Text(
             message,
-            style: TextStyle(color: Colors.grey[400], fontSize: 15),
+            style: TextStyle(color: Colors.grey[400], fontSize: 16, fontWeight: FontWeight.w500),
           ),
         ],
       ),

@@ -46,13 +46,23 @@ def update_last_login(user_id):
     mysql.connection.commit()
     cur.close()
 
+def set_reset_requested(user_id, value):
+    """Set the resetRequested flag for a user."""
+    cur = mysql.connection.cursor()
+    cur.execute(
+        "UPDATE USERS SET resetRequested = %s WHERE userID = %s",
+        (1 if value else 0, user_id)
+    )
+    mysql.connection.commit()
+    cur.close()
+
 
 def get_all_users():
     """Fetch all users except passwords."""
     cur = mysql.connection.cursor()
     cur.execute("""
         SELECT userID, fullName, email, phone, userRole, 
-               createdAt, lastLoginAt, mustChangePassword
+               createdAt, lastLoginAt, mustChangePassword, resetRequested
         FROM USERS
         ORDER BY createdAt DESC
     """)

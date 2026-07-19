@@ -441,6 +441,7 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50, reported_by_use
                 g.notes,
                 g.placeID,
                 g.reportedByUserID,
+                g.noticeLevel,
                 b.barangayID,
                 b.barangayName,
                 r.businessSize,

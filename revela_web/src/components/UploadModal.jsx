@@ -233,7 +233,7 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#64748b',
+      cancelButtoncolor: "var(--color-muted)",
       confirmButtonText: 'Yes, cancel it'
     });
 
@@ -484,7 +484,7 @@ const s = {
     alignItems: "center", justifyContent: "center", zIndex: 100,
   },
   card: {
-    background: "#fff", borderRadius: "var(--radius-xl)",
+    background: "var(--color-modal-bg)", borderRadius: "var(--radius-xl)",
     padding: 32, width: 480,
     boxShadow: "0 25px 50px rgba(0,0,0,0.15)",
     maxHeight: "90vh", overflowY: "auto",
@@ -541,7 +541,7 @@ const s = {
   },
   warningNote: {
     fontSize: 11, color: "var(--color-muted)", textAlign: "center",
-    padding: "8px 16px", background: "rgba(248,249,250,0.8)",
+    padding: "8px 16px", background: "var(--color-hover)",
     borderRadius: "var(--radius-sm)", width: "100%",
   },
 
@@ -562,7 +562,7 @@ const s = {
   // Summary result
   summaryResult: {
     display: "flex", flexDirection: "column", gap: 10, marginBottom: 16,
-    padding: 16, background: "rgba(248,249,250,0.8)", borderRadius: "var(--radius-lg)",
+    padding: 16, background: "var(--color-hover)", borderRadius: "var(--radius-lg)",
   },
   summaryRow: { display: "flex", justifyContent: "space-between", fontSize: 13 },
   errorList: {
@@ -586,7 +586,7 @@ const s = {
   dropZoneActive: { borderColor: "var(--color-primary)", background: "var(--color-primary-light)" },
   fileInput: { position: "absolute", inset: 0, opacity: 0, cursor: "pointer" },
   hint: {
-    background: "rgba(248,249,250,0.8)", border: "1px solid var(--color-border)",
+    background: "var(--color-hover)", border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-sm)", padding: "10px 14px",
     fontSize: 12, color: "var(--color-muted)", marginBottom: 16, lineHeight: 1.6,
   },

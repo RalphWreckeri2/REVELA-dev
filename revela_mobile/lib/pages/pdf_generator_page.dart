@@ -22,11 +22,21 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
   bool _isLoading = true;
 
   String get _documentTitle {
-    return 'NOTICE OF NON-COMPLIANCE';
+    final lvl = _selectedTask?.currentNoticeLevel ?? 0;
+    if (lvl == 1) return '2ND NOTICE: WARNING FOR CLOSURE';
+    if (lvl >= 2) return '3RD NOTICE: CLOSURE ORDER';
+    return '1ST NOTICE: WARNING FOR NON-COMPLIANCE';
   }
 
   String get _certificationText {
-    return "CERTIFICATION: According to the records of this office, your establishment has not yet secured the required BUSINESS AND MAYOR'S PERMIT. Consequently, you are hereby requested to coordinate with our office within five (5) days upon receipt of this notice. Thank you very much.";
+    final lvl = _selectedTask?.currentNoticeLevel ?? 0;
+    if (lvl == 1) {
+      return "CERTIFICATION: According to the records of this office, your establishment has continuously failed to secure the required BUSINESS AND MAYOR'S PERMIT despite our first warning. You are hereby given a FINAL WARNING. Failure to comply within three (3) days will result in the immediate closure of your business.";
+    } else if (lvl >= 2) {
+      return "CERTIFICATION: Be informed that your establishment is hereby ORDERED CLOSED due to your habitual failure to secure the required BUSINESS AND MAYOR'S PERMIT despite multiple warnings. You must cease all business operations immediately until full compliance is met.";
+    } else {
+      return "CERTIFICATION: According to the records of this office, your establishment has not yet secured the required BUSINESS AND MAYOR'S PERMIT. Consequently, you are hereby requested to coordinate with our office within five (5) days upon receipt of this notice. Thank you very much.";
+    }
   }
 
   String get _ownerPrefix {
@@ -37,6 +47,23 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
   void initState() {
     super.initState();
     _loadTasks();
+  }
+
+  void _showSearchModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return _SearchModal(
+          tasks: _allTasks,
+          onSelected: (task) {
+            setState(() => _selectedTask = task);
+          },
+        );
+      },
+    );
   }
 
   Future<void> _loadTasks() async {
@@ -318,27 +345,27 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             ),
                           ),
                           SizedBox(height: 12),
-                          DropdownButtonFormField<InspectionTask>(
-                            isExpanded: true,
-                            initialValue: _selectedTask,
-                            decoration: const InputDecoration(
-                              labelText: 'Select Establishment',
-                              border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.storefront),
-                            ),
-                            items: _allTasks.map((t) {
-                              return DropdownMenuItem(
-                                value: t,
-                                child: Flexible(
-                                  child: Text(
-                                    '${t.detectedName} (${t.barangayName})',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                          InkWell(
+                            onTap: () => _showSearchModal(context),
+                            borderRadius: BorderRadius.circular(4),
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Select Establishment',
+                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.search),
+                                suffixIcon: Icon(Icons.arrow_drop_down),
+                              ),
+                              child: Text(
+                                _selectedTask != null
+                                    ? '${_selectedTask!.detectedName} (${_selectedTask!.barangayName})'
+                                    : 'Tap to search...',
+                                style: TextStyle(
+                                  color: _selectedTask != null ? context.adaptiveTextDark : context.adaptiveTextMid,
+                                  fontSize: 16,
                                 ),
-                              );
-                            }).toList(),
-                            onChanged: (val) =>
-                                setState(() => _selectedTask = val),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -611,6 +638,73 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _SearchModal extends StatefulWidget {
+  final List<InspectionTask> tasks;
+  final ValueChanged<InspectionTask> onSelected;
+
+  const _SearchModal({required this.tasks, required this.onSelected});
+
+  @override
+  State<_SearchModal> createState() => _SearchModalState();
+}
+
+class _SearchModalState extends State<_SearchModal> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.tasks.where((t) {
+      final q = _query.toLowerCase();
+      return t.detectedName.toLowerCase().contains(q) ||
+             t.barangayName.toLowerCase().contains(q);
+    }).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.adaptiveSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      margin: const EdgeInsets.only(top: 60),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Search Establishment or Barangay...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (val) => setState(() => _query = val),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final t = filtered[index];
+                return ListTile(
+                  leading: const Icon(Icons.storefront),
+                  title: Text(t.detectedName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(t.barangayName),
+                  onTap: () {
+                    widget.onSelected(t);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

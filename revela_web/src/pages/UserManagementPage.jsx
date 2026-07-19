@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -6,20 +6,89 @@ import {
   createUserRequest,
   updateUserRequest,
   deleteUserRequest,
+  API_ORIGIN,
 } from "../services/api";
+import "../styles/UserManagement.css";
+
+// ── SVG Icons ─────────────────────────────────────────────────────────────────
+const Icons = {
+  users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  shield: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  clipboard: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>,
+  alertTriangle: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  edit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  key: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
+  trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  plus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  refresh: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
+  copy: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+};
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+const AVATAR_COLORS = ["#56ab2f","#3b82f6","#8b5cf6","#ec4899","#f59e0b","#06b6d4","#ef4444","#10b981"];
+function UserAvatar({ name, size = 38 }) {
+  const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+  const colorIdx = (name || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length;
+  return (
+    <div className="um-avatar" style={{ width: size, height: size, background: AVATAR_COLORS[colorIdx] }}>
+      {initials}
+    </div>
+  );
+}
 
 // ── Role badge ────────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
-  const styles = {
-    SUPER_ADMIN: { background: "#fef3c7", color: "#92400e" },
-    Admin:       { background: "#dcfce7", color: "#15803d" },
-    Inspector:   { background: "#ffc8b6", color: "#cb0a00" },
+  const cfg = {
+    SUPER_ADMIN: { cls: "um-badge--gold", label: "Super Admin" },
+    Admin:       { cls: "um-badge--green", label: "Admin" },
+    Inspector:   { cls: "um-badge--blue", label: "Inspector" },
   };
-  const s = styles[role] ?? { background: "#f1f5f9", color: "#64748b" };
+  const c = cfg[role] ?? { cls: "um-badge--muted", label: role };
+  return <span className={`um-badge ${c.cls}`}>{c.label}</span>;
+}
+
+// ── Status badge ──────────────────────────────────────────────────────────────
+function StatusBadge({ user }) {
+  if (user.isActive === 0 || user.isActive === false) {
+    return <span className="um-badge um-badge--danger">Deactivated</span>;
+  }
+  if (user.resetRequested) {
+    return <span className="um-badge um-badge--danger um-badge--pulse">🚨 Reset Requested</span>;
+  }
+  if (user.mustChangePassword) {
+    return <span className="um-badge um-badge--warning">Temp Password</span>;
+  }
+  return <span className="um-badge um-badge--success">Active</span>;
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ icon, value, label, variant = "green" }) {
   return (
-    <span style={{ ...s, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12 }}>
-      {role}
-    </span>
+    <div className={`um-stat-card frosted-glass um-stat--${variant}`}>
+      <div className={`um-stat-icon um-stat-icon--${variant}`}>{icon}</div>
+      <div className="um-stat-info">
+        <h3>{value}</h3>
+        <p>{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Copy to clipboard helper ──────────────────────────────────────────────────
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button type="button" className="um-copy-btn" onClick={handleCopy} title="Copy to clipboard">
+      <span className="um-copy-icon">{copied ? Icons.check : Icons.copy}</span>
+      {copied ? "Copied!" : "Copy"}
+    </button>
   );
 }
 
@@ -34,7 +103,7 @@ function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
   const generatePassword = async () => {
     setGenerating(true);
     try {
-      const res = await fetch("http://127.0.0.1:5000/api/users/generate-password", {
+      const res = await fetch(`${API_ORIGIN}/api/users/generate-password`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -65,64 +134,70 @@ function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
   };
 
   return (
-    <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        <h3 style={styles.modalTitle}>Create New User</h3>
+    <div className="um-backdrop" onClick={onClose}>
+      <div className="um-modal" onClick={e => e.stopPropagation()}>
+        <button className="um-modal-close" onClick={onClose}>✕</button>
+        <div className="um-modal-header">
+          <div className="um-modal-icon um-modal-icon--green">{Icons.plus}</div>
+          <div>
+            <h3 className="um-modal-title">Create New User</h3>
+            <p className="um-modal-subtitle">Add a new team member to the system</p>
+          </div>
+        </div>
 
-        {error && <p style={styles.errorBanner}>{error}</p>}
+        {error && <div className="um-alert um-alert--error">{error}</div>}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <form onSubmit={handleSubmit} className="um-form">
           {[
             { label: "Full Name",  key: "fullName", type: "text",  placeholder: "Juan Dela Cruz"                  },
             { label: "Email",      key: "email",    type: "email", placeholder: "juan@mataasnakahoy.gov.ph"        },
             { label: "Phone",      key: "phone",    type: "text",  placeholder: "+63 9XX XXX XXXX (optional)"     },
           ].map(f => (
-            <div key={f.key}>
-              <label style={styles.label}>{f.label}</label>
+            <div key={f.key} className="um-field">
+              <label className="um-label">{f.label}</label>
               <input
                 type={f.type}
                 required={f.key !== "phone"}
                 placeholder={f.placeholder}
                 value={formData[f.key]}
                 onChange={e => setFormData({ ...formData, [f.key]: e.target.value })}
-                style={styles.input}
+                className="um-input"
               />
             </div>
           ))}
 
-          <div>
-            <label style={styles.label}>Temporary Password</label>
-            <div style={{ display: "flex", gap: 8 }}>
+          <div className="um-field">
+            <label className="um-label">Temporary Password</label>
+            <div className="um-input-group">
               <input
                 type="text"
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                style={{ ...styles.input, flex: 1 }}
+                className="um-input"
+                style={{ flex: 1 }}
               />
-              <button type="button" className="ghost-btn" style={{ padding: "0 12px" }} onClick={generatePassword} disabled={generating}>
+              <button type="button" className="ghost-btn um-btn-sm" onClick={generatePassword} disabled={generating}>
+                {Icons.refresh}
                 {generating ? "..." : "Random"}
               </button>
             </div>
-            <span style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, display: "block" }}>
-              User will be required to change this on first login.
-            </span>
+            <span className="um-hint">User will be required to change this on first login.</span>
           </div>
 
-          <div>
-            <label style={styles.label}>Role</label>
+          <div className="um-field">
+            <label className="um-label">Role</label>
             <select
               value={formData.role}
               onChange={e => setFormData({ ...formData, role: e.target.value })}
-              style={styles.input}
+              className="um-input"
             >
               <option value="Admin">Admin</option>
               <option value="Inspector">Inspector</option>
             </select>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+          <div className="um-modal-actions">
             <button type="button" className="ghost-btn" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary-btn" disabled={loading}>
               {loading ? "Creating…" : "Create User"}
@@ -161,57 +236,61 @@ function EditUserModal({ user, onClose, onSuccess, token }) {
   };
 
   return (
-    <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        <h3 style={styles.modalTitle}>Edit User</h3>
+    <div className="um-backdrop" onClick={onClose}>
+      <div className="um-modal" onClick={e => e.stopPropagation()}>
+        <button className="um-modal-close" onClick={onClose}>✕</button>
+        <div className="um-modal-header">
+          <div className="um-modal-icon um-modal-icon--blue">{Icons.edit}</div>
+          <div>
+            <h3 className="um-modal-title">Edit User</h3>
+            <p className="um-modal-subtitle">Update details for {user.fullName}</p>
+          </div>
+        </div>
 
-        {error && <p style={styles.errorBanner}>{error}</p>}
+        {error && <div className="um-alert um-alert--error">{error}</div>}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <form onSubmit={handleSubmit} className="um-form">
           {[
             { label: "Full Name", key: "fullName", type: "text"  },
             { label: "Email",     key: "email",    type: "email" },
             { label: "Phone",     key: "phone",    type: "text"  },
           ].map(f => (
-            <div key={f.key}>
-              <label style={styles.label}>{f.label}</label>
+            <div key={f.key} className="um-field">
+              <label className="um-label">{f.label}</label>
               <input
                 type={f.type}
                 required={f.key !== "phone"}
                 value={formData[f.key]}
                 onChange={e => setFormData({ ...formData, [f.key]: e.target.value })}
-                style={styles.input}
+                className="um-input"
               />
             </div>
           ))}
 
           {user.userRole !== "SUPER_ADMIN" ? (
-            <div>
-              <label style={styles.label}>Role</label>
+            <div className="um-field">
+              <label className="um-label">Role</label>
               <select
                 value={formData.role}
                 onChange={e => setFormData({ ...formData, role: e.target.value })}
-                style={styles.input}
+                className="um-input"
               >
                 <option value="Admin">Admin</option>
               </select>
             </div>
           ) : (
-            <div>
-              <label style={styles.label}>Role</label>
+            <div className="um-field">
+              <label className="um-label">Role</label>
               <input
                 disabled
                 value="SUPER_ADMIN"
-                style={{ ...styles.input, background: "rgba(240,240,240,0.8)", color: "var(--color-muted)", cursor: "not-allowed" }}
+                className="um-input um-input--disabled"
               />
-              <span style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, display: "block" }}>
-                🔒 This role is permanently locked and cannot be changed.
-              </span>
+              <span className="um-hint">🔒 This role is permanently locked and cannot be changed.</span>
             </div>
           )}
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+          <div className="um-modal-actions">
             <button type="button" className="ghost-btn" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary-btn" disabled={loading}>
               {loading ? "Saving…" : "Save Changes"}
@@ -243,20 +322,27 @@ function DeleteUserModal({ targetUser, onClose, onSuccess, token }) {
   };
 
   return (
-    <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        <h3 style={styles.modalTitle}>Remove User</h3>
+    <div className="um-backdrop" onClick={onClose}>
+      <div className="um-modal" onClick={e => e.stopPropagation()}>
+        <button className="um-modal-close" onClick={onClose}>✕</button>
+        <div className="um-modal-header">
+          <div className="um-modal-icon um-modal-icon--red">{Icons.trash}</div>
+          <div>
+            <h3 className="um-modal-title">Remove User</h3>
+            <p className="um-modal-subtitle">This action cannot be undone</p>
+          </div>
+        </div>
 
-        {error && <p style={styles.errorBanner}>{error}</p>}
+        {error && <div className="um-alert um-alert--error">{error}</div>}
 
-        <p style={{ fontSize: 14, color: "var(--color-ink)", marginBottom: 24, lineHeight: 1.5 }}>
-          Are you sure you want to permanently remove <strong>{targetUser.fullName}</strong>? This action cannot be undone.
+        <p className="um-confirm-text">
+          Are you sure you want to permanently remove <strong>{targetUser.fullName}</strong>?
+          All their access will be revoked immediately.
         </p>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+        <div className="um-modal-actions">
           <button type="button" className="ghost-btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="primary-btn" style={{ background: "var(--color-danger)", borderColor: "var(--color-danger)" }} onClick={handleConfirm} disabled={loading}>
+          <button type="button" className="primary-btn um-btn--danger" onClick={handleConfirm} disabled={loading}>
             {loading ? "Removing…" : "Remove User"}
           </button>
         </div>
@@ -275,7 +361,7 @@ function ResetPasswordModal({ targetUser, onClose, onSuccess, token }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`http://127.0.0.1:5000/api/users/${targetUser.userID}/reset-password`, {
+      const res = await fetch(`${API_ORIGIN}/api/users/${targetUser.userID}/reset-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -303,29 +389,47 @@ function ResetPasswordModal({ targetUser, onClose, onSuccess, token }) {
   };
 
   return (
-    <div style={styles.backdrop} onClick={!newPass ? onClose : undefined}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <button style={styles.closeBtn} onClick={onClose}>✕</button>
-        <h3 style={styles.modalTitle}>Reset Password</h3>
-        {error && <p style={styles.errorBanner}>{error}</p>}
+    <div className="um-backdrop" onClick={!newPass ? onClose : undefined}>
+      <div className="um-modal" onClick={e => e.stopPropagation()}>
+        <button className="um-modal-close" onClick={onClose}>✕</button>
+        <div className="um-modal-header">
+          <div className="um-modal-icon um-modal-icon--gold">{Icons.key}</div>
+          <div>
+            <h3 className="um-modal-title">Reset Password</h3>
+            <p className="um-modal-subtitle">{targetUser.fullName}</p>
+          </div>
+        </div>
+        {error && <div className="um-alert um-alert--error">{error}</div>}
         {newPass ? (
           <div>
-            <p style={{ fontSize: 14, color: "var(--color-ink)", marginBottom: 16 }}>Password has been successfully reset for <strong>{targetUser.fullName}</strong>.</p>
-            <div style={{ background: "rgba(248,249,250,0.8)", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--color-border)", marginBottom: 20 }}>
-              <label style={styles.label}>New Temporary Password</label>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--color-primary)", letterSpacing: "1px", userSelect: "all" }}>{newPass}</div>
-              <p style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 6, margin: 0 }}>Please copy and securely send this to the user. They will be forced to change it on their next login.</p>
+            <div className="um-alert um-alert--success">
+              Password has been successfully reset.
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div className="um-password-result">
+              <label className="um-label">New Temporary Password</label>
+              <div className="um-password-display">
+                <span className="um-password-value">{newPass}</span>
+                <CopyButton text={newPass} />
+              </div>
+              <p className="um-hint" style={{ marginTop: 8 }}>
+                Please securely send this to the user. They will be forced to change it on their next login.
+              </p>
+            </div>
+            <div className="um-modal-actions">
               <button type="button" className="primary-btn" onClick={onClose}>Done</button>
             </div>
           </div>
         ) : (
           <div>
-            <p style={{ fontSize: 14, color: "var(--color-ink)", marginBottom: 24, lineHeight: 1.5 }}>Are you sure you want to reset the password for <strong>{targetUser.fullName}</strong>? This will invalidate their current password immediately.</p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <p className="um-confirm-text">
+              Are you sure you want to reset the password for <strong>{targetUser.fullName}</strong>?
+              This will invalidate their current password immediately.
+            </p>
+            <div className="um-modal-actions">
               <button type="button" className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
-              <button type="button" className="primary-btn" style={{ background: "var(--color-primary)", borderColor: "var(--color-primary)" }} onClick={handleConfirm} disabled={loading}>{loading ? "Resetting…" : "Reset Password"}</button>
+              <button type="button" className="primary-btn" onClick={handleConfirm} disabled={loading}>
+                {loading ? "Resetting…" : "Reset Password"}
+              </button>
             </div>
           </div>
         )}
@@ -345,6 +449,8 @@ export default function UserManagementPage() {
   const [userToDelete,   setUserToDelete]   = useState(null);
   const [userToReset,    setUserToReset]    = useState(null);
   const [successMsg,     setSuccessMsg]     = useState("");
+  const [search,         setSearch]         = useState("");
+  const [roleFilter,     setRoleFilter]     = useState("all");
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -359,7 +465,34 @@ export default function UserManagementPage() {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, [token]);
+  useEffect(() => { 
+    fetchUsers(); 
+    const handleReset = () => {
+      fetchUsers();
+    };
+    window.addEventListener("revela:password-reset", handleReset);
+    return () => window.removeEventListener("revela:password-reset", handleReset);
+  }, [token]);
+
+  // Derived stats
+  const stats = useMemo(() => {
+    const total = users.length;
+    const active = users.filter(u => (u.isActive !== 0 && u.isActive !== false) && !u.mustChangePassword).length;
+    const inspectors = users.filter(u => u.userRole === "Inspector").length;
+    const admins = users.filter(u => u.userRole === "Admin" || u.userRole === "SUPER_ADMIN" || u.userRole === "System Administrator").length;
+    const pendingResets = users.filter(u => u.resetRequested).length;
+    return { total, active, inspectors, admins, pendingResets };
+  }, [users]);
+
+  // Filtered users
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => {
+      const q = search.toLowerCase();
+      const matchesSearch = !q || u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.phone || "").includes(q);
+      const matchesRole = roleFilter === "all" || u.userRole === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, search, roleFilter]);
 
   // ── Access control ────────────────────────────────────────────────────────
   if (user?.role !== "SUPER_ADMIN") {
@@ -381,114 +514,172 @@ export default function UserManagementPage() {
 
   return (
     <DashboardLayout user={{ initials: user?.fullName?.charAt(0) ?? "?", name: user?.fullName ?? "" }}>
+      {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">User Management</h1>
-          <p className="page-subtitle">Manage system access and administrator accounts.</p>
+          <p className="page-subtitle">Manage system access, roles, and administrator accounts.</p>
         </div>
         <button className="primary-btn" type="button" onClick={() => setShowCreate(true)}>
-          + Create User
+          {Icons.plus} Create User
         </button>
       </div>
 
-      {error && <p style={styles.errorBanner}>{error}</p>}
-      {successMsg && <p style={styles.successBanner}>{successMsg}</p>}
+      {/* Banners */}
+      {error && <div className="um-alert um-alert--error">{error}</div>}
+      {successMsg && (
+        <div className="um-alert um-alert--success">
+          {successMsg}
+          <button className="um-alert-dismiss" onClick={() => setSuccessMsg("")}>✕</button>
+        </div>
+      )}
 
-      <div className="saas-card frosted-glass" style={{ overflowX: "auto", padding: 0 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", color: "var(--color-muted)", fontSize: 12, textTransform: "uppercase", background: "rgba(248,249,250,0.9)", borderBottom: "1px solid var(--color-border)" }}>
-              {["Name", "Role", "Email", "Phone", "Last Login", "Status", "Actions"].map(h => (
-                <th key={h} style={{ padding: "14px 20px", whiteSpace: "nowrap" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} style={{ padding: "48px 20px", textAlign: "center", color: "var(--color-muted)" }}>
-                  Loading users…
-                </td>
-              </tr>
-            ) : users.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: "48px 20px", textAlign: "center", color: "var(--color-muted)", fontSize: 14 }}>
-                  No users found. Click "Create User" to add an administrator.
-                </td>
-              </tr>
-            ) : users.map((u, i) => (
-              <tr key={u.userID} style={{ borderBottom: "1px solid rgba(226,232,240,0.4)", background: i % 2 === 0 ? "rgba(255,255,255,0.5)" : "transparent" }}>
-                <td style={{ padding: "14px 20px", fontWeight: 600, color: "var(--color-ink)" }}>
-                  {u.fullName}
-                  {u.userID === user.userID && (
-                    <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: "var(--color-primary)", background: "var(--color-primary-light)", padding: "2px 6px", borderRadius: 8 }}>
-                      You
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: "14px 20px" }}><RoleBadge role={u.userRole} /></td>
-                <td style={{ padding: "14px 20px", color: "var(--color-muted)", fontSize: 13 }}>{u.email}</td>
-                <td style={{ padding: "14px 20px", color: "var(--color-muted)", fontSize: 13 }}>{u.phone ?? "—"}</td>
-                <td style={{ padding: "14px 20px", color: "var(--color-muted)", fontSize: 12 }}>
-                  {u.lastLoginAt ? u.lastLoginAt.slice(0, 10) : "Never"}
-                </td>
-                <td style={{ padding: "14px 20px" }}>
-                  {u.isActive === 0 || u.isActive === false ? (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#b91c1c", background: "#fee2e2", padding: "3px 8px", borderRadius: 10 }}>
-                      Deactivated
-                    </span>
-                  ) : u.mustChangePassword ? (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e", background: "#fef3c7", padding: "3px 8px", borderRadius: 10 }}>
-                      Temp Password
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#15803d", background: "#dcfce7", padding: "3px 8px", borderRadius: 10 }}>
-                      Active
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: "14px 20px" }}>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      className="ghost-btn"
-                      type="button"
-                      style={{ padding: "6px 12px", fontSize: 12 }}
-                      onClick={() => setEditingUser(u)}
-                    >
-                      Edit
-                    </button>
-                    {u.userID !== user.userID && u.isActive !== 0 && u.isActive !== false && (
-                      <button
-                        className="ghost-btn"
-                        type="button"
-                        style={{ padding: "6px 12px", fontSize: 12, color: "var(--color-primary)", borderColor: "var(--color-primary-light)" }}
-                        onClick={() => setUserToReset(u)}
-                      >
-                        Reset Pass
-                      </button>
-                    )}
-                    {u.userID !== user.userID && u.isActive !== 0 && u.isActive !== false && (
-                      <button
-                        className="ghost-btn"
-                        type="button"
-                        style={{ padding: "6px 12px", fontSize: 12, color: "var(--color-danger)", borderColor: "var(--color-danger-light)" }}
-                        onClick={() => setUserToDelete(u)}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+      {stats.pendingResets > 0 && (
+        <div className="um-alert um-alert--error" style={{ background: "var(--color-danger)", color: "#fff", border: "none", boxShadow: "0 10px 25px rgba(239, 68, 68, 0.4)", animation: "um-pulse 2s infinite" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ background: "rgba(255,255,255,0.2)", padding: 6, borderRadius: "50%", display: "flex" }}>{Icons.alertTriangle}</span>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <strong style={{ fontSize: 16 }}>Action Required: Pending Password Resets</strong>
+              <span style={{ fontSize: 13, opacity: 0.9 }}>{stats.pendingResets} user{stats.pendingResets > 1 ? 's have' : ' has'} requested a password reset. Please review the list below.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stat Cards */}
+      <div className="um-stats-grid">
+        <StatCard icon={Icons.users} value={stats.total} label="Total Users" variant="green" />
+        <StatCard icon={Icons.shield} value={stats.admins} label="Administrators" variant="gold" />
+        <StatCard icon={Icons.clipboard} value={stats.inspectors} label="Inspectors" variant="blue" />
+        {stats.pendingResets > 0 && (
+          <StatCard icon={Icons.alertTriangle} value={stats.pendingResets} label="Pending Resets" variant="red" />
+        )}
+      </div>
+
+      {/* Table Card */}
+      <div className="saas-card frosted-glass um-table-card">
+        {/* Toolbar */}
+        <div className="um-toolbar">
+          <div className="um-search">
+            {Icons.search}
+            <input
+              type="text"
+              placeholder="Search by name, email, or phone…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="um-filters">
+            {["all", "Admin", "Inspector", "SUPER_ADMIN"].map(r => (
+              <button
+                key={r}
+                className={`um-filter-btn ${roleFilter === r ? "um-filter-btn--active" : ""}`}
+                onClick={() => setRoleFilter(r)}
+              >
+                {r === "all" ? "All Roles" : r === "SUPER_ADMIN" ? "Super Admin" : r}
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="um-table-wrapper">
+          <table className="um-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Contact</th>
+                <th>Last Login</th>
+                <th>Status</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="um-table-empty">
+                    <div className="um-spinner" />
+                    <span>Loading users…</span>
+                  </td>
+                </tr>
+              ) : filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="um-table-empty">
+                    <div style={{ fontSize: 36, marginBottom: 8 }}>👤</div>
+                    <span>{search || roleFilter !== "all" ? "No users match your filters." : 'No users found. Click "Create User" to add one.'}</span>
+                  </td>
+                </tr>
+              ) : filteredUsers.map((u) => (
+                <tr key={u.userID} className="um-row">
+                  <td>
+                    <div className="um-user-cell">
+                      <UserAvatar name={u.fullName} />
+                      <div>
+                        <div className="um-user-name">
+                          {u.fullName}
+                          {u.userID === user.userID && (
+                            <span className="um-you-badge">You</span>
+                          )}
+                        </div>
+                        <div className="um-user-email">{u.email}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td><RoleBadge role={u.userRole} /></td>
+                  <td className="um-cell-muted">{u.phone || "—"}</td>
+                  <td className="um-cell-muted">
+                    {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Never"}
+                  </td>
+                  <td><StatusBadge user={u} /></td>
+                  <td>
+                    <div className="um-actions">
+                      <button
+                        className="um-action-btn"
+                        title="Edit user"
+                        onClick={() => setEditingUser(u)}
+                      >
+                        {Icons.edit}
+                      </button>
+                      {u.userID !== user.userID && u.isActive !== 0 && u.isActive !== false && (
+                        <>
+                          <button
+                            className="um-action-btn um-action-btn--primary"
+                            title="Reset password"
+                            onClick={() => setUserToReset(u)}
+                          >
+                            {Icons.key}
+                          </button>
+                          <button
+                            className="um-action-btn um-action-btn--danger"
+                            title="Remove user"
+                            onClick={() => setUserToDelete(u)}
+                          >
+                            {Icons.trash}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Table footer */}
+        {!loading && filteredUsers.length > 0 && (
+          <div className="um-table-footer">
+            Showing {filteredUsers.length} of {users.length} user{users.length !== 1 ? "s" : ""}
+          </div>
+        )}
       </div>
 
       <footer className="saas-footer frosted-glass">
         <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
       </footer>
 
+      {/* Modals */}
       {showCreate && (
         <CreateUserModal
           token={token}
@@ -534,15 +725,3 @@ export default function UserManagementPage() {
     </DashboardLayout>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-const styles = {
-  backdrop:    { position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
-  modal:       { background: "#fff", borderRadius: 20, padding: 32, width: "min(100%, 440px)", position: "relative", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" },
-  modalTitle:  { fontSize: 20, fontWeight: 700, color: "var(--color-ink)", marginBottom: 20 },
-  closeBtn:    { position: "absolute", top: 16, right: 16, background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", fontSize: 18 },
-  label:       { display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 },
-  input:       { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.8)", fontSize: 14, fontFamily: "var(--font-base)", boxSizing: "border-box" },
-  errorBanner: { background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 16 },
-  successBanner: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#15803d", marginBottom: 16 },
-};

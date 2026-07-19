@@ -510,7 +510,7 @@ export default function ExportReportsPage() {
             {/* ── BARANGAY HEATMAP ── */}
             {printReport.type === 'barangay-heatmap' && (
               <div>
-                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Barangay Heatmap & Compliance Breakdown</h3>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Barangay Heatmap & Compliance Breakdown</h3>
                 <table className="print-table">
                   <thead>
                     <tr>
@@ -539,7 +539,7 @@ export default function ExportReportsPage() {
             {/* ── SECTOR COMPLIANCE ── */}
             {printReport.type === 'sector-compliance' && (
               <div>
-                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Sectoral & Industrial Compliance Audit</h3>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Sectoral & Industrial Compliance Audit</h3>
                 <table className="print-table">
                   <thead>
                     <tr>
@@ -566,7 +566,7 @@ export default function ExportReportsPage() {
             {/* ── INSPECTOR PERFORMANCE ── */}
             {printReport.type === 'inspector-performance' && (
               <div>
-                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Inspector Performance & Accomplishment Log</h3>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Inspector Performance & Accomplishment Log</h3>
                 <table className="print-table">
                   <thead>
                     <tr>
@@ -591,7 +591,7 @@ export default function ExportReportsPage() {
             )}
 
             {/* Metadata Section */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px", marginBottom: "20px", fontSize: "11px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px", background: "var(--color-card-alt)", border: "1px solid var(--color-border)", borderRadius: "8px", padding: "14px", marginBottom: "20px", fontSize: "11px" }}>
               <div><span style={{ fontWeight: "bold", color: "#6b7280", marginRight: "6px" }}>DATE GENERATED:</span><span style={{ color: "#111827", fontWeight: "500" }}>{printReport.date}</span></div>
               <div><span style={{ fontWeight: "bold", color: "#6b7280", marginRight: "6px" }}>OFFICE:</span><span style={{ color: "#111827", fontWeight: "500" }}>{printReport.office}</span></div>
               <div><span style={{ fontWeight: "bold", color: "#6b7280", marginRight: "6px" }}>PREPARED BY:</span><span style={{ color: "#111827", fontWeight: "500" }}>{printReport.preparedBy}</span></div>
@@ -602,7 +602,7 @@ export default function ExportReportsPage() {
             {printReport.type === 'compliance' && (
               <div>
                 <div>
-                  <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Key Performance Indicators</h3>
+                  <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Key Performance Indicators</h3>
                   <table className="print-table">
                     <thead>
                       <tr>
@@ -623,7 +623,7 @@ export default function ExportReportsPage() {
 
                 {printReport.data.sectors?.length > 0 && (
                   <div className="page-break-avoid">
-                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Business Sector Distribution (Top 10 LOB)</h3>
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Business Sector Distribution (Top 10 LOB)</h3>
                     <table className="print-table">
                       <thead>
                         <tr>
@@ -645,7 +645,7 @@ export default function ExportReportsPage() {
 
                 {printReport.data.sizes?.length > 0 && (
                   <div className="page-break-avoid">
-                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Business Size Classification Distribution</h3>
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Business Size Classification Distribution</h3>
                     <table className="print-table">
                       <thead>
                         <tr>
@@ -667,7 +667,7 @@ export default function ExportReportsPage() {
 
                 {printReport.data.audits?.length > 0 && (
                   <div className="page-break-avoid">
-                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Field Inspections Audit Results Breakdown</h3>
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Field Inspections Audit Results Breakdown</h3>
                     <table className="print-table">
                       <thead>
                         <tr>
@@ -682,7 +682,7 @@ export default function ExportReportsPage() {
                             <td style={{ fontWeight: "600", color: "#111827" }}>{a.count}</td>
                           </tr>
                         ))}
-                        <tr style={{ fontWeight: "bold", background: "#f1f5f9" }}>
+                        <tr style={{ fontWeight: "bold", background: "var(--color-surface)" }}>
                           <td>TOTAL AUDIT INSPECTIONS COMPLETED</td>
                           <td>{printReport.data.totalInspections}</td>
                         </tr>
@@ -697,9 +697,9 @@ export default function ExportReportsPage() {
             {printReport.type === 'unregistered' && (
               <div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px" }}>
-                    <div style={{ fontSize: "9px", fontWeight: "bold", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Flagged Locations</div>
-                    <div style={{ fontSize: "13px", fontWeight: "bold", color: "#1e293b", marginTop: "4px" }}>{printReport.data.summary.total} Suspected Entities</div>
+                  <div style={{ background: "var(--color-card-alt)", border: "1px solid var(--color-border)", borderRadius: "8px", padding: "10px" }}>
+                    <div style={{ fontSize: "9px", fontWeight: "bold", color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Flagged Locations</div>
+                    <div style={{ fontSize: "13px", fontWeight: "bold", color: "var(--color-ink)", marginTop: "4px" }}>{printReport.data.summary.total} Suspected Entities</div>
                   </div>
                   <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px" }}>
                     <div style={{ fontSize: "9px", fontWeight: "bold", color: "#dc2626", textTransform: "uppercase", letterSpacing: "0.5px" }}>Unregistered Commercial (Red)</div>
@@ -749,7 +749,7 @@ export default function ExportReportsPage() {
             {/* ── DISPATCH REPORT TABLES ── */}
             {printReport.type === 'dispatch' && (
               <div>
-                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Barangay Priority Rankings</h3>
+                <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Barangay Priority Rankings</h3>
                 <table className="print-table">
                   <thead>
                     <tr>
@@ -785,7 +785,7 @@ export default function ExportReportsPage() {
 
                 {printReport.data.recommendations?.length > 0 && (
                   <div className="page-break-avoid">
-                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "#1e293b", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Actionable Dispatch Recommendations &amp; Allocations</h3>
+                    <h3 style={{ fontSize: "11px", fontWeight: "bold", color: "var(--color-ink)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Actionable Dispatch Recommendations &amp; Allocations</h3>
                     <table className="print-table">
                       <thead>
                         <tr>

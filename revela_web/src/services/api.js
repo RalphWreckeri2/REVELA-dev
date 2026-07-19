@@ -127,6 +127,19 @@ export async function markNotificationsReadRequest(token, ids = null) {
   return await handleResponse(res);
 }
 
+export async function deleteNotificationsRequest(token, ids = null) {
+  const body = ids && ids.length ? { ids } : {};
+  const res = await fetch(`${BASE_URL}/notifications`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  return await handleResponse(res);
+}
+
 export async function updateMePreferencesRequest(payload, token) {
   const res = await fetch(`${BASE_URL}/auth/me/preferences`, {
     method: "PATCH",

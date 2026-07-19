@@ -1,10 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import '../pages/login_page.dart';
 import 'api_config.dart';
 
-enum LoginResult { success, mustChangePassword, twoFactorRequired, notInspector, failed, networkError }
+enum LoginResult { success, mustChangePassword, twoFactorRequired, notInspector, failed, networkError, canceled }
 
 class AuthService {
   late final Dio _dio;
@@ -14,6 +15,7 @@ class AuthService {
   static String get apiBase => ApiConfig.apiBase;
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final LocalAuthentication _localAuth = LocalAuthentication();
 
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
@@ -46,7 +48,16 @@ class AuthService {
               return handler.next(options);
             },
         onError: (DioException e, ErrorInterceptorHandler handler) async {
-          if (e.response?.statusCode == 401) {
+          // Only force-logout on 401 for authenticated endpoints.
+          // Auth endpoints (login, logout, reset) handle 401 themselves.
+          final path = e.requestOptions.path;
+          final isAuthEndpoint = path.contains('/auth/login') ||
+              path.contains('/auth/logout') ||
+              path.contains('/auth/request-manual-reset') ||
+              path.contains('/auth/request-otp') ||
+              path.contains('/auth/reset-password');
+
+          if (e.response?.statusCode == 401 && !isAuthEndpoint) {
             await logout();
             if (navigatorKey.currentState != null) {
               navigatorKey.currentState!.pushAndRemoveUntil(
@@ -98,6 +109,10 @@ class AuthService {
           final String token = response.data['access_token'];
           await _storage.write(key: 'jwt_token', value: token);
 
+          // Save credentials securely for biometric re-login
+          await _storage.write(key: 'saved_email', value: email);
+          await _storage.write(key: 'saved_password', value: password);
+
           bool mustChange = false;
           if (user != null && user is Map) {
             await _storage.write(
@@ -136,7 +151,23 @@ class AuthService {
       }
       
       debugPrint('Login Error: ${e.response?.data ?? e.message}');
+      debugPrint('Login Error: ${e.response?.data ?? e.message}');
       return LoginResult.failed;
+    }
+  }
+
+  Future<bool> requestManualPasswordReset(String email) async {
+    try {
+      final response = await _dio.post(
+        '/api/auth/request-manual-reset',
+        data: {'email': email},
+      );
+      // Clear saved password so biometrics is disabled until they login again with new password
+      await _storage.delete(key: 'saved_password');
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Reset Request Error: $e');
+      return false; // Still return false on catastrophic error, but API returns 200 even if not found
     }
   }
 
@@ -191,6 +222,13 @@ class AuthService {
       );
       if (response.statusCode == 200) {
         await _storage.write(key: 'must_change_password', value: 'false');
+        
+        // Update the saved password so biometrics doesn't break
+        final email = await _storage.read(key: 'saved_email');
+        if (email != null) {
+          await _storage.write(key: 'saved_password', value: newPassword);
+        }
+
         return {'success': true, 'message': response.data['message'] ?? 'Password changed successfully'};
       }
       return {'success': false, 'error': response.data['error'] ?? 'Failed to change password'};
@@ -210,6 +248,62 @@ class AuthService {
     } catch (e) {
       debugPrint('Error getting profile: $e');
       return null;
+    }
+  }
+
+
+  Future<bool> canUseBiometrics() async {
+    try {
+      return await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> authenticateForSetup() async {
+    try {
+      final canCheck = await canUseBiometrics();
+      if (!canCheck) return false;
+      
+      return await _localAuth.authenticate(
+        localizedReason: 'Please authenticate to enable biometric login',
+        persistAcrossBackgrounding: true,
+        biometricOnly: false,
+      );
+    } catch (e) {
+      debugPrint('Setup Biometric error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> hasSavedCredentials() async {
+    final email = await _storage.read(key: 'saved_email');
+    final password = await _storage.read(key: 'saved_password');
+    return email != null && email.isNotEmpty && password != null && password.isNotEmpty;
+  }
+
+  Future<LoginResult> biometricLogin() async {
+    try {
+      final email = await _storage.read(key: 'saved_email');
+      final password = await _storage.read(key: 'saved_password');
+      if (email == null || password == null) return LoginResult.failed;
+
+      final canCheck = await canUseBiometrics();
+      if (!canCheck) return LoginResult.failed;
+
+      final didAuthenticate = await _localAuth.authenticate(
+        localizedReason: 'Please authenticate to log in',
+        persistAcrossBackgrounding: true,
+        biometricOnly: false,
+      );
+
+      if (didAuthenticate) {
+        return await loginWithRole(email, password);
+      }
+      return LoginResult.canceled;
+    } catch (e) {
+      debugPrint('Biometric error: $e');
+      return LoginResult.canceled;
     }
   }
 
@@ -266,7 +360,15 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    try {
+      await _dio.post('/api/auth/logout');
+    } catch (_) {}
+
+    final email = await _storage.read(key: 'saved_email');
+    final password = await _storage.read(key: 'saved_password');
     await _storage.deleteAll();
+    if (email != null) await _storage.write(key: 'saved_email', value: email);
+    if (password != null) await _storage.write(key: 'saved_password', value: password);
 
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();

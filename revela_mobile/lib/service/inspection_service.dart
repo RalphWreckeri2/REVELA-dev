@@ -23,6 +23,7 @@ class InspectionTask {
   /// Field result after inspector submits (null while still open).
   final String? inspectionResult;
   final String? deadline;
+  final int currentNoticeLevel;
 
   InspectionTask({
     required this.reportID,
@@ -39,6 +40,7 @@ class InspectionTask {
     required this.irTimestamp,
     this.inspectionResult,
     this.deadline,
+    this.currentNoticeLevel = 0,
   });
 
   factory InspectionTask.fromJson(Map<String, dynamic> json) {
@@ -62,6 +64,7 @@ class InspectionTask {
       irTimestamp: json['irTimestamp']?.toString() ?? '',
       inspectionResult: json['inspectionResult']?.toString(),
       deadline: json['deadline']?.toString(),
+      currentNoticeLevel: _asInt(json['currentNoticeLevel']),
     );
   }
 
@@ -138,6 +141,7 @@ class InspectionService {
   Future<void> submitInspection({
     required InspectionTask task,
     required String inspectionResult,
+    int noticeLevel = 0,
     String? notes,
     double? verifiedLat,
     double? verifiedLng,
@@ -162,6 +166,7 @@ class InspectionService {
     await _auth.dio.post('/api/inspections/submit', data: {
       'logID': task.logID,
       'inspectionResult': inspectionResult,
+      'noticeLevel': noticeLevel,
       'verifiedLat': verifiedLat,
       'verifiedLng': verifiedLng,
       'notes': notes,

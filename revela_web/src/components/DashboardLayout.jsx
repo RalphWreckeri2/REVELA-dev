@@ -21,6 +21,7 @@ import {
   getNotificationsRequest,
   getNotificationsUnreadCountRequest,
   markNotificationsReadRequest,
+  deleteNotificationsRequest,
   getNotificationStreamUrl,
 } from "../services/api";
 import "../styles/global.css";
@@ -272,6 +273,10 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
           window.dispatchEvent(
             new CustomEvent("revela:detection-progress", { detail: data }),
           );
+        } else if (data.type === "password_reset_requested") {
+          window.dispatchEvent(
+            new CustomEvent("revela:password-reset", { detail: data }),
+          );
         }
       };
       es.onerror = () => {
@@ -409,7 +414,7 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
                 {unreadCount} New Alert{unreadCount > 1 ? 's' : ''}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff", display: "inline-block", animation: "snippetPulse 2s infinite", flexShrink: 0 }}></span>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-modal-bg)", display: "inline-block", animation: "snippetPulse 2s infinite", flexShrink: 0 }}></span>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {notifications[0].title}
                 </span>
@@ -419,8 +424,51 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
 
           {showNotifications && (
             <div className="notification-popover" ref={notificationPopoverRef}>
-              <div className="notification-popover__header">Notifications</div>
-              <div className="notification-list" style={{ maxHeight: "360px", overflowY: "auto", overscrollBehavior: "contain" }}>
+              <div className="notification-popover__header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Notifications</span>
+                <div style={{ display: "flex", gap: 4, marginTop: -2 }}>
+                  <button 
+                    title="Mark all as read"
+                    style={{ background: "transparent", border: "none", color: "var(--color-primary)", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", transition: "background 0.2s" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(52, 211, 153, 0.15)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setUnreadCount(0);
+                      if (token) await markNotificationsReadRequest(token);
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 6 7 17l-5-5"></path>
+                      <path d="m22 10-7.5 7.5L13 16"></path>
+                    </svg>
+                  </button>
+                    <button 
+                      title="Clear all"
+                      style={{ background: "transparent", border: "none", color: "var(--color-muted)", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", transition: "background 0.2s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--color-hover)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setNotifications([]);
+                        if (token) {
+                          try {
+                            await deleteNotificationsRequest(token);
+                          } catch (err) {
+                            console.error("Failed to delete notifications", err);
+                          }
+                        }
+                      }}
+                    >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18"></path>
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="notification-list" style={{ maxHeight: "560px", overflowY: "auto", overscrollBehavior: "contain" }}>
                 {!isAdmin && (
                   <div className="notification-item">
                     <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>
@@ -429,8 +477,9 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
                   </div>
                 )}
                 {isAdmin && notifications.length === 0 && (
-                  <div className="notification-item">
-                    <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>
+                  <div style={{ padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 16 }}>
+                    <img src="/searching.png" alt="No notifications" style={{ height: 100, objectFit: "contain", opacity: 0.9 }} />
+                    <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13, maxWidth: 220 }}>
                       No notifications yet. You will be alerted when an inspector submits evidence for review.
                     </p>
                   </div>
@@ -454,9 +503,17 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
                       }}
                       style={{ cursor: note.link ? "pointer" : "default" }}
                     >
-                      <strong>{note.title}</strong>
-                      <p>{note.body}</p>
-                      <span>{formatTimeAgo(note.createdAt)}</span>
+                      <div className="notification-item-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                      </div>
+                      <div className="notification-item-content">
+                        <strong>{note.title}</strong>
+                        <p>{note.body}</p>
+                        <span>{formatTimeAgo(note.createdAt)}</span>
+                      </div>
                     </div>
                   ))}
               </div>
@@ -498,7 +555,7 @@ export default function DashboardLayout({ children, onLogout }) {
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
-      cancelButtonColor: '#64748b',
+      cancelButtoncolor: "var(--color-muted)",
       confirmButtonText: 'Yes, log out'
     }).then((result) => {
       if (result.isConfirmed) {

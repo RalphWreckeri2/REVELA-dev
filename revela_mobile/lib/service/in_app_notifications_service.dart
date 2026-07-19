@@ -65,4 +65,12 @@ class InAppNotificationsService {
   Future<void> markRead(List<int> ids) async {
     await _dio.patch('/api/notifications/read', data: {'ids': ids});
   }
+
+  Future<void> deleteNotification(int id) async {
+    await _dio.delete('/api/notifications', data: {'ids': [id]});
+  }
+
+  Future<void> deleteAllNotifications() async {
+    await _dio.delete('/api/notifications', data: {});
+  }
 }

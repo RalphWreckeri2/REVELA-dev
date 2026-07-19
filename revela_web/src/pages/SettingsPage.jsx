@@ -5,7 +5,7 @@ import { AuthContext } from "../context/AuthContext";
 import { changePasswordRequest, setup2faRequest, verify2faSetupRequest } from "../services/authService";
 import Swal from "sweetalert2";
 import { QRCodeSVG } from "qrcode.react";
-import { getWlcConfigRequest, updateWlcConfigRequest, updateMePreferencesRequest } from "../services/api";
+import { getWlcConfigRequest, updateWlcConfigRequest, updateMePreferencesRequest, API_ORIGIN } from "../services/api";
 import { useLoadScript, GoogleMap, Marker } from "@react-google-maps/api";
 
 const LIBRARIES = ["places"];
@@ -57,7 +57,7 @@ function ChangePasswordModal({ onClose, token }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div className="saas-card frosted-glass" style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "#fff", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
+      <div className="saas-card frosted-glass" style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", fontSize: 20 }}>✕</button>
         <h3 style={{ margin: "0 0 20px 0", fontSize: 18, color: "var(--color-ink)" }}>Change Password</h3>
 
@@ -67,7 +67,7 @@ function ChangePasswordModal({ onClose, token }) {
           <div>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 }}>Current Password</label>
             <div style={{ position: "relative" }}>
-              <input type={showOldPassword ? "text" : "password"} value={oldPassword} onChange={e => setOldPassword(e.target.value)} required style={{ width: "100%", padding: "10px 36px 10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.8)", fontSize: 14, boxSizing: "border-box" }} />
+              <input type={showOldPassword ? "text" : "password"} value={oldPassword} onChange={e => setOldPassword(e.target.value)} required style={{ width: "100%", padding: "10px 36px 10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "var(--color-input-bg)", fontSize: 14, boxSizing: "border-box" }} />
               <button type="button" onClick={() => setShowOldPassword(!showOldPassword)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--color-muted)", display: "flex", padding: 0 }}>
                 {showOldPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
@@ -76,7 +76,7 @@ function ChangePasswordModal({ onClose, token }) {
           <div>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 }}>New Password</label>
             <div style={{ position: "relative" }}>
-              <input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={8} style={{ width: "100%", padding: "10px 36px 10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.8)", fontSize: 14, boxSizing: "border-box" }} />
+              <input type={showNewPassword ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={8} style={{ width: "100%", padding: "10px 36px 10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "var(--color-input-bg)", fontSize: 14, boxSizing: "border-box" }} />
               <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--color-muted)", display: "flex", padding: 0 }}>
                 {showNewPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
@@ -140,7 +140,7 @@ function Setup2FAModal({ onClose, token, onSuccess }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div className="saas-card frosted-glass" style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "#fff", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
+      <div className="saas-card frosted-glass" style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", fontSize: 20 }}>✕</button>
         <h3 style={{ margin: "0 0 20px 0", fontSize: 18, color: "var(--color-ink)" }}>Set up Two-Factor Auth</h3>
         {error && <p style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 16 }}>{error}</p>}
@@ -150,13 +150,13 @@ function Setup2FAModal({ onClose, token, onSuccess }) {
         ) : (
           <form onSubmit={handleVerify} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>1. Scan this QR code with Google Authenticator or Authy:</p>
-            <div style={{ display: "flex", justifyContent: "center", background: "#fff", padding: "16px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
+            <div style={{ display: "flex", justifyContent: "center", background: "var(--color-modal-bg)", padding: "16px", borderRadius: "8px", border: "1px dashed var(--color-border)" }}>
               {otpUri && <QRCodeSVG value={otpUri} size={150} level="M" />}
             </div>
             <p style={{ fontSize: 12, color: "var(--color-muted)", textAlign: "center", margin: 0 }}>Or enter this setup key manually:</p>
-            <div style={{ background: "rgba(248,249,250,0.8)", padding: "8px 12px", borderRadius: "8px", textAlign: "center", fontWeight: "700", letterSpacing: "2px", color: "var(--color-primary)", wordBreak: "break-word", fontFamily: "monospace", fontSize: 14 }}>{secret.match(/.{1,4}/g)?.join(' ') || secret}</div>
+            <div style={{ background: "var(--color-hover)", padding: "8px 12px", borderRadius: "8px", textAlign: "center", fontWeight: "700", letterSpacing: "2px", color: "var(--color-primary)", wordBreak: "break-word", fontFamily: "monospace", fontSize: 14 }}>{secret.match(/.{1,4}/g)?.join(' ') || secret}</div>
             <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>2. Enter the 6-digit code generated by the app to verify.</p>
-            <input type="text" placeholder="123456" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "rgba(255,255,255,0.8)", fontSize: 16, textAlign: "center", letterSpacing: "4px" }} />
+            <input type="text" placeholder="123456" maxLength={6} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ""))} required style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "var(--color-input-bg)", fontSize: 16, textAlign: "center", letterSpacing: "4px" }} />
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
               <button type="button" className="ghost-btn" onClick={onClose}>Cancel</button>
@@ -172,7 +172,7 @@ function Setup2FAModal({ onClose, token, onSuccess }) {
 export default function SettingsPage() {
   const { token, user, refreshUser } = useContext(AuthContext);
   const [emailAlerts, setEmailAlerts] = useState(true);
-  const { isDark, setTheme } = useTheme();
+  const { theme, isDark, setTheme } = useTheme();
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
 
@@ -261,7 +261,7 @@ export default function SettingsPage() {
       }).then(async (result) => {
         if (result.isConfirmed) {
           try {
-            const res = await fetch("http://127.0.0.1:5000/api/auth/disable-2fa", {
+            const res = await fetch(`${API_ORIGIN}/api/auth/disable-2fa`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${token}` }
             });
@@ -365,15 +365,75 @@ export default function SettingsPage() {
               {savingPreferences ? "Saving..." : "Save Preferences"}
             </button>
           </div>
-          <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gap: 16 }}>
             <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
               <span>Email notifications (inspection evidence submitted)</span>
               <input type="checkbox" checked={emailAlerts} onChange={() => setEmailAlerts((prev) => !prev)} />
             </label>
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-              <span>Dark mode</span>
-              <input type="checkbox" checked={!!isDark} onChange={() => setTheme(isDark ? "light" : "dark")} />
-            </label>
+
+            {/* Theme Selector */}
+            <div>
+              <span style={{ display: "block", marginBottom: 8, fontSize: 14, fontWeight: 500, color: "var(--color-ink)" }}>Appearance</span>
+              <div style={{
+                display: "inline-flex",
+                background: "var(--color-hover)",
+                borderRadius: 12,
+                padding: 4,
+                border: "1px solid var(--color-border-soft)",
+                position: "relative",
+              }}>
+                {[
+                  { value: "light", label: "Light", icon: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="5" />
+                      <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                      <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                    </svg>
+                  )},
+                  { value: "system", label: "System", icon: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                  )},
+                  { value: "dark", label: "Dark", icon: (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                  )},
+                ].map(opt => {
+                  const isActive = theme === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setTheme(opt.value)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 16px",
+                        borderRadius: 8,
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 13,
+                        fontWeight: isActive ? 600 : 500,
+                        fontFamily: "inherit",
+                        background: isActive ? "var(--color-primary)" : "transparent",
+                        color: isActive ? "#fff" : "var(--color-muted)",
+                        transition: "all 0.2s ease",
+                        boxShadow: isActive ? "0 2px 8px rgba(86, 171, 47, 0.3)" : "none",
+                      }}
+                    >
+                      {opt.icon}
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -400,7 +460,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Linked Sliders */}
-            <div style={{ background: "rgba(248,249,250,0.8)", padding: "16px", borderRadius: 8, border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ background: "var(--color-hover)", padding: "16px", borderRadius: 8, border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: 16 }}>
               <label style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>Linked Priority Weights</label>
               {[
                 { key: "w1_risk", label: "Risk Volume (W1)", color: "var(--color-danger)" },
@@ -424,8 +484,8 @@ export default function SettingsPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {sectors.length === 0 && <p style={{ fontSize: 12, color: "var(--color-muted)" }}>No sector policies defined. Click "Add Sector" to set custom severities.</p>}
                 {sectors.map((sec, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.6)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
-                    <select value={sec.name} onChange={e => updateSector(i, "name", e.target.value)} style={{ padding: "6px", borderRadius: 6, border: "1px solid var(--color-border)", fontSize: 13, width: 160, background: "#fff" }}>
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--color-input-bg)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                    <select value={sec.name} onChange={e => updateSector(i, "name", e.target.value)} style={{ padding: "6px", borderRadius: 6, border: "1px solid var(--color-border)", fontSize: 13, width: 160, background: "var(--color-modal-bg)" }}>
                       <option value="">Select Sector ▾</option>
                       {SECTOR_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
@@ -454,11 +514,11 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 16 }}>
-                <div style={{ flex: 1, background: "rgba(248,249,250,0.8)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                <div style={{ flex: 1, background: "var(--color-hover)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>Latitude</label>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-ink)", fontFamily: "monospace" }}>{wlcConfig.bplo_lat || "—"}</div>
                 </div>
-                <div style={{ flex: 1, background: "rgba(248,249,250,0.8)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                <div style={{ flex: 1, background: "var(--color-hover)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--color-muted)", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>Longitude</label>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-ink)", fontFamily: "monospace" }}>{wlcConfig.bplo_lng || "—"}</div>
                 </div>
@@ -511,14 +571,14 @@ export default function SettingsPage() {
           zIndex: 99999
         }}>
           <div style={{
-            background: "#ffffff", borderRadius: 16, padding: 24,
+            background: "var(--color-modal-bg)", borderRadius: 16, padding: 24,
             width: "90%", maxWidth: 600,
             boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)"
           }}>
-            <h3 style={{ margin: "0 0 16px", color: "#0f172a", fontSize: 18, fontWeight: 700 }}>Select Base Station Location</h3>
-            <p style={{ margin: "0 0 16px", color: "#64748b", fontSize: 13 }}>Click anywhere on the map to set the BPLO office coordinates.</p>
+            <h3 style={{ margin: "0 0 16px", color: "var(--color-ink)", fontSize: 18, fontWeight: 700 }}>Select Base Station Location</h3>
+            <p style={{ margin: "0 0 16px", color: "var(--color-muted)", fontSize: 13 }}>Click anywhere on the map to set the BPLO office coordinates.</p>
 
-            <div style={{ width: "100%", height: 350, borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+            <div style={{ width: "100%", height: 350, borderRadius: 12, overflow: "hidden", border: "1px solid var(--color-border)" }}>
               <GoogleMap
                 mapContainerStyle={{ width: "100%", height: "100%" }}
                 center={{ lat: wlcConfig.bplo_lat || 13.9639, lng: wlcConfig.bplo_lng || 121.1114 }}
@@ -544,7 +604,7 @@ export default function SettingsPage() {
                 type="button"
                 className="ghost-btn"
                 onClick={() => setShowMapModal(false)}
-                style={{ padding: "8px 16px", background: "#f1f5f9", color: "#475569" }}
+                style={{ padding: "8px 16px", background: "var(--color-surface)", color: "var(--color-muted)" }}
               >
                 Close
               </button>

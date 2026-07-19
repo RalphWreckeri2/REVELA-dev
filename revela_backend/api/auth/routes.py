@@ -2,8 +2,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, get_jwt, create_access_token
 from api.auth.service import login_user, request_otp, reset_password, update_user_password, generate_2fa_setup, verify_totp_code
 from api.middleware.decorators import jwt_required
-from api.models.user import find_user_by_id, find_user_by_email, enable_user_2fa, update_user_2fa_secret, get_user_2fa_secret
-from api.notifications.service import get_email_inspection_alerts, set_email_inspection_alerts
+from api.models.user import find_user_by_id, find_user_by_email, enable_user_2fa, update_user_2fa_secret, get_user_2fa_secret, set_reset_requested
+from api.notifications.service import get_email_inspection_alerts, set_email_inspection_alerts, notify_password_reset_request
 from datetime import timedelta
 
 auth_bp = Blueprint("auth", __name__)
@@ -57,6 +57,13 @@ def login():
     }), 200
 
 
+# ── POST /api/auth/logout ─────────────────────────────────────────────────────
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    """No-op endpoint — JWT is stateless, but the mobile app calls this on logout."""
+    return jsonify({"message": "Logged out"}), 200
+
+
 # ── GET /api/auth/me ──────────────────────────────────────────────────────────
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()   # <-- our custom decorator
@@ -107,6 +114,21 @@ def request_otp_route():
 
     # Always return success — never reveal if user exists
     return jsonify({"message": "If an account exists, an OTP has been sent"}), 200
+
+# ── POST /api/auth/request-manual-reset ───────────────────────────────────────
+@auth_bp.route("/request-manual-reset", methods=["POST"])
+def request_manual_reset():
+    data = request.get_json()
+    if not data or not data.get("email"):
+        return jsonify({"error": "Email is required"}), 400
+
+    user = find_user_by_email(data["email"])
+    if user:
+        set_reset_requested(user["userID"], True)
+        notify_password_reset_request(user["fullName"])
+    
+    # Always return success to prevent email enumeration
+    return jsonify({"message": "If this email is registered, the administrator has been notified."}), 200
 
 
 # ── POST /api/auth/reset-password ─────────────────────────────────────────────

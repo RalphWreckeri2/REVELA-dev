@@ -7,46 +7,62 @@ class HistoryDetailPage extends StatelessWidget {
 
   const HistoryDetailPage({super.key, this.task});
 
+  String _formatResult(String result) {
+    switch (result) {
+      case 'Green': return 'Registered';
+      case 'Yellow': return 'Suspected / Needs Verification';
+      case 'Orange': return 'Warned / Non-Compliant';
+      case 'Red': return 'Unregistered';
+      case 'Black': return 'Closed / Blacklisted';
+      default: return result;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Supports both direct push (task passed) and named route
     final InspectionTask? resolvedTask =
         task ?? ModalRoute.of(context)?.settings.arguments as InspectionTask?;
 
-    if (resolvedTask == null) {
-      return Scaffold(
-        appBar: AppBar(title: Text('Detail')),
-        body: Center(child: Text('No inspection data found.')),
-      );
-    }
+    if (resolvedTask == null) return const SizedBox();
 
-    return Scaffold(
-      backgroundColor: context.adaptiveBackground,
-      appBar: AppBar(
-        backgroundColor: context.adaptiveSurface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: context.adaptivePrimary,
-          ),
-          onPressed: () => Navigator.pop(context),
+    return DraggableScrollableSheet(
+      initialChildSize: 0.85,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (_, scrollController) => Container(
+        decoration: BoxDecoration(
+          color: context.adaptiveBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        title: Text(
-          'Inspection Report',
-          style: TextStyle(
-            color: context.adaptiveTextDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Inspection Report',
+              style: TextStyle(
+                color: context.adaptiveTextDark,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
             // ── Business Card ──────────────────────────────────────────────
             Container(
               width: double.infinity,
@@ -208,7 +224,7 @@ class HistoryDetailPage extends StatelessWidget {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      resolvedTask.inspectionResult!,
+                      _formatResult(resolvedTask.inspectionResult!),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -356,6 +372,10 @@ class HistoryDetailPage extends StatelessWidget {
             ),
 
             SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

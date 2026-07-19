@@ -72,6 +72,18 @@ class _WelcomePageState extends State<WelcomePage>
     super.dispose();
   }
 
+  void _skip() async {
+    await _requestPermissions();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('seen_welcome', true);
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+      );
+    }
+  }
+
   void _next() async {
     if (_currentIndex < _slides.length - 1) {
       _pageController.nextPage(
@@ -79,16 +91,7 @@ class _WelcomePageState extends State<WelcomePage>
         curve: Curves.easeInOut,
       );
     } else {
-      await _requestPermissions(); // ✅ ask permissions before navigating
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('seen_welcome', true);
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-        );
-      }
+      _skip();
     }
   }
 
@@ -109,7 +112,7 @@ class _WelcomePageState extends State<WelcomePage>
                   child: Padding(
                     padding: const EdgeInsets.only(top: 12, right: 24),
                     child: TextButton(
-                      onPressed: _next,
+                      onPressed: _skip,
                       child: Text(
                         'Skip',
                         style: TextStyle(

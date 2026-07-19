@@ -12,6 +12,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest } from "../services/api";
 import "../styles/HomePage.css";
 
@@ -19,13 +20,13 @@ const MAP_LIBRARIES = ["places", "marker"];
 const DEFAULT_CENTER = { lat: 13.9667, lng: 121.1167 };
 
 const FLAG_COLORS = {
-  Red:    { marker: "#ef4444", bg: "#fee2e2", text: "#b91c1c", label: "Detected Unregistered" },
-  Yellow: { marker: "#f59e0b", bg: "#fef3c7", text: "#92400e", label: "Suspected Unregistered" },
-  Orange: { marker: "#f97316", bg: "#ffedd5", text: "#c2410c", label: "Closed Business" },
-  Black:  { marker: "#1e293b", bg: "#f1f5f9", text: "#1e293b", label: "Critical Violation" },
-  Green:  { marker: "#22c55e", bg: "#dcfce7", text: "#15803d", label: "Active Business" },
+  Red:    { marker: "#ef4444", bg: "var(--flag-red-bg)", text: "var(--flag-red-text)", label: "Detected Unregistered" },
+  Yellow: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered" },
+  Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "1st/2nd Warning / 3rd Notice Closure" },
+  Black:  { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Closed / Nonconforming" },
+  Green:  { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
 };
-const defaultColor = { marker: "#94a3b8", bg: "#f1f5f9", text: "#64748b", label: "Unknown" };
+const defaultColor = { marker: "var(--color-muted)", bg: "var(--flag-default-bg)", text: "var(--flag-default-text)", label: "Unknown" };
 const getFlagColor = (c) => FLAG_COLORS[c] ?? defaultColor;
 
 const parseColor = (f) => {
@@ -49,9 +50,12 @@ function OnboardingPanel({ onDismiss }) {
   return (
     <section className="onboarding-panel frosted-glass">
       <div className="onboarding-header">
-        <div>
-          <span className="hero-tag">Welcome to REVELA</span>
-          <h2>Geospatial Business Intelligence</h2>
+        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+          <img src="/standing.png" alt="Revela Mascot" style={{ height: 100, width: "auto", objectFit: "contain", dropShadow: "0 10px 20px rgba(0,0,0,0.15)" }} />
+          <div>
+            <span className="hero-tag">Welcome to REVELA</span>
+            <h2>Geospatial Business Intelligence</h2>
+          </div>
         </div>
         <button className="dismiss-btn" onClick={onDismiss}>Dismiss Guide ✕</button>
       </div>
@@ -141,17 +145,17 @@ function ActiveInspectionsWidget({ navigate, stats }) {
         </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, textAlign: "center", marginTop: 8 }}>
-        <div style={{ background: "rgba(239,246,255,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #bfdbfe" }}>
+        <div style={{ background: "var(--color-hover)", padding: "20px 10px", borderRadius: 12, border: "1px solid var(--color-border-soft)" }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6", lineHeight: 1 }}>{stats.assigned}</div>
-          <div style={{ fontSize: 11, color: "#1e3a8a", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>ASSIGNED</div>
+          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>ASSIGNED</div>
         </div>
-        <div style={{ background: "rgba(254,252,232,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #fef08a" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#ca8a04", lineHeight: 1 }}>{stats.reassigned}</div>
-          <div style={{ fontSize: 11, color: "#713f12", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>REASSIGNED</div>
+        <div style={{ background: "var(--color-hover)", padding: "20px 10px", borderRadius: 12, border: "1px solid var(--color-border-soft)" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#f59e0b", lineHeight: 1 }}>{stats.reassigned}</div>
+          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>REASSIGNED</div>
         </div>
-        <div style={{ background: "rgba(240,253,244,0.8)", padding: "20px 10px", borderRadius: 12, border: "1px solid #bbf7d0" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a", lineHeight: 1 }}>{stats.verified}</div>
-          <div style={{ fontSize: 11, color: "#14532d", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>VERIFIED</div>
+        <div style={{ background: "var(--color-hover)", padding: "20px 10px", borderRadius: 12, border: "1px solid var(--color-border-soft)" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#22c55e", lineHeight: 1 }}>{stats.verified}</div>
+          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>VERIFIED</div>
         </div>
       </div>
     </div>
@@ -261,7 +265,7 @@ function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
 }
 
 // ── Mini Map Widget ───────────────────────────────────────────────────────────
-function MiniMapWidget({ flags, onOpenMap, isLoaded, loadError }) {
+function MiniMapWidget({ flags, isDark, onOpenMap, isLoaded, loadError }) {
   const mapRef     = useRef(null);
   const markerRefs = useRef([]);
 
@@ -333,6 +337,7 @@ function MiniMapWidget({ flags, onOpenMap, isLoaded, loadError }) {
               clickableIcons:    false,
               zoomControl:       false,
               mapId:             "34390388b3abb63aa84876a7",
+              colorScheme:       isDark ? "DARK" : "LIGHT",
             }}
             onLoad={handleMapLoad}
           />
@@ -365,7 +370,7 @@ function MiniMapWidget({ flags, onOpenMap, isLoaded, loadError }) {
       {/* Mini legend */}
       <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
         {Object.entries(FLAG_COLORS).map(([color, meta]) => (
-          <div key={color} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#64748b" }}>
+          <div key={color} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--color-muted)" }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: meta.marker, display: "inline-block" }} />
             {meta.label}
           </div>
@@ -378,7 +383,7 @@ function MiniMapWidget({ flags, onOpenMap, isLoaded, loadError }) {
 const miniMapFallback = {
   width: "100%", height: "100%", display: "flex", flexDirection: "column",
   alignItems: "center", justifyContent: "center", gap: 6,
-  background: "#f1f5f9", color: "#64748b", fontSize: 13, textAlign: "center",
+  background: "var(--color-surface)", color: "var(--color-muted)", fontSize: 13, textAlign: "center",
 };
 
 // ── Recent Detections Widget ──────────────────────────────────────────────────
@@ -400,7 +405,7 @@ function RecentFlagsWidget({ flags, loading, onViewAll, onOpenMap, totalFetched 
             }} />
           ))
         ) : flags.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8", fontSize: 13 }}>
+          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--color-muted)", fontSize: 13 }}>
             {totalFetched > 0
               ? "No recent log entries in the current batch."
               : "No flags detected yet. Run the detection engine from the map or quick actions."}
@@ -435,7 +440,10 @@ function RecentFlagsWidget({ flags, loading, onViewAll, onOpenMap, totalFetched 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const { token } = useAuth();
+  const { theme, resolvedTheme } = useTheme();
   const navigate  = useNavigate();
+  
+  const isDark = resolvedTheme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const { isLoaded, loadError } = useLoadScript({
@@ -597,6 +605,7 @@ export default function HomePage() {
       <div className="widget-grid" style={{ marginTop: 24 }}>
         <MiniMapWidget
           flags={allFlags}
+          isDark={isDark}
           onOpenMap={() => navigate("/map")}
           isLoaded={isLoaded}
           loadError={loadError}

@@ -50,6 +50,9 @@ dependencies:
   google_fonts: ^8.1.0
   flutter_animate: ^4.5.2
   shimmer: ^3.0.0
+  intl: ^0.20.3
+  local_auth: ^3.0.2
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

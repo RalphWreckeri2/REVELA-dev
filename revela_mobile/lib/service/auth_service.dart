@@ -5,7 +5,15 @@ import 'package:local_auth/local_auth.dart';
 import '../pages/login_page.dart';
 import 'api_config.dart';
 
-enum LoginResult { success, mustChangePassword, twoFactorRequired, notInspector, failed, networkError, canceled }
+enum LoginResult {
+  success,
+  mustChangePassword,
+  twoFactorRequired,
+  notInspector,
+  failed,
+  networkError,
+  canceled,
+}
 
 class AuthService {
   late final Dio _dio;
@@ -35,7 +43,7 @@ class AuthService {
         receiveTimeout: const Duration(seconds: 30),
       ),
     );
-  
+
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest:
@@ -51,7 +59,8 @@ class AuthService {
           // Only force-logout on 401 for authenticated endpoints.
           // Auth endpoints (login, logout, reset) handle 401 themselves.
           final path = e.requestOptions.path;
-          final isAuthEndpoint = path.contains('/auth/login') ||
+          final isAuthEndpoint =
+              path.contains('/auth/login') ||
               path.contains('/auth/logout') ||
               path.contains('/auth/request-manual-reset') ||
               path.contains('/auth/request-otp') ||
@@ -142,14 +151,14 @@ class AuthService {
           e.type == DioExceptionType.sendTimeout) {
         return LoginResult.networkError;
       }
-      
+
       if (e.response?.statusCode == 403) {
         final errorMsg = e.response?.data?['error']?.toString() ?? '';
         if (errorMsg.contains('Inspectors only')) {
           return LoginResult.notInspector;
         }
       }
-      
+
       debugPrint('Login Error: ${e.response?.data ?? e.message}');
       debugPrint('Login Error: ${e.response?.data ?? e.message}');
       return LoginResult.failed;
@@ -189,7 +198,10 @@ class AuthService {
 
         final profile = await getProfile();
         if (profile != null) {
-          final String userRole = profile['role']?.toString() ?? profile['userRole']?.toString() ?? '';
+          final String userRole =
+              profile['role']?.toString() ??
+              profile['userRole']?.toString() ??
+              '';
           if (userRole != 'Inspector') {
             return LoginResult.notInspector;
           }
@@ -206,7 +218,9 @@ class AuthService {
       }
       return LoginResult.failed;
     } on DioException catch (e) {
-      debugPrint('2FA Login Verification error: ${e.response?.data ?? e.message}');
+      debugPrint(
+        '2FA Login Verification error: ${e.response?.data ?? e.message}',
+      );
       return LoginResult.failed;
     }
   }
@@ -222,18 +236,26 @@ class AuthService {
       );
       if (response.statusCode == 200) {
         await _storage.write(key: 'must_change_password', value: 'false');
-        
+
         // Update the saved password so biometrics doesn't break
         final email = await _storage.read(key: 'saved_email');
         if (email != null) {
           await _storage.write(key: 'saved_password', value: newPassword);
         }
 
-        return {'success': true, 'message': response.data['message'] ?? 'Password changed successfully'};
+        return {
+          'success': true,
+          'message':
+              response.data['message'] ?? 'Password changed successfully',
+        };
       }
-      return {'success': false, 'error': response.data['error'] ?? 'Failed to change password'};
+      return {
+        'success': false,
+        'error': response.data['error'] ?? 'Failed to change password',
+      };
     } on DioException catch (e) {
-      final err = e.response?.data?['error'] ?? e.message ?? 'An error occurred';
+      final err =
+          e.response?.data?['error'] ?? e.message ?? 'An error occurred';
       return {'success': false, 'error': err};
     }
   }
@@ -251,10 +273,10 @@ class AuthService {
     }
   }
 
-
   Future<bool> canUseBiometrics() async {
     try {
-      return await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
+      return await _localAuth.canCheckBiometrics ||
+          await _localAuth.isDeviceSupported();
     } catch (e) {
       return false;
     }
@@ -264,7 +286,7 @@ class AuthService {
     try {
       final canCheck = await canUseBiometrics();
       if (!canCheck) return false;
-      
+
       return await _localAuth.authenticate(
         localizedReason: 'Please authenticate to enable biometric login',
         persistAcrossBackgrounding: true,
@@ -279,7 +301,10 @@ class AuthService {
   Future<bool> hasSavedCredentials() async {
     final email = await _storage.read(key: 'saved_email');
     final password = await _storage.read(key: 'saved_password');
-    return email != null && email.isNotEmpty && password != null && password.isNotEmpty;
+    return email != null &&
+        email.isNotEmpty &&
+        password != null &&
+        password.isNotEmpty;
   }
 
   Future<LoginResult> biometricLogin() async {
@@ -329,9 +354,13 @@ class AuthService {
       if (response.statusCode == 200) {
         return {'success': true, 'message': response.data['message']};
       }
-      return {'success': false, 'error': response.data['error'] ?? 'Invalid code'};
+      return {
+        'success': false,
+        'error': response.data['error'] ?? 'Invalid code',
+      };
     } on DioException catch (e) {
-      final err = e.response?.data?['error'] ?? e.message ?? 'Verification failed';
+      final err =
+          e.response?.data?['error'] ?? e.message ?? 'Verification failed';
       return {'success': false, 'error': err};
     }
   }
@@ -359,6 +388,11 @@ class AuthService {
     }
   }
 
+  /// Clears only the saved password, typically after a biometric login fails.
+  Future<void> clearSavedPassword() async {
+    await _storage.delete(key: 'saved_password');
+  }
+
   Future<void> logout() async {
     try {
       await _dio.post('/api/auth/logout');
@@ -368,7 +402,8 @@ class AuthService {
     final password = await _storage.read(key: 'saved_password');
     await _storage.deleteAll();
     if (email != null) await _storage.write(key: 'saved_email', value: email);
-    if (password != null) await _storage.write(key: 'saved_password', value: password);
+    if (password != null)
+      await _storage.write(key: 'saved_password', value: password);
 
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();

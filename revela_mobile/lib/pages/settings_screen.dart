@@ -1,6 +1,7 @@
 import 'package:revela_mobile/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../service/auth_service.dart';
 import '../main.dart';
 import '../widgets/modern_segmented_filter.dart';
@@ -64,6 +65,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _contactAdmin() async {
+    final Uri emailLaunchUri = Uri(
+      scheme: 'mailto',
+      path: 'mkahoy.bplo@gmail.com',
+      query: 'subject=App Support Needed',
+    );
+
+    try {
+      if (await canLaunchUrl(emailLaunchUri)) {
+        await launchUrl(emailLaunchUri);
+      } else {
+        _showSnackBar('Could not open your email app.', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Could not open your email app.', isError: true);
+    }
+  }
+
+  Future<void> _openLegalUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        // Consistent with login screen, open in an in-app web view
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      } else {
+        _showSnackBar('Could not open the link.', isError: true);
+      }
+    } catch (e) {
+      // In case of an error, show a generic message
+      _showSnackBar(
+        'An error occurred while trying to open the link.',
+        isError: true,
+      );
+    }
+  }
+
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8, top: 24),
@@ -109,44 +146,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _SettingsCard(
                           children: [
                             ListTile(
-                              leading: Icon(Icons.lock_outline, color: AppColors.darkGreen),
-                              title: const Text('Change Password', style: TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: const Text('Update your current password'),
-                              trailing: Icon(Icons.chevron_right, color: AppColors.textLight),
+                              leading: Icon(
+                                Icons.lock_person_outlined,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'Change Password',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: const Text(
+                                'Update your account password',
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: context.adaptiveTextLight,
+                              ),
                               onTap: () => _showChangePasswordDialog(context),
                             ),
-                            Divider(height: 1, indent: 56, color: AppColors.borderColor),
+                            Divider(
+                              height: 1,
+                              indent: 56,
+                              color: context.adaptiveBorder,
+                            ),
                             SwitchListTile(
-                              secondary: Icon(Icons.security, color: AppColors.darkGreen),
-                              title: const Text('Two-Factor Authentication', style: TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: const Text('Add an extra layer of security'),
+                              secondary: Icon(
+                                Icons.security_rounded,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'Two-Factor Authentication',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: const Text(
+                                'Add an extra layer of security',
+                              ),
                               value: _is2faEnabled,
-                              activeColor: AppColors.darkGreen,
+                              activeColor: context.adaptivePrimary,
                               onChanged: _handle2FAChange,
                             ),
-                            Divider(height: 1, indent: 56, color: AppColors.borderColor),
+                            Divider(
+                              height: 1,
+                              indent: 56,
+                              color: context.adaptiveBorder,
+                            ),
                             SwitchListTile(
-                              secondary: Icon(Icons.fingerprint, color: AppColors.darkGreen),
-                              title: const Text('Biometric Login', style: TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: const Text('Use Face ID or Fingerprint to log in'),
+                              secondary: Icon(
+                                Icons.fingerprint_rounded,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'Biometric Login',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: const Text(
+                                'Use Face ID or Fingerprint to log in',
+                              ),
                               value: _biometricEnabled,
-                              activeColor: AppColors.darkGreen,
+                              activeColor: context.adaptivePrimary,
                               onChanged: (bool value) async {
-                                final prefs = await SharedPreferences.getInstance();
-                                
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+
                                 if (value) {
                                   // User is trying to enable biometrics
-                                  final authSuccess = await AuthService().authenticateForSetup();
+                                  final authSuccess = await AuthService()
+                                      .authenticateForSetup();
                                   if (!authSuccess) {
                                     // If they cancel or fail, don't enable it
-                                    _showSnackBar('Biometric authentication failed. Cannot enable.', isError: true);
+                                    _showSnackBar(
+                                      'Biometric authentication failed. Cannot enable.',
+                                      isError: true,
+                                    );
                                     return;
                                   }
                                 }
-                                
+
                                 await prefs.setBool('biometric_enabled', value);
                                 setState(() => _biometricEnabled = value);
-                                _showSnackBar(value ? 'Biometric login enabled' : 'Biometric login disabled');
+                                _showSnackBar(
+                                  value
+                                      ? 'Biometric login enabled'
+                                      : 'Biometric login disabled',
+                                );
                               },
                             ),
                           ],
@@ -156,33 +237,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _SettingsCard(
                           children: [
                             SwitchListTile(
-                              secondary: Icon(Icons.notifications_active_outlined, color: AppColors.darkGreen),
-                              title: const Text('Email Inspection Alerts', style: TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: const Text('Receive emails when assigned a new inspection'),
+                              secondary: Icon(
+                                Icons.alternate_email_rounded,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'Email Inspection Alerts',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: const Text(
+                                'Receive emails when assigned a new inspection',
+                              ),
                               value: _emailAlertsEnabled,
-                              activeColor: AppColors.darkGreen,
+                              activeColor: context.adaptivePrimary,
                               onChanged: (bool value) async {
                                 setState(() => _emailAlertsEnabled = value);
-                                final success = await AuthService().updateEmailAlerts(value);
+                                final success = await AuthService()
+                                    .updateEmailAlerts(value);
                                 if (!success) {
                                   setState(() => _emailAlertsEnabled = !value);
-                                  _showSnackBar('We couldn\'t save your preference. Please try again.', isError: true);
+                                  _showSnackBar(
+                                    'We couldn\'t save your preference. Please try again.',
+                                    isError: true,
+                                  );
                                 } else {
                                   _showSnackBar('Preference updated');
                                 }
                               },
                             ),
-                            Divider(height: 1, indent: 56, color: AppColors.borderColor),
+                            Divider(
+                              height: 1,
+                              indent: 56,
+                              color: context.adaptiveBorder,
+                            ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
-                                      Icon(Icons.brightness_6_outlined, color: AppColors.darkGreen),
+                                      Icon(
+                                        Icons.brightness_6_outlined,
+                                        color: AppColors.darkGreen,
+                                      ),
                                       const SizedBox(width: 16),
-                                      const Text('Appearance', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                                      const Text(
+                                        'Appearance',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 16,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 12),
@@ -205,24 +314,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ),
                                     ],
                                     selected: {_themePreference},
-                                    onSelectionChanged: (Set<String> newSelection) async {
-                                      final value = newSelection.first;
-                                      setState(() => _themePreference = value);
-                                      
-                                      if (value == 'dark') {
-                                        themeModeNotifier.value = ThemeMode.dark;
-                                      } else if (value == 'light') {
-                                        themeModeNotifier.value = ThemeMode.light;
-                                      } else {
-                                        themeModeNotifier.value = ThemeMode.system;
-                                      }
-                                      
-                                      final prefs = await SharedPreferences.getInstance();
-                                      await prefs.setString('theme_preference', value);
-                                    },
+                                    onSelectionChanged:
+                                        (Set<String> newSelection) async {
+                                          final value = newSelection.first;
+                                          setState(
+                                            () => _themePreference = value,
+                                          );
+
+                                          if (value == 'dark') {
+                                            themeModeNotifier.value =
+                                                ThemeMode.dark;
+                                          } else if (value == 'light') {
+                                            themeModeNotifier.value =
+                                                ThemeMode.light;
+                                          } else {
+                                            themeModeNotifier.value =
+                                                ThemeMode.system;
+                                          }
+
+                                          final prefs =
+                                              await SharedPreferences.getInstance();
+                                          await prefs.setString(
+                                            'theme_preference',
+                                            value,
+                                          );
+                                        },
                                     style: ButtonStyle(
                                       visualDensity: VisualDensity.compact,
-                                      side: MaterialStateProperty.all(BorderSide(color: context.adaptiveBorder)),
+                                      side: MaterialStateProperty.all(
+                                        BorderSide(
+                                          color: context.adaptiveBorder,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -235,9 +358,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _SettingsCard(
                           children: [
                             ListTile(
-                              leading: Icon(Icons.info_outline, color: AppColors.darkGreen),
-                              title: const Text('About REVELA', style: TextStyle(fontWeight: FontWeight.w600)),
-                              trailing: Icon(Icons.chevron_right, color: AppColors.textLight),
+                              leading: Icon(
+                                Icons.gavel_rounded,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'Terms & Conditions',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: context.adaptiveTextLight,
+                              ),
+                              onTap: () =>
+                                  _openLegalUrl('https://www.revela.com/terms'),
+                            ),
+                            Divider(
+                              height: 1,
+                              indent: 56,
+                              color: context.adaptiveBorder,
+                            ),
+                            ListTile(
+                              leading: Icon(
+                                Icons.privacy_tip_outlined,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'Privacy Policy',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: context.adaptiveTextLight,
+                              ),
+                              onTap: () => _openLegalUrl(
+                                'https://www.revela.com/privacy',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        _SettingsCard(
+                          children: [
+                            ListTile(
+                              leading: Icon(
+                                Icons.info_outline,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'About REVELA',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: const Text('App version and details'),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: context.adaptiveTextLight,
+                              ),
                               onTap: () {
                                 showAboutDialog(
                                   context: context,
@@ -247,27 +423,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 );
                               },
                             ),
+                            Divider(
+                              height: 1,
+                              indent: 56,
+                              color: context.adaptiveBorder,
+                            ),
+                            ListTile(
+                              leading: Icon(
+                                Icons.support_agent_rounded,
+                                color: context.adaptivePrimary,
+                              ),
+                              title: const Text(
+                                'Contact Admin',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: const Text('Get help from app support'),
+                              trailing: Icon(
+                                Icons.chevron_right,
+                                color: context.adaptiveTextLight,
+                              ),
+                              onTap: _contactAdmin,
+                            ),
                           ],
                         ),
-                        
+
                         const SizedBox(height: 24),
                         _SettingsCard(
+                          // Log Out Card
                           danger: true,
                           children: [
                             ListTile(
-                              leading: const Icon(Icons.logout, color: Colors.redAccent),
-                              title: const Text('Log Out', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                              leading: Icon(
+                                Icons.logout,
+                                color: Colors.redAccent,
+                              ),
+                              title: const Text(
+                                'Log Out',
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               onTap: () async {
                                 final confirm = await showDialog<bool>(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
+                                    backgroundColor: context.adaptiveSurface,
                                     title: const Text('Log Out'),
-                                    content: const Text('Are you sure you want to log out?'),
+                                    titleTextStyle: TextStyle(
+                                      color: context.adaptiveTextDark,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    content: const Text(
+                                      'Are you sure you want to log out?',
+                                    ),
+                                    contentTextStyle: TextStyle(
+                                      color: context.adaptiveTextMid,
+                                      fontSize: 16,
+                                    ),
                                     actions: [
-                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx, true),
-                                        child: const Text('Log Out', style: TextStyle(color: Colors.redAccent)),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: Text(
+                                          'Cancel',
+                                          style: TextStyle(
+                                            color: context.adaptiveTextMid,
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text(
+                                          'Log Out',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.redAccent,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -292,7 +527,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (enable) {
       final res = await AuthService().setup2FA();
       if (res == null || res['secret'] == null) {
-        _showSnackBar('Unable to set up Two-Factor Authentication at this time. Please try again.', isError: true);
+        _showSnackBar(
+          'Unable to set up Two-Factor Authentication at this time. Please try again.',
+          isError: true,
+        );
         return;
       }
       final String secret = res['secret'];
@@ -303,7 +541,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Disable 2FA'),
-          content: const Text('Are you sure you want to disable Two-Factor Authentication?'),
+          content: const Text(
+            'Are you sure you want to disable Two-Factor Authentication?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -323,7 +563,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           setState(() => _is2faEnabled = false);
           _showSnackBar('2FA disabled successfully');
         } else {
-          _showSnackBar('Unable to disable Two-Factor Authentication. Please try again.', isError: true);
+          _showSnackBar(
+            'Unable to disable Two-Factor Authentication. Please try again.',
+            isError: true,
+          );
         }
       }
     }
@@ -334,7 +577,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final formKey = GlobalKey<FormState>();
     bool isSubmitting = false;
     String? errorMsg;
-    final qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${Uri.encodeComponent(otpUri ?? secret)}';
+    final qrUrl =
+        'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${Uri.encodeComponent(otpUri ?? secret)}';
 
     showDialog(
       context: context,
@@ -369,10 +613,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           fit: BoxFit.contain,
                           loadingBuilder: (ctx, child, progress) {
                             if (progress == null) return child;
-                            return const Center(child: CircularProgressIndicator());
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
                           },
                           errorBuilder: (ctx, err, stack) => const Center(
-                            child: Icon(Icons.qr_code, size: 80, color: Colors.grey),
+                            child: Icon(
+                              Icons.qr_code,
+                              size: 80,
+                              color: Colors.grey,
+                            ),
                           ),
                         ),
                       ),
@@ -395,7 +645,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (errorMsg != null) ...[
                         Text(
                           errorMsg!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
                         ),
                         const SizedBox(height: 8),
                       ],
@@ -406,7 +659,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           labelText: 'Enter 6-Digit Code',
                           border: OutlineInputBorder(),
                         ),
-                        validator: (v) => v == null || v.length < 6 ? 'Enter 6-digit code' : null,
+                        validator: (v) => v == null || v.length < 6
+                            ? 'Enter 6-digit code'
+                            : null,
                       ),
                     ],
                   ),
@@ -426,7 +681,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               isSubmitting = true;
                               errorMsg = null;
                             });
-                            final result = await AuthService().verify2FASetup(codeController.text.trim());
+                            final result = await AuthService().verify2FASetup(
+                              codeController.text.trim(),
+                            );
                             if (result['success'] == true) {
                               if (mounted) {
                                 Navigator.pop(dialogCtx);
@@ -436,7 +693,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             } else {
                               setDialogState(() {
                                 isSubmitting = false;
-                                errorMsg = result['error'] ?? 'Verification failed';
+                                errorMsg =
+                                    result['error'] ?? 'Verification failed';
                               });
                             }
                           }
@@ -484,7 +742,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       if (errorMsg != null) ...[
                         Text(
                           errorMsg!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
                         ),
                         const SizedBox(height: 8),
                       ],
@@ -495,12 +756,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           labelText: 'Current Password',
                           suffixIcon: IconButton(
                             icon: Icon(
-                              obscureOld ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              obscureOld
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
-                            onPressed: () => setDialogState(() => obscureOld = !obscureOld),
+                            onPressed: () =>
+                                setDialogState(() => obscureOld = !obscureOld),
                           ),
                         ),
-                        validator: (val) => val != null && val.isEmpty ? 'Required' : null,
+                        validator: (val) =>
+                            val != null && val.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 10),
                       TextFormField(
@@ -510,14 +775,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           labelText: 'New Password (min. 8 chars)',
                           suffixIcon: IconButton(
                             icon: Icon(
-                              obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              obscureNew
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
-                            onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                            onPressed: () =>
+                                setDialogState(() => obscureNew = !obscureNew),
                           ),
                         ),
                         validator: (val) {
                           if (val == null || val.isEmpty) return 'Required';
-                          if (val.length < 8) return 'Must be at least 8 characters';
+                          if (val.length < 8)
+                            return 'Must be at least 8 characters';
                           return null;
                         },
                       ),
@@ -529,13 +798,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           labelText: 'Confirm New Password',
                           suffixIcon: IconButton(
                             icon: Icon(
-                              obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              obscureConfirm
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
-                            onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                            onPressed: () => setDialogState(
+                              () => obscureConfirm = !obscureConfirm,
+                            ),
                           ),
                         ),
                         validator: (val) {
-                          if (val != newPasswordController.text) return 'Passwords do not match';
+                          if (val != newPasswordController.text)
+                            return 'Passwords do not match';
                           return null;
                         },
                       ),
@@ -569,7 +843,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             } else {
                               setDialogState(() {
                                 isSubmitting = false;
-                                errorMsg = res['error'] ?? 'We couldn\'t update your password. Please try again.';
+                                errorMsg =
+                                    res['error'] ??
+                                    'We couldn\'t update your password. Please try again.';
                               });
                             }
                           }
@@ -601,12 +877,16 @@ class _SettingsCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: danger
-            ? Colors.redAccent.withValues(alpha: 0.05)
+            ? (context.isDarkMode
+                  ? Colors.red.withOpacity(0.1)
+                  : Colors.red.shade50)
             : context.adaptiveSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: danger
-              ? Colors.redAccent.withValues(alpha: 0.2)
+              ? (context.isDarkMode
+                    ? Colors.red.withOpacity(0.3)
+                    : Colors.red.shade200)
               : context.adaptiveBorder,
           width: 0.8,
         ),
@@ -619,10 +899,7 @@ class _SettingsCard extends StatelessWidget {
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: children,
-      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }

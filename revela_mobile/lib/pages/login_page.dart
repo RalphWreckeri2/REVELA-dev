@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
@@ -24,16 +25,190 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
   bool _canUseBiometrics = false;
 
+  // Bump this string whenever the Privacy Policy / Terms actually change.
+  // Anyone who already agreed to an older version will be prompted again.
+  static const String _privacyPolicyVersion = '1.0';
+  static const String _privacyPolicyAcceptedKey =
+      'privacy_policy_accepted_version';
+
   @override
   void initState() {
     super.initState();
+    // Runs after the first frame so `context` is safe to use for showDialog.
+    // Biometrics auto-login is deliberately checked afterward (see
+    // _checkPrivacyPolicyAcceptance) so it can't pop up at the same time as
+    // the privacy dialog.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkPrivacyPolicyAcceptance(),
+    );
+  }
+
+  Future<void> _checkPrivacyPolicyAcceptance() async {
+    final prefs = await SharedPreferences.getInstance();
+    final acceptedVersion = prefs.getString(_privacyPolicyAcceptedKey);
+
+    if (acceptedVersion == _privacyPolicyVersion) {
+      // Already agreed to the current version — proceed as normal.
+      _checkBiometrics();
+      return;
+    }
+
+    // No stored acceptance = first-time user. A stored-but-different
+    // version = the policy changed since they last agreed.
+    final isUpdate = acceptedVersion != null;
+    if (mounted) _showPrivacyPolicyDialog(isUpdate: isUpdate);
+  }
+
+  void _showPrivacyPolicyDialog({required bool isUpdate}) {
+    bool isChecked = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return PopScope(
+          canPop: false, // Block back-button/gesture dismissal
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: Row(
+                  children: [
+                    Icon(
+                      Icons.privacy_tip_rounded,
+                      color: AppColors.darkGreen,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isUpdate
+                            ? 'Our Privacy Policy Has Been Updated'
+                            : 'Your Privacy Matters',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isUpdate
+                            ? 'We\'ve made changes to our Privacy Policy. Please review them before continuing to use the app.'
+                            : 'Before you get started, please take a moment to review how we collect, use, and protect your data.',
+                        style: const TextStyle(fontSize: 14, height: 1.4),
+                      ),
+                      const SizedBox(height: 16),
+                      InkWell(
+                        onTap: () =>
+                            _openLegalUrl('https://www.revela.com/privacy'),
+                        child: Text(
+                          'Read the full Privacy Policy',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.darkGreen,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      InkWell(
+                        onTap: () =>
+                            _openLegalUrl('https://www.revela.com/terms'),
+                        child: Text(
+                          'Read the Terms & Conditions',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.darkGreen,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      InkWell(
+                        onTap: () => setDialogState(() {
+                          isChecked = !isChecked;
+                        }),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Checkbox(
+                              value: isChecked,
+                              activeColor: AppColors.darkGreen,
+                              onChanged: (value) => setDialogState(() {
+                                isChecked = value ?? false;
+                              }),
+                            ),
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.only(top: 12),
+                                child: Text(
+                                  'I have read and agree to the Privacy '
+                                  'Policy and Terms & Conditions.',
+                                  style: TextStyle(fontSize: 13, height: 1.3),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: isChecked
+                          ? () => _acceptPrivacyPolicy(ctx)
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.darkGreen,
+                        disabledBackgroundColor: Colors.grey[300],
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Continue',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _acceptPrivacyPolicy(BuildContext dialogContext) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_privacyPolicyAcceptedKey, _privacyPolicyVersion);
+    if (mounted) Navigator.pop(dialogContext);
     _checkBiometrics();
   }
 
   Future<void> _checkBiometrics() async {
     final prefs = await SharedPreferences.getInstance();
     final isEnabledInSettings = prefs.getBool('biometric_enabled') ?? false;
-    
+
     if (!isEnabledInSettings) {
       if (mounted) setState(() => _canUseBiometrics = false);
       return;
@@ -44,7 +219,7 @@ class _LoginPageState extends State<LoginPage> {
     if (mounted) {
       setState(() => _canUseBiometrics = canUse && hasCreds);
     }
-    
+
     // Auto prompt if possible
     if (canUse && hasCreds) {
       // Small delay so UI renders first
@@ -72,12 +247,28 @@ class _LoginPageState extends State<LoginPage> {
         'Your saved credentials have expired or your password was reset. Please log in manually with your new password.',
       );
       // Clear saved credentials so it doesn't keep prompting on start
-      await _authService.logout(); // The auth service logout also clears secure storage
+      await _authService
+          .logout(); // The auth service logout also clears secure storage
       _checkBiometrics(); // Re-evaluates _canUseBiometrics
       return;
     }
 
     _handleLoginResult(result);
+  }
+
+  Future<void> _openLegalUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        // Consistent with SettingsScreen, open in an in-app web view
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      } else {
+        _showSnackBar('Could not open the link.');
+      }
+    } catch (e) {
+      // In case of an error, show a generic message
+      _showSnackBar('An error occurred while trying to open the link.');
+    }
   }
 
   @override
@@ -87,7 +278,10 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _showSnackBar(String message, {Color backgroundColor = Colors.redAccent}) {
+  void _showSnackBar(
+    String message, {
+    Color backgroundColor = Colors.redAccent,
+  }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -105,27 +299,17 @@ class _LoginPageState extends State<LoginPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(
-              Icons.gpp_bad_rounded,
-              color: Colors.redAccent,
-              size: 28,
-            ),
+            Icon(Icons.gpp_bad_rounded, color: Colors.redAccent, size: 28),
             SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
-        content: Text(
-          message,
-          style: TextStyle(fontSize: 14, height: 1.4),
-        ),
+        content: Text(message, style: TextStyle(fontSize: 14, height: 1.4)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -199,9 +383,9 @@ class _LoginPageState extends State<LoginPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
+      builder: (dialogCtx) {
         return Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: context.adaptiveSurface,
           body: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -216,7 +400,7 @@ class _LoginPageState extends State<LoginPage> {
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: AppColors.darkGreen,
+                    color: context.adaptivePrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -224,12 +408,12 @@ class _LoginPageState extends State<LoginPage> {
                   'Preparing your dashboard...',
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey[600],
+                    color: context.adaptiveTextMid,
                   ),
                 ),
                 const SizedBox(height: 40),
                 CircularProgressIndicator(
-                  color: AppColors.darkGreen,
+                  color: context.adaptivePrimary,
                   strokeWidth: 3,
                 ),
               ],
@@ -267,7 +451,9 @@ class _LoginPageState extends State<LoginPage> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Enter your registered email address. Your request will be sent directly to the administrator for a secure manual reset.'),
+                  const Text(
+                    'Enter your registered email address. Your request will be sent directly to the administrator for a secure manual reset.',
+                  ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: emailController,
@@ -292,10 +478,10 @@ class _LoginPageState extends State<LoginPage> {
                           if (email.isEmpty) return;
 
                           setDialogState(() => isSubmitting = true);
-                          
+
                           final authService = AuthService();
                           await authService.requestManualPasswordReset(email);
-                          
+
                           if (mounted) {
                             Navigator.pop(ctx);
                             _showSnackBar(
@@ -309,7 +495,14 @@ class _LoginPageState extends State<LoginPage> {
                     foregroundColor: Colors.white,
                   ),
                   child: isSubmitting
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                       : const Text('Request Reset'),
                 ),
               ],
@@ -338,12 +531,19 @@ class _LoginPageState extends State<LoginPage> {
               ),
               title: Row(
                 children: [
-                  Icon(Icons.security, color: context.adaptivePrimary, size: 28),
+                  Icon(
+                    Icons.security,
+                    color: context.adaptivePrimary,
+                    size: 28,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Two-Factor Authentication',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -356,7 +556,10 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Text(
                         'Step 2 of 2 — Enter the 6-digit code from your authenticator app to complete sign in.',
-                        style: TextStyle(fontSize: 13, color: context.adaptiveTextMid),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: context.adaptiveTextMid,
+                        ),
                       ),
                       SizedBox(height: 16),
                       if (errorMessage != null) ...[
@@ -383,8 +586,9 @@ class _LoginPageState extends State<LoginPage> {
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.pin),
                         ),
-                        validator: (v) =>
-                            v == null || v.length < 6 ? 'Enter 6-digit code' : null,
+                        validator: (v) => v == null || v.length < 6
+                            ? 'Enter 6-digit code'
+                            : null,
                       ),
                     ],
                   ),
@@ -416,7 +620,9 @@ class _LoginPageState extends State<LoginPage> {
                               Navigator.pop(ctx);
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (_) => const MainLayout()),
+                                MaterialPageRoute(
+                                  builder: (_) => const MainLayout(),
+                                ),
                               );
                             } else if (res == LoginResult.mustChangePassword) {
                               Navigator.pop(ctx);
@@ -424,7 +630,8 @@ class _LoginPageState extends State<LoginPage> {
                             } else {
                               setDialogState(() {
                                 isSubmitting = false;
-                                errorMessage = 'Invalid 2FA code. Please try again.';
+                                errorMessage =
+                                    'Invalid 2FA code. Please try again.';
                               });
                             }
                           }
@@ -471,12 +678,19 @@ class _LoginPageState extends State<LoginPage> {
               ),
               title: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange,
+                    size: 28,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Password Change Required',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -489,7 +703,10 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Text(
                         'Your administrator requires you to update your temporary password before accessing the system.',
-                        style: TextStyle(fontSize: 13, color: context.adaptiveTextMid),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: context.adaptiveTextMid,
+                        ),
                       ),
                       SizedBox(height: 16),
                       if (errorMessage != null) ...[
@@ -515,12 +732,16 @@ class _LoginPageState extends State<LoginPage> {
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              obscureOld ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              obscureOld
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
-                            onPressed: () => setDialogState(() => obscureOld = !obscureOld),
+                            onPressed: () =>
+                                setDialogState(() => obscureOld = !obscureOld),
                           ),
                         ),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Required' : null,
                       ),
                       SizedBox(height: 12),
                       TextFormField(
@@ -531,14 +752,18 @@ class _LoginPageState extends State<LoginPage> {
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              obscureNew ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              obscureNew
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
-                            onPressed: () => setDialogState(() => obscureNew = !obscureNew),
+                            onPressed: () =>
+                                setDialogState(() => obscureNew = !obscureNew),
                           ),
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Required';
-                          if (v.length < 8) return 'Must be at least 8 characters';
+                          if (v.length < 8)
+                            return 'Must be at least 8 characters';
                           return null;
                         },
                       ),
@@ -551,13 +776,18 @@ class _LoginPageState extends State<LoginPage> {
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              obscureConfirm
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
-                            onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                            onPressed: () => setDialogState(
+                              () => obscureConfirm = !obscureConfirm,
+                            ),
                           ),
                         ),
                         validator: (v) {
-                          if (v != newController.text) return 'Passwords do not match';
+                          if (v != newController.text)
+                            return 'Passwords do not match';
                           return null;
                         },
                       ),
@@ -588,13 +818,17 @@ class _LoginPageState extends State<LoginPage> {
                                 Navigator.pop(ctx);
                                 Navigator.pushReplacement(
                                   context,
-                                  MaterialPageRoute(builder: (_) => const MainLayout()),
+                                  MaterialPageRoute(
+                                    builder: (_) => const MainLayout(),
+                                  ),
                                 );
                               }
                             } else {
                               setDialogState(() {
                                 isSubmitting = false;
-                                errorMessage = res['error']?.toString() ?? 'We couldn\'t update your password. Please try again.';
+                                errorMessage =
+                                    res['error']?.toString() ??
+                                    'We couldn\'t update your password. Please try again.';
                               });
                             }
                           }
@@ -621,31 +855,27 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1B5E20), // Dark green background
+      backgroundColor: context.adaptivePrimary,
       body: SafeArea(
         bottom: false, // Let the white card go to the bottom
         child: Column(
           children: [
             const SizedBox(height: 40), // Top spacing (reduced)
-
             // Logo Container
             Container(
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: const Color(0xFF388E3C).withValues(alpha: 0.5), // Lighter green glow
+                color: Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Center(
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 44,
-                ),
+                child: Image.asset('assets/images/logo.png', height: 44),
               ),
             ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack),
-            
+
             const SizedBox(height: 12),
-            
+
             // App Name
             const Text(
               'REVELA',
@@ -656,9 +886,9 @@ class _LoginPageState extends State<LoginPage> {
                 letterSpacing: 4,
               ),
             ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
-            
+
             const SizedBox(height: 2),
-            
+
             // Subtitle
             Text(
               'Field Inspection Platform',
@@ -670,14 +900,18 @@ class _LoginPageState extends State<LoginPage> {
             ).animate().fadeIn(delay: 400.ms),
 
             const SizedBox(height: 24), // Reduced from 40
-
             // White Card
             Expanded(
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(32, 32, 32, 24), // Reduced top padding
-                decoration: const BoxDecoration(
-                  color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(
+                  32,
+                  32,
+                  32,
+                  24,
+                ), // Reduced top padding
+                decoration: BoxDecoration(
+                  color: context.adaptiveSurface,
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(32),
                     topRight: Radius.circular(32),
@@ -687,12 +921,12 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
+                      Text(
                         'Welcome',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
-                          color: Colors.black87,
+                          color: context.adaptiveTextDark,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -700,70 +934,92 @@ class _LoginPageState extends State<LoginPage> {
                         'Please login to continue',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey,
+                          color: context.adaptiveTextMid,
                         ),
                       ),
                       const SizedBox(height: 32),
 
                       // Email Field
-                      const Text(
+                      Text(
                         'Email',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: Colors.black87,
+                          color: context.adaptiveTextDark,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
+                          color: context.isDarkMode
+                              ? Colors.black.withOpacity(0.15)
+                              : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200),
+                          border: Border.all(color: context.adaptiveBorder),
                         ),
                         child: TextField(
-                          style: const TextStyle(color: Colors.black87),
+                          style: TextStyle(color: context.adaptiveTextDark),
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
                             hintText: 'Enter your email',
-                            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                            prefixIcon: Icon(Icons.email_outlined, color: Colors.grey.shade400, size: 20),
+                            hintStyle: TextStyle(
+                              color: context.adaptiveTextLight,
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.email_outlined,
+                              color: context.adaptiveTextLight,
+                              size: 20,
+                            ),
                             border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 16), // Reduced from 20
-
                       // Password Field
-                      const Text(
+                      Text(
                         'Password',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: Colors.black87,
+                          color: context.adaptiveTextDark,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
+                          color: context.isDarkMode
+                              ? Colors.black.withOpacity(0.15)
+                              : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200),
+                          border: Border.all(color: context.adaptiveBorder),
                         ),
                         child: TextField(
-                          style: const TextStyle(color: Colors.black87),
+                          style: TextStyle(color: context.adaptiveTextDark),
                           controller: _passwordController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             hintText: 'Enter your password',
-                            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-                            prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade400, size: 20),
+                            hintStyle: TextStyle(
+                              color: context.adaptiveTextLight,
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.lock_outline,
+                              color: context.adaptiveTextLight,
+                              size: 20,
+                            ),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                color: Colors.green.shade600,
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off,
+                                color: context.adaptivePrimary,
                                 size: 20,
                               ),
                               onPressed: () {
@@ -773,19 +1029,23 @@ class _LoginPageState extends State<LoginPage> {
                               },
                             ),
                             border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      
+
                       // Forgot Password Button
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: _showForgotPasswordDialog,
                           style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF1B5E20),
+                            foregroundColor: context.adaptivePrimary
+                                .withOpacity(0.8),
                             padding: EdgeInsets.zero,
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -800,14 +1060,13 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       const SizedBox(height: 24), // Reduced from 32
-
                       // Login Button
                       SizedBox(
                         height: 54,
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1B5E20),
+                            backgroundColor: context.adaptivePrimary,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -844,8 +1103,13 @@ class _LoginPageState extends State<LoginPage> {
                         SizedBox(
                           height: 54,
                           child: OutlinedButton.icon(
-                            onPressed: _isLoading ? null : _handleBiometricLogin,
-                            icon: const Icon(Icons.fingerprint_rounded, size: 24),
+                            onPressed: _isLoading
+                                ? null
+                                : _handleBiometricLogin,
+                            icon: const Icon(
+                              Icons.fingerprint_rounded,
+                              size: 24,
+                            ),
                             label: const Text(
                               'Login with Biometrics',
                               style: TextStyle(
@@ -854,8 +1118,11 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                             ),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.darkGreen,
-                              side: BorderSide(color: AppColors.darkGreen.withValues(alpha: 0.3), width: 1.5),
+                              foregroundColor: context.adaptivePrimary,
+                              side: BorderSide(
+                                color: context.adaptivePrimary.withOpacity(0.3),
+                                width: 1.5,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
@@ -863,6 +1130,48 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.1),
                       ],
+                      const SizedBox(height: 24),
+                      RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: TextStyle(
+                            color: context.adaptiveTextMid,
+                            fontSize: 11,
+                            height: 1.5,
+                          ),
+                          children: [
+                            const TextSpan(
+                              text: 'By logging in, you agree to the ',
+                            ),
+                            TextSpan(
+                              text: 'Terms & Conditions',
+                              style: TextStyle(
+                                color: context.adaptivePrimary.withOpacity(0.8),
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => _openLegalUrl(
+                                  'https://www.revela.com/terms',
+                                ), // Replace with your actual URL
+                            ),
+                            const TextSpan(text: ' and acknowledge our '),
+                            TextSpan(
+                              text: 'Privacy Policy',
+                              style: TextStyle(
+                                color: context.adaptivePrimary.withOpacity(0.8),
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => _openLegalUrl(
+                                  'https://www.revela.com/privacy',
+                                ), // Replace with your actual URL
+                            ),
+                            const TextSpan(text: '.'),
+                          ],
+                        ),
+                      ),
                     ],
                   ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1),
                 ),

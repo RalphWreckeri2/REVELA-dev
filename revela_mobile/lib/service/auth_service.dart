@@ -104,6 +104,8 @@ class AuthService {
             key: 'temp_2fa_token',
             value: response.data['tempToken'],
           );
+          await _storage.write(key: 'temp_email', value: email);
+          await _storage.write(key: 'temp_password', value: password);
           return LoginResult.twoFactorRequired;
         }
 
@@ -210,6 +212,16 @@ class AuthService {
             value: profile['fullName']?.toString() ?? '',
           );
           await _storage.write(key: 'user_role', value: userRole);
+          
+          final tempEmail = await _storage.read(key: 'temp_email');
+          final tempPassword = await _storage.read(key: 'temp_password');
+          if (tempEmail != null && tempPassword != null) {
+            await _storage.write(key: 'saved_email', value: tempEmail);
+            await _storage.write(key: 'saved_password', value: tempPassword);
+            await _storage.delete(key: 'temp_email');
+            await _storage.delete(key: 'temp_password');
+          }
+
           if (profile['mustChangePassword'] == true) {
             return LoginResult.mustChangePassword;
           }

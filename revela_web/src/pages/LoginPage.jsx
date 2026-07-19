@@ -6,6 +6,8 @@ import { changePasswordRequest } from "../services/authService";
 import "../styles/LoginPage.css";
 import Swal from "sweetalert2";
 import sealImg from "../assets/seal.png";
+import TermsPage from "../components/TermsPage";
+import PrivacyPage from "../components/PrivacyPage";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const Icon = {
@@ -58,6 +60,36 @@ function ForgotPasswordModal({ onClose, onSuccess }) {
   );
 }
 
+// ── Legal Document Modal ──────────────────────────────────────────────────────
+function LegalDocModal({ title, children, onClose }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "#fff", borderRadius: 16,
+          width: "min(100%, 800px)", height: "min(90vh, 800px)",
+          display: "flex", flexDirection: "column",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+          <h3 style={{ margin: 0, fontSize: 16, color: "#1a202c" }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#64748b", fontSize: 20 }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 const ALLOWED_ROLES = ["Admin", "SUPER_ADMIN", "System Administrator"];
 
 export default function LoginPage() {
@@ -87,6 +119,10 @@ export default function LoginPage() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState(null);
   const [forgotSuccess, setForgotSuccess] = useState(null);
+
+  // ── Legal docs state ──
+  const [showTermsDoc, setShowTermsDoc] = useState(false);
+  const [showPrivacyDoc, setShowPrivacyDoc] = useState(false);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -574,8 +610,38 @@ const handleVerify2FA = async () => {
             RESTRICTED ACCESS: Authorized BPLO personnel only.<br />
             Violators will be prosecuted under RA 10175.
           </p>
+
+          <p style={{ marginTop: 14, marginBottom: 0, fontSize: 12, lineHeight: 1.6, color: "#94a3b8", textAlign: "center" }}>
+            By signing in, you agree to our{" "}
+            <button
+              type="button"
+              onClick={() => setShowTermsDoc(true)}
+              style={{ background: "none", border: "none", padding: 0, font: "inherit", fontSize: "inherit", color: "#56ab2f", fontWeight: 600, cursor: "pointer" }}
+            >
+              Terms &amp; Conditions
+            </button>{" "}
+            and{" "}
+            <button
+              type="button"
+              onClick={() => setShowPrivacyDoc(true)}
+              style={{ background: "none", border: "none", padding: 0, font: "inherit", fontSize: "inherit", color: "#56ab2f", fontWeight: 600, cursor: "pointer" }}
+            >
+              Privacy Policy
+            </button>.
+          </p>
         </div>
       </div>
+
+      {showTermsDoc && (
+        <LegalDocModal title="Terms & Conditions" onClose={() => setShowTermsDoc(false)}>
+          <TermsPage />
+        </LegalDocModal>
+      )}
+      {showPrivacyDoc && (
+        <LegalDocModal title="Privacy Policy" onClose={() => setShowPrivacyDoc(false)}>
+          <PrivacyPage />
+        </LegalDocModal>
+      )}
     </div>
   );
 }

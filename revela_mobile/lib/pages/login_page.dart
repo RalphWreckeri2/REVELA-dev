@@ -108,8 +108,9 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 16),
                       InkWell(
-                        onTap: () =>
-                            _openLegalUrl('https://www.revela.com/privacy'),
+                        onTap: () => _openLegalUrl(
+                          'https://ralphwreckeri2.github.io/revela_pn/',
+                        ),
                         child: Text(
                           'Read the full Privacy Policy',
                           style: TextStyle(
@@ -122,8 +123,9 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 4),
                       InkWell(
-                        onTap: () =>
-                            _openLegalUrl('https://www.revela.com/terms'),
+                        onTap: () => _openLegalUrl(
+                          'https://ralphwreckeri2.github.io/revela_tc/',
+                        ),
                         child: Text(
                           'Read the Terms & Conditions',
                           style: TextStyle(
@@ -1152,8 +1154,8 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                               recognizer: TapGestureRecognizer()
                                 ..onTap = () => _openLegalUrl(
-                                  'https://www.revela.com/terms',
-                                ), // Replace with your actual URL
+                                  'https://ralphwreckeri2.github.io/revela_tc/',
+                                ),
                             ),
                             const TextSpan(text: ' and acknowledge our '),
                             TextSpan(
@@ -1165,8 +1167,8 @@ class _LoginPageState extends State<LoginPage> {
                               ),
                               recognizer: TapGestureRecognizer()
                                 ..onTap = () => _openLegalUrl(
-                                  'https://www.revela.com/privacy',
-                                ), // Replace with your actual URL
+                                  'https://ralphwreckeri2.github.io/revela_pn/',
+                                ),
                             ),
                             const TextSpan(text: '.'),
                           ],

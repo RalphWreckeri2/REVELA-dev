@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
 
@@ -16,6 +17,18 @@ class HistoryDetailPage extends StatelessWidget {
       case 'Black': return 'Closed / Blacklisted';
       default: return result;
     }
+  }
+
+  int _getNoticeLevel(InspectionTask task) {
+    final remarks = task.remarks ?? '';
+    final result = task.inspectionResult ?? '';
+    
+    if (remarks.contains('[Blacklisted/Closed]') || remarks.contains('Blacklisted') || result == 'Blacklisted/Closed') return 4;
+    if (remarks.contains('[3rd Notice Issued]') || remarks.contains('Given Third Notice') || result == 'Given Third Notice') return 3;
+    if (remarks.contains('[2nd Notice Issued]') || remarks.contains('Given Second Notice') || result == 'Given Second Notice') return 2;
+    if (remarks.contains('[1st Notice Issued]') || remarks.contains('Given First Notice') || result == 'Given First Notice') return 1;
+    
+    return 0;
   }
 
   @override
@@ -126,10 +139,15 @@ class HistoryDetailPage extends StatelessWidget {
                   const Divider(height: 28),
 
                   // Row: Inspector
-                  _DetailRow(
-                    icon: Icons.person_outline_rounded,
-                    label: 'Inspector',
-                    value: 'Unknown', // Inspector name not available in model
+                  FutureBuilder<String?>(
+                    future: const FlutterSecureStorage().read(key: 'user_fullName'),
+                    builder: (context, snapshot) {
+                      return _DetailRow(
+                        icon: Icons.person_outline_rounded,
+                        label: 'Inspector',
+                        value: snapshot.data ?? 'Field Inspector',
+                      );
+                    },
                   ),
                   SizedBox(height: 12),
 
@@ -233,40 +251,83 @@ class HistoryDetailPage extends StatelessWidget {
                     SizedBox(height: 16),
                   ],
 
-                  if (resolvedTask.inspectionResult == 'Given First Notice' ||
-                      (resolvedTask.remarks != null && resolvedTask.remarks!.contains('Given First Notice'))) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.shade300),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Given First Notice',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.orange),
-                                ),
-                                Text(
-                                  'First official compliance notice was issued to this establishment.',
-                                  style: TextStyle(fontSize: 11, color: Colors.black87),
-                                ),
-                              ],
-                            ),
+                  Builder(builder: (context) {
+                    final noticeLevel = _getNoticeLevel(resolvedTask);
+                    if (noticeLevel == 0) return const SizedBox();
+                    
+                    Color bgColor;
+                    Color borderColor;
+                    Color iconColor;
+                    String title;
+                    String desc;
+                    IconData icon;
+                    
+                    if (noticeLevel == 2) {
+                      bgColor = context.isDarkMode ? Colors.deepOrange.withValues(alpha: 0.1) : Colors.deepOrange.shade50;
+                      borderColor = context.isDarkMode ? Colors.deepOrange.withValues(alpha: 0.3) : Colors.deepOrange.shade300;
+                      iconColor = Colors.deepOrange;
+                      title = 'Given Second Notice';
+                      desc = 'Second official compliance notice (Warning for Closure) was issued.';
+                      icon = Icons.error_outline_rounded;
+                    } else if (noticeLevel == 3) {
+                      bgColor = context.isDarkMode ? Colors.red.withValues(alpha: 0.1) : Colors.red.shade50;
+                      borderColor = context.isDarkMode ? Colors.red.withValues(alpha: 0.3) : Colors.red.shade300;
+                      iconColor = context.isDarkMode ? Colors.red.shade400 : Colors.red;
+                      title = 'Given Third Notice / Closure';
+                      desc = 'Third official notice (Closure) was issued due to continued non-compliance.';
+                      icon = Icons.block;
+                    } else if (noticeLevel == 4) {
+                      bgColor = context.isDarkMode ? Colors.grey.shade900 : Colors.grey.shade200;
+                      borderColor = context.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade400;
+                      iconColor = context.isDarkMode ? Colors.grey.shade300 : Colors.grey.shade800;
+                      title = 'Blacklisted / Closed';
+                      desc = 'Establishment has been blacklisted or officially closed.';
+                      icon = Icons.lock_outline_rounded;
+                    } else {
+                      bgColor = context.isDarkMode ? Colors.orange.withValues(alpha: 0.1) : Colors.orange.shade50;
+                      borderColor = context.isDarkMode ? Colors.orange.withValues(alpha: 0.3) : Colors.orange.shade300;
+                      iconColor = Colors.orange;
+                      title = 'Given First Notice';
+                      desc = 'First official compliance notice was issued to this establishment.';
+                      icon = Icons.warning_amber_rounded;
+                    }
+                    
+                    return Column(
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: borderColor),
                           ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                  ],
+                          child: Row(
+                            children: [
+                              Icon(icon, color: iconColor, size: 24),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: iconColor),
+                                    ),
+                                    Text(
+                                      desc,
+                                      style: TextStyle(fontSize: 11, color: context.isDarkMode ? Colors.grey[300] : Colors.black87),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                      ],
+                    );
+                  }),
 
                   // Remarks
                   Text(

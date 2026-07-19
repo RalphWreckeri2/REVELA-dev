@@ -13,7 +13,6 @@ import 'login_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
-
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
@@ -30,7 +29,7 @@ class _SplashScreenState extends State<SplashScreen> {
       // 1. Initialize API config and base URL
       await ApiConfig.initialize();
       AuthService().syncBaseUrl();
-      
+
       // 2. Initialize notifications
       await AssignmentNotifications.init();
 
@@ -38,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen> {
       final prefs = await SharedPreferences.getInstance();
       final bool seenWelcome = prefs.getBool('seen_welcome') ?? false;
       final String themePref = prefs.getString('theme_preference') ?? 'system';
-      
+
       if (themePref == 'dark') {
         themeModeNotifier.value = ThemeMode.dark;
       } else if (themePref == 'light') {
@@ -95,25 +94,28 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Spacer(),
-            
+
             // Logo Container
             Container(
               width: 110,
               height: 110,
               decoration: BoxDecoration(
-                color: const Color(0xFF388E3C).withValues(alpha: 0.5), // Lighter green glow
+                color: const Color(
+                  0xFF388E3C,
+                ).withValues(alpha: 0.5), // Lighter green glow
                 borderRadius: BorderRadius.circular(28),
               ),
               child: Center(
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 65,
-                ),
+                child: Image.asset('assets/images/logo.png', height: 65),
               ),
-            ).animate().scale(delay: 200.ms, duration: 600.ms, curve: Curves.easeOutBack),
-            
+            ).animate().scale(
+              delay: 200.ms,
+              duration: 600.ms,
+              curve: Curves.easeOutBack,
+            ),
+
             const SizedBox(height: 24),
-            
+
             // App Name
             const Text(
               'REVELA',
@@ -124,9 +126,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 letterSpacing: 4,
               ),
             ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2),
-            
+
             const SizedBox(height: 8),
-            
+
             // Subtitle
             Text(
               'Field Inspection Platform',
@@ -136,15 +138,15 @@ class _SplashScreenState extends State<SplashScreen> {
                 letterSpacing: 1.5,
               ),
             ).animate().fadeIn(delay: 700.ms),
-            
+
             const Spacer(),
-            
+
             // Loading Spinner
             const CircularProgressIndicator(
               color: Colors.white,
               strokeWidth: 3,
             ).animate().fadeIn(delay: 1000.ms),
-            
+
             const SizedBox(height: 60),
           ],
         ),

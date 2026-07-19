@@ -511,7 +511,7 @@ body {
   background: var(--color-surface);
   border-color: var(--color-border);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 
 .notification-item-icon {
@@ -892,12 +892,19 @@ html.theme-dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.4);
 }
 
-
 /* ── Dark: Ambient mesh ── */
 html.theme-dark .ambient-bg-mesh {
   background-image:
-    radial-gradient(circle at 10% 20%, rgba(52, 211, 153, 0.04) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(252, 211, 77, 0.03) 0%, transparent 40%);
+    radial-gradient(
+      circle at 10% 20%,
+      rgba(52, 211, 153, 0.04) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 90% 80%,
+      rgba(252, 211, 77, 0.03) 0%,
+      transparent 40%
+    );
 }
 
 /*Spinner animation for loading states*/
@@ -931,7 +938,9 @@ html.theme-dark .ambient-bg-mesh {
     width: 260px;
     transition: left 0.3s ease;
     z-index: 999;
-    background: var(--color-modal-bg); /* theme-aware instead of hardcoded white */
+    background: var(
+      --color-modal-bg
+    ); /* theme-aware instead of hardcoded white */
     display: flex; /* Override the 'display: none' you had */
   }
 
@@ -983,7 +992,8 @@ html.theme-dark .ambient-bg-mesh {
     transform: scale(1);
     opacity: 0.8;
   }
-  70%, 100% {
+  70%,
+  100% {
     transform: scale(2);
     opacity: 0;
   }
@@ -1004,7 +1014,12 @@ html.theme-dark .ambient-bg-mesh {
 /* ── 5. GLOBAL PRINT STYLES ───────────────────────────────── */
 @media print {
   /* Force height auto and overflow visible on all parent wrappers to prevent blank screen print preview bug */
-  html, body, #root, .saas-root, .saas-main, .saas-content {
+  html,
+  body,
+  #root,
+  .saas-root,
+  .saas-main,
+  .saas-content {
     height: auto !important;
     min-height: auto !important;
     max-height: none !important;
@@ -1035,7 +1050,7 @@ html.theme-dark .ambient-bg-mesh {
   .no-print {
     display: none !important;
   }
-  
+
   /* Print container rules */
   .print-report-container {
     display: block !important;
@@ -1058,7 +1073,8 @@ html.theme-dark .ambient-bg-mesh {
     page-break-inside: avoid;
     page-break-after: auto;
   }
-  .print-table th, .print-table td {
+  .print-table th,
+  .print-table td {
     border: 1px solid #cbd5e1;
     padding: 8px 12px;
     text-align: left;
@@ -1074,7 +1090,7 @@ html.theme-dark .ambient-bg-mesh {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  
+
   /* Dynamic Page numbering */
   body {
     counter-reset: page;
@@ -1083,9 +1099,152 @@ html.theme-dark .ambient-bg-mesh {
     counter-increment: page;
     content: "Page " counter(page);
   }
-  
+
   /* Prevent page break inside section blocks */
   .page-break-before-avoid {
     page-break-inside: avoid;
+  }
+}
+
+/* ── 4b. LEGAL PAGES (Terms, Privacy — unauthenticated, theme-aware) ── */
+.legal-page-container {
+  min-height: 100vh;
+  background: var(--color-page-bg);
+  background-image:
+    radial-gradient(
+      circle at 10% 20%,
+      var(--color-primary-light) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 90% 80%,
+      var(--color-gold-light) 0%,
+      transparent 40%
+    );
+  display: flex;
+  justify-content: center;
+  padding: 56px 24px 80px;
+}
+
+.legal-page-content {
+  width: 100%;
+  max-width: 720px;
+  background: var(--color-modal-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow);
+  padding: 48px 56px;
+  color: var(--color-ink);
+}
+
+.legal-page-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+
+.legal-page-content h1 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--color-ink);
+  margin-bottom: 6px;
+}
+
+.legal-page-divider {
+  width: 48px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-gold);
+  margin: 14px 0 18px;
+}
+
+.legal-page-subtitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted);
+  margin-bottom: 28px;
+}
+
+.legal-page-content p {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-muted);
+  margin-bottom: 16px;
+}
+
+.legal-page-content h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-ink);
+  margin: 32px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.legal-page-content ul {
+  margin: 0 0 16px;
+  padding-left: 20px;
+}
+.legal-page-content li {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-muted);
+  margin-bottom: 8px;
+}
+.legal-page-content li strong {
+  color: var(--color-ink);
+}
+
+.legal-page-notice {
+  background: var(--color-gold-light);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin: 24px 0;
+}
+.legal-page-notice p {
+  margin: 0;
+  color: var(--color-gold-dark);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.legal-page-restricted {
+  background: var(--color-danger-light);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-danger);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  margin-top: 32px;
+}
+
+.legal-page-footer {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border-soft);
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-subtle);
+}
+.legal-page-footer strong {
+  color: var(--color-primary-dark);
+}
+
+@media (max-width: 640px) {
+  .legal-page-content {
+    padding: 32px 24px;
   }
 }

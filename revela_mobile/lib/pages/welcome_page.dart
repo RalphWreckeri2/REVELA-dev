@@ -129,10 +129,7 @@ class _WelcomePageState extends State<WelcomePage>
                   margin: const EdgeInsets.only(top: 8, bottom: 32),
                   child: Column(
                     children: [
-                      Image.asset(
-                        'assets/images/logo.png',
-                        height: 80,
-                      ),
+                      Image.asset('assets/images/logo.png', height: 80),
                       SizedBox(height: 12),
                       Text(
                         'REVELA',
@@ -232,18 +229,22 @@ class _SlideContent extends StatelessWidget {
         children: [
           // Icon card
           Container(
-            width: 160,
-            height: 160,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(40),
-            ),
-            child: Icon(slide.icon, size: 72, color: AppColors.gold),
-          ).animate().fadeIn(duration: 500.ms).scale(delay: 100.ms).shimmer(delay: 800.ms, duration: 1000.ms),
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(40),
+                ),
+                child: Icon(slide.icon, size: 72, color: AppColors.gold),
+              )
+              .animate()
+              .fadeIn(duration: 500.ms)
+              .scale(delay: 100.ms)
+              .shimmer(delay: 800.ms, duration: 1000.ms),
           SizedBox(height: 40),
           Text(
             slide.title,

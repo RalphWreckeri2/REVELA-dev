@@ -370,8 +370,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 Icons.chevron_right,
                                 color: context.adaptiveTextLight,
                               ),
-                              onTap: () =>
-                                  _openLegalUrl('https://www.revela.com/terms'),
+                              onTap: () => _openLegalUrl(
+                                'https://ralphwreckeri2.github.io/revela_tc/',
+                              ),
                             ),
                             Divider(
                               height: 1,
@@ -392,7 +393,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 color: context.adaptiveTextLight,
                               ),
                               onTap: () => _openLegalUrl(
-                                'https://www.revela.com/privacy',
+                                'https://ralphwreckeri2.github.io/revela_pn/',
                               ),
                             ),
                           ],

@@ -7,6 +7,8 @@ import Swal from "sweetalert2";
 import { QRCodeSVG } from "qrcode.react";
 import { getWlcConfigRequest, updateWlcConfigRequest, updateMePreferencesRequest, API_ORIGIN } from "../services/api";
 import { useLoadScript, GoogleMap, Marker } from "@react-google-maps/api";
+import TermsPage from "../components/TermsPage";
+import PrivacyPage from "../components/PrivacyPage";
 
 const LIBRARIES = ["places"];
 
@@ -24,6 +26,36 @@ const EyeOffIcon = () => (
     <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
+
+// ── Legal Document Modal ──────────────────────────────────────────────────────
+function LegalDocModal({ title, children, onClose }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: "var(--color-modal-bg)", borderRadius: 16,
+          width: "min(100%, 800px)", height: "min(90vh, 800px)",
+          display: "flex", flexDirection: "column",
+          boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", borderBottom: "1px solid var(--color-border-soft)" }}>
+          <h3 style={{ margin: 0, fontSize: 16, color: "var(--color-ink)" }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", fontSize: 20 }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
 
 // ── Change Password Modal ─────────────────────────────────────────────────────
 function ChangePasswordModal({ onClose, token }) {
@@ -183,6 +215,8 @@ export default function SettingsPage() {
   });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
+  const [showTermsDoc, setShowTermsDoc] = useState(false);
+  const [showPrivacyDoc, setShowPrivacyDoc] = useState(false);
   const [wlcConfig, setWlcConfig] = useState({ w1_risk: 40, w2_sector: 40, w3_distance: 20, bplo_lat: 13.9667, bplo_lng: 121.1167 });
   const [sectors, setSectors] = useState([]);
 
@@ -557,10 +591,44 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        {/* Legal & Support */}
+        <section className="saas-card frosted-glass">
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>Legal & Support</h3>
+            <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Review the platform's terms of service and privacy policy.</p>
+          </div>
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 700, color: "var(--color-ink)" }}>Terms & Conditions</div>
+                <div style={{ color: "var(--color-muted)", fontSize: 12 }}>Read the terms of service for using the REVELA platform.</div>
+              </div>
+              <button type="button" className="ghost-btn" style={{ padding: "8px 12px" }} onClick={() => setShowTermsDoc(true)}>View</button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 700, color: "var(--color-ink)" }}>Privacy Policy</div>
+                <div style={{ color: "var(--color-muted)", fontSize: 12 }}>Understand how your data is collected, used, and protected.</div>
+              </div>
+              <button type="button" className="ghost-btn" style={{ padding: "8px 12px" }} onClick={() => setShowPrivacyDoc(true)}>View</button>
+            </div>
+          </div>
+        </section>
       </div>
 
       {showPasswordModal && <ChangePasswordModal token={token} onClose={() => setShowPasswordModal(false)} />}
       {show2FAModal && <Setup2FAModal token={token} onClose={() => setShow2FAModal(false)} onSuccess={refreshUser} />}
+      {showTermsDoc && (
+        <LegalDocModal title="Terms & Conditions" onClose={() => setShowTermsDoc(false)}>
+          <TermsPage />
+        </LegalDocModal>
+      )}
+      {showPrivacyDoc && (
+        <LegalDocModal title="Privacy Policy" onClose={() => setShowPrivacyDoc(false)}>
+          <PrivacyPage />
+        </LegalDocModal>
+      )}
 
       {/* Map Picker Modal */}
       {showMapModal && isLoaded && (

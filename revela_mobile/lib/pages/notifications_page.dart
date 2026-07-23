@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:async';
 import '../component/inspection_modal.dart';
 import '../service/api_config.dart';
 import '../service/in_app_notifications_service.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/custom_app_bar.dart';
 import '../widgets/floating_mascot.dart';
 import '../widgets/task_card.dart';
 import '../widgets/modern_segmented_filter.dart';
@@ -117,83 +119,69 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      appBar: CustomAppBar(
+        title: 'Notifications',
+        icon: Icons.notifications_active_rounded,
+        actions: [
+          if (_items.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent, size: 24),
+              tooltip: 'Clear all notifications',
+              onPressed: _loading
+                  ? null
+                  : () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Clear All'),
+                          content: const Text('Are you sure you want to permanently delete all notifications?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Clear', style: TextStyle(color: Colors.redAccent)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        setState(() => _loading = true);
+                        await InAppNotificationsService().deleteAllNotifications();
+                        await _load();
+                      }
+                    },
+            ),
+            if (hasUnread)
+              IconButton(
+                icon: Icon(Icons.mark_email_read_outlined, color: AppColors.darkGreen, size: 22),
+                tooltip: 'Mark all as read',
+                onPressed: _loading
+                    ? null
+                    : () async {
+                        await InAppNotificationsService().markAllRead();
+                        _load(silent: true);
+                      },
+              ),
+          ],
+          Padding(
+            padding: const EdgeInsets.only(right: 24.0, left: 8.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: context.isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.refresh_rounded, color: context.adaptiveTextDark, size: 24),
+                onPressed: _loading ? null : _load,
+              ),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header Row ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 12, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: TextStyle(
-                        color: context.adaptiveTextDark,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 28,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                  if (_items.isNotEmpty) ...[
-                    IconButton(
-                      icon: const Icon(Icons.delete_sweep_outlined,
-                          color: Colors.redAccent, size: 24),
-                      tooltip: 'Clear all notifications',
-                      onPressed: _loading
-                          ? null
-                          : () async {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Clear All'),
-                                  content: const Text(
-                                      'Are you sure you want to permanently delete all notifications?'),
-                                  actions: [
-                                    TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, false),
-                                        child: const Text('Cancel')),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx, true),
-                                      child: const Text('Clear',
-                                          style: TextStyle(
-                                              color: Colors.redAccent)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirm == true) {
-                                setState(() => _loading = true);
-                                await InAppNotificationsService()
-                                    .deleteAllNotifications();
-                                await _load();
-                              }
-                            },
-                    ),
-                    if (hasUnread)
-                      IconButton(
-                        icon: Icon(Icons.mark_email_read_outlined,
-                            color: AppColors.darkGreen, size: 22),
-                        tooltip: 'Mark all as read',
-                        onPressed: _loading
-                            ? null
-                            : () async {
-                                await InAppNotificationsService().markAllRead();
-                                _load(silent: true);
-                              },
-                      ),
-                  ],
-                  IconButton(
-                    icon: Icon(Icons.refresh_rounded,
-                        color: context.adaptiveTextMid, size: 22),
-                    onPressed: _loading ? null : _load,
-                  ),
-                ],
-              ),
-            ),
 
             // ── Filter Tabs ──
             ModernSegmentedFilter(

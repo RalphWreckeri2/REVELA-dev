@@ -12,9 +12,9 @@
   --color-primary: #56ab2f;
   --color-primary-dark: #3b6d11;
   --color-primary-light: rgba(86, 171, 47, 0.1);
-  --color-gold: #d4af37;
-  --color-gold-dark: #b8860b;
-  --color-gold-light: rgba(212, 175, 55, 0.1);
+  --color-gold: #eab308;
+  --color-gold-dark: #ca8a04;
+  --color-gold-light: rgba(234, 179, 8, 0.1);
 
   /* Semantic */
   --color-danger: #ef4444;
@@ -673,9 +673,9 @@ html.theme-dark {
   --color-primary: #34d399;
   --color-primary-dark: #059669;
   --color-primary-light: rgba(52, 211, 153, 0.14);
-  --color-gold: #fcd34d;
-  --color-gold-dark: #a16207;
-  --color-gold-light: rgba(252, 211, 77, 0.15);
+  --color-gold: #fde047;
+  --color-gold-dark: #eab308;
+  --color-gold-light: rgba(253, 224, 71, 0.15);
 
   --color-danger: #fb7185;
   --color-danger-light: rgba(251, 113, 133, 0.15);

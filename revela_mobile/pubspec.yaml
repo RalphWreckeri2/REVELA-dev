@@ -64,6 +64,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  rename: ^3.1.0
 
 flutter_launcher_icons:
   android: "launcher_icon"
@@ -84,6 +85,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/data/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

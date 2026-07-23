@@ -6,6 +6,7 @@ import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/task_card.dart';
 import '../widgets/modern_segmented_filter.dart';
+import '../widgets/custom_app_bar.dart';
 import 'history_detail_page.dart';
 import 'pdf_generator_page.dart';
 
@@ -28,24 +29,50 @@ class _InspectionPageState extends State<InspectionPage>
   List<InspectionTask> _currentTasks = [];
   List<InspectionTask> _missingTasks = [];
   List<InspectionTask> _historyTasks = [];
-  String _selectedHistoryStatus = 'All';
-  String _selectedHistoryResult = 'All';
+  String _selectedStatus = 'All';
+  String _selectedResult = 'All';
+  String _selectedBarangay = 'All';
+  String _selectedSort = 'Newest';
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  bool _showHistoryFilters = false;
+  bool _showFilters = false;
   bool _loadingCurrent = true;
   bool _loadingHistory = true;
 
-  List<String> get _availableHistoryStatuses {
-    final statuses = _historyTasks.map((t) => t.verificationStatus).toSet().toList();
+  List<InspectionTask> get _activeTabTasks {
+    if (_currentFilterIndex == 0) return _currentTasks;
+    if (_currentFilterIndex == 1) return _missingTasks;
+    return _historyTasks;
+  }
+
+  List<String> get _availableStatuses {
+    final statuses = _activeTabTasks.map((t) => t.verificationStatus).toSet().toList();
     statuses.sort();
     return ['All', ...statuses];
   }
 
-  List<String> get _availableHistoryResults {
-    final results = _historyTasks.map((t) => t.inspectionResult ?? 'Pending').toSet().toList();
+  List<String> get _availableResults {
+    final results = _activeTabTasks.map((t) => t.inspectionResult ?? 'Pending').toSet().toList();
     results.sort();
     return ['All', ...results];
+  }
+
+  List<String> get _availableBarangays {
+    final barangays = _activeTabTasks.map((t) => t.barangayName).toSet().toList();
+    barangays.sort();
+    return ['All', ...barangays];
+  }
+
+  void _validateFilters() {
+    if (_selectedStatus != 'All' && !_availableStatuses.contains(_selectedStatus)) {
+      _selectedStatus = 'All';
+    }
+    if (_selectedResult != 'All' && !_availableResults.contains(_selectedResult)) {
+      _selectedResult = 'All';
+    }
+    if (_selectedBarangay != 'All' && !_availableBarangays.contains(_selectedBarangay)) {
+      _selectedBarangay = 'All';
+    }
   }
 
   String _formatResult(String result) {
@@ -59,27 +86,35 @@ class _InspectionPageState extends State<InspectionPage>
     }
   }
 
-  List<InspectionTask> get _filteredCurrentTasks {
-    if (_searchQuery.isEmpty) return _currentTasks;
+  List<InspectionTask> _applyFiltersAndSort(List<InspectionTask> tasks, bool isHistory) {
     final q = _searchQuery.toLowerCase();
-    return _currentTasks.where((t) => t.detectedName.toLowerCase().contains(q) || t.barangayName.toLowerCase().contains(q)).toList();
-  }
-
-  List<InspectionTask> get _filteredMissingTasks {
-    if (_searchQuery.isEmpty) return _missingTasks;
-    final q = _searchQuery.toLowerCase();
-    return _missingTasks.where((t) => t.detectedName.toLowerCase().contains(q) || t.barangayName.toLowerCase().contains(q)).toList();
-  }
-
-  List<InspectionTask> get _filteredHistoryTasks {
-    final q = _searchQuery.toLowerCase();
-    return _historyTasks.where((t) {
-      final matchesStatus = _selectedHistoryStatus == 'All' || t.verificationStatus == _selectedHistoryStatus;
-      final matchesResult = _selectedHistoryResult == 'All' || (t.inspectionResult ?? 'Pending') == _selectedHistoryResult;
+    var filtered = tasks.where((t) {
       final matchesSearch = q.isEmpty || t.detectedName.toLowerCase().contains(q) || t.barangayName.toLowerCase().contains(q);
-      return matchesStatus && matchesResult && matchesSearch;
+      final matchesBarangay = _selectedBarangay == 'All' || t.barangayName == _selectedBarangay;
+      
+      if (!isHistory) {
+        return matchesSearch && matchesBarangay;
+      } else {
+        final matchesStatus = _selectedStatus == 'All' || t.verificationStatus == _selectedStatus;
+        final matchesResult = _selectedResult == 'All' || (t.inspectionResult ?? 'Pending') == _selectedResult;
+        return matchesSearch && matchesBarangay && matchesStatus && matchesResult;
+      }
     }).toList();
+
+    if (!isHistory) {
+      filtered.sort((a, b) {
+        final dateA = DateTime.tryParse(a.irTimestamp) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final dateB = DateTime.tryParse(b.irTimestamp) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return _selectedSort == 'Oldest' ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
+      });
+    }
+
+    return filtered;
   }
+
+  List<InspectionTask> get _filteredCurrentTasks => _applyFiltersAndSort(_currentTasks, false);
+  List<InspectionTask> get _filteredMissingTasks => _applyFiltersAndSort(_missingTasks, false);
+  List<InspectionTask> get _filteredHistoryTasks => _applyFiltersAndSort(_historyTasks, true);
   String? _currentError;
   String? _historyError;
   bool _isDrawerOpen = false;
@@ -93,6 +128,10 @@ class _InspectionPageState extends State<InspectionPage>
       if (_currentFilterIndex != _tabController.index) {
         setState(() {
           _currentFilterIndex = _tabController.index;
+          _selectedStatus = 'All';
+          _selectedResult = 'All';
+          _selectedBarangay = 'All';
+          _selectedSort = 'Newest';
         });
       }
     });
@@ -137,6 +176,9 @@ class _InspectionPageState extends State<InspectionPage>
         setState(() {
           _currentTasks = currentList;
           _missingTasks = missingList;
+          if (_currentFilterIndex == 0 || _currentFilterIndex == 1) {
+            _validateFilters();
+          }
           _loadingCurrent = false;
         });
       }
@@ -163,15 +205,10 @@ class _InspectionPageState extends State<InspectionPage>
       if (mounted) {
         setState(() {
           _historyTasks = historyTasks;
+          if (_currentFilterIndex == 2) {
+            _validateFilters();
+          }
           _loadingHistory = false;
-          if (_selectedHistoryStatus != 'All' &&
-              !_historyTasks.any((t) => t.verificationStatus == _selectedHistoryStatus)) {
-            _selectedHistoryStatus = 'All';
-          }
-          if (_selectedHistoryResult != 'All' &&
-              !_historyTasks.any((t) => (t.inspectionResult ?? 'Pending') == _selectedHistoryResult)) {
-            _selectedHistoryResult = 'All';
-          }
         });
       }
     } catch (e) {
@@ -223,13 +260,65 @@ class _InspectionPageState extends State<InspectionPage>
     if (mounted) setState(() => _isDrawerOpen = false);
   }
 
-  Widget _buildHistoryFilter(BuildContext context) {
-    final statuses = _availableHistoryStatuses;
-    final results = _availableHistoryResults;
+  Widget _buildDropdownColumn({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    String Function(String)? formatValue,
+  }) {
+    // Defensive check to avoid Flutter DropdownButton crash
+    // Ensure items are strictly unique and the value exists in the list.
+    final safeItems = items.toSet().toList();
+    final safeValue = safeItems.contains(value) ? value : (safeItems.isNotEmpty ? safeItems.first : null);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: context.isDarkMode ? Colors.grey[800] : Colors.grey[100],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: safeValue,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey, size: 18),
+              style: TextStyle(color: context.adaptiveTextDark, fontSize: 13, fontWeight: FontWeight.w600),
+              dropdownColor: context.adaptiveSurface,
+              onChanged: onChanged,
+              items: safeItems.map<DropdownMenuItem<String>>((String item) {
+                final text = formatValue != null ? formatValue(item) : (item == 'All' ? 'All $label' : item);
+                return DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(text, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilter(BuildContext context) {
+    final isHistory = _currentFilterIndex == 2;
+    
+    final statuses = _availableStatuses;
+    final results = _availableResults;
+    final barangays = _availableBarangays;
+    
     final hasStatusFilter = statuses.length > 1;
     final hasResultFilter = results.length > 1;
+    final hasBarangayFilter = barangays.length > 1;
 
-    if (!hasStatusFilter && !hasResultFilter) return const SizedBox.shrink();
+    // Check if we have anything to show
+    if (isHistory && !hasStatusFilter && !hasResultFilter && !hasBarangayFilter) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -253,13 +342,15 @@ class _InspectionPageState extends State<InspectionPage>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Filters', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: context.adaptiveTextDark)),
-                if (_selectedHistoryStatus != 'All' || _selectedHistoryResult != 'All')
+                if (_selectedStatus != 'All' || _selectedResult != 'All' || _selectedBarangay != 'All' || _selectedSort != 'Newest')
                   GestureDetector(
                     onTap: () {
                       if (mounted) {
                         setState(() {
-                          _selectedHistoryStatus = 'All';
-                          _selectedHistoryResult = 'All';
+                          _selectedStatus = 'All';
+                          _selectedResult = 'All';
+                          _selectedBarangay = 'All';
+                          _selectedSort = 'Newest';
                         });
                       }
                     },
@@ -268,88 +359,70 @@ class _InspectionPageState extends State<InspectionPage>
               ],
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                if (hasStatusFilter)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Status', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: context.isDarkMode ? Colors.grey[800] : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
+            if (!isHistory)
+              Row(
+                children: [
+                  if (hasBarangayFilter)
+                    Expanded(
+                      child: _buildDropdownColumn(
+                        label: 'Barangay',
+                        value: _selectedBarangay,
+                        items: barangays,
+                        onChanged: (val) => setState(() => _selectedBarangay = val!),
                       ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: _selectedHistoryStatus,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey, size: 18),
-                          style: TextStyle(color: context.adaptiveTextDark, fontSize: 13, fontWeight: FontWeight.w600),
-                          dropdownColor: context.adaptiveSurface,
-                          onChanged: (String? newValue) {
-                            if (newValue != null && mounted) {
-                              setState(() => _selectedHistoryStatus = newValue);
-                            }
-                          },
-                          items: statuses.map<DropdownMenuItem<String>>((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value == 'All' ? 'All Statuses' : value, overflow: TextOverflow.ellipsis),
-                            );
-                          }).toList(),
-                        ),
+                    ),
+                  if (hasBarangayFilter) const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildDropdownColumn(
+                      label: 'Sort',
+                      value: _selectedSort,
+                      items: const ['Newest', 'Oldest'],
+                      onChanged: (val) => setState(() => _selectedSort = val!),
+                    ),
+                  ),
+                ],
+              ),
+            if (isHistory) ...[
+              if (hasBarangayFilter)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDropdownColumn(
+                        label: 'Barangay',
+                        value: _selectedBarangay,
+                        items: barangays,
+                        onChanged: (val) => setState(() => _selectedBarangay = val!),
                       ),
                     ),
                   ],
                 ),
-              ),
-            if (hasStatusFilter && hasResultFilter)
-              const SizedBox(width: 12),
-            if (hasResultFilter)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Result', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: context.isDarkMode ? Colors.grey[800] : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: _selectedHistoryResult,
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey, size: 18),
-                          style: TextStyle(color: context.adaptiveTextDark, fontSize: 13, fontWeight: FontWeight.w600),
-                          dropdownColor: context.adaptiveSurface,
-                          onChanged: (String? newValue) {
-                            if (newValue != null && mounted) {
-                              setState(() => _selectedHistoryResult = newValue);
-                            }
-                          },
-                          items: results.map<DropdownMenuItem<String>>((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value == 'All' ? 'All Results' : _formatResult(value), overflow: TextOverflow.ellipsis),
-                            );
-                          }).toList(),
-                        ),
+              if (hasBarangayFilter && (hasStatusFilter || hasResultFilter))
+                const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (hasStatusFilter)
+                    Expanded(
+                      child: _buildDropdownColumn(
+                        label: 'Status',
+                        value: _selectedStatus,
+                        items: statuses,
+                        onChanged: (val) => setState(() => _selectedStatus = val!),
                       ),
                     ),
-                  ],
-                ),
+                  if (hasStatusFilter && hasResultFilter) const SizedBox(width: 12),
+                  if (hasResultFilter)
+                    Expanded(
+                      child: _buildDropdownColumn(
+                        label: 'Result',
+                        value: _selectedResult,
+                        items: results,
+                        onChanged: (val) => setState(() => _selectedResult = val!),
+                        formatValue: (val) => val == 'All' ? 'All' : _formatResult(val),
+                      ),
+                    ),
+                ],
               ),
-          ],
-            ),
+            ],
           ],
         ),
       ),
@@ -381,46 +454,33 @@ class _InspectionPageState extends State<InspectionPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
+      appBar: CustomAppBar(
+        title: 'Inspections',
+        icon: Icons.assignment_turned_in_rounded,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 24.0),
+            child: Container(
+              decoration: BoxDecoration(
+                color: context.isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.picture_as_pdf_rounded, color: AppColors.darkGreen, size: 24),
+                tooltip: 'Generate Notice PDF',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PdfGeneratorPage()),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
-              child: Row(
-                children: [
-                  if (Navigator.of(context).canPop())
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.adaptiveTextDark),
-                        onPressed: () => Navigator.pop(context),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(
-                      'Inspections',
-                      style: TextStyle(
-                        color: context.adaptiveTextDark,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 28,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.picture_as_pdf_rounded, color: AppColors.darkGreen, size: 24),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const PdfGeneratorPage()),
-                    ),
-                    tooltip: 'Generate Notice PDF',
-                  ),
-                ],
-              ),
-            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
               child: Container(
@@ -461,28 +521,26 @@ class _InspectionPageState extends State<InspectionPage>
                         },
                         child: Icon(Icons.close, color: Colors.grey, size: 20),
                       ),
-                    if (_currentFilterIndex == 2) ...[
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _showHistoryFilters = !_showHistoryFilters;
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _showHistoryFilters ? context.adaptivePrimary.withOpacity(0.1) : Colors.transparent,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Icons.tune_rounded, 
-                            color: _showHistoryFilters ? context.adaptivePrimary : Colors.grey, 
-                            size: 20,
-                          ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showFilters = !_showFilters;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _showFilters ? context.adaptivePrimary.withOpacity(0.1) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.tune_rounded, 
+                          color: _showFilters ? context.adaptivePrimary : Colors.grey, 
+                          size: 20,
                         ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
@@ -494,6 +552,7 @@ class _InspectionPageState extends State<InspectionPage>
                 _tabController.animateTo(index);
               },
             ),
+            if (_showFilters) _buildFilter(context),
             const SizedBox(height: 8),
             Expanded(
               child: TabBarView(
@@ -561,29 +620,20 @@ class _InspectionPageState extends State<InspectionPage>
                     message: 'No inspection history yet.',
                     imagePath: 'assets/images/searching.png',
                   )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_showHistoryFilters)
-                        _buildHistoryFilter(context),
-                      Expanded(
-                        child: _filteredHistoryTasks.isEmpty
-                            ? const _EmptyState(
-                                message: 'No history matches the selected filter.',
-                                imagePath: 'assets/images/searching.png',
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(20),
-                                itemCount: _filteredHistoryTasks.length,
-                                itemBuilder: (_, i) => TaskCard(
-                                  task: _filteredHistoryTasks[i],
-                                  isCurrent: false,
-                                  onTap: () => _onHistoryTaskTap(_filteredHistoryTasks[i]),
-                                ),
-                              ),
+                : _filteredHistoryTasks.isEmpty
+                    ? const _EmptyState(
+                        message: 'No history matches the selected filter.',
+                        imagePath: 'assets/images/searching.png',
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: _filteredHistoryTasks.length,
+                        itemBuilder: (_, i) => TaskCard(
+                          task: _filteredHistoryTasks[i],
+                          isCurrent: false,
+                          onTap: () => _onHistoryTaskTap(_filteredHistoryTasks[i]),
+                        ),
                       ),
-                    ],
-                  ),
           ),
         ],
               ),

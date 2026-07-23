@@ -48,3 +48,7 @@ revela_mobile/.flutter-plugins
 revela_mobile/.flutter-plugins-dependencies
 revela_mobile/windows/flutter/generated_*
 revela_mobile/linux/flutter/generated_*
+
+# Never commit signing keys
+*.jks
+*.keystore

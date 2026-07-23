@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid,
@@ -100,6 +100,21 @@ const Skeleton = ({ h = 200 }) => (
 
 // ── Chart Interpretation & Insights ──────────────────────────────────────────
 const ChartInterpretation = ({ type = "info", title = "Analysis & Recommendations", findings = [], actions = [] }) => {
+  const [expanded, setExpanded] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setExpanded(false);
+      }
+    };
+    if (expanded) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [expanded]);
+  
   const styles = {
     info: {
       borderLeft: "4px solid #3b82f6",
@@ -133,44 +148,73 @@ const ChartInterpretation = ({ type = "info", title = "Analysis & Recommendation
   };
 
   return (
-    <div style={{
-      marginTop: 16,
-      padding: "14px 18px",
-      borderRadius: "var(--radius-md, 8px)",
-      borderLeft: styles.borderLeft,
-      background: styles.background,
-      backdropFilter: "blur(8px)",
-      fontSize: 13,
-      lineHeight: 1.5,
-      boxShadow: "0 2px 10px rgba(0,0,0,0.03)"
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: styles.titleColor, flexShrink: 0 }}>
-          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+    <div ref={containerRef} style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}>
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          background: expanded ? styles.background : "var(--color-input-bg)",
+          border: `1px solid ${expanded ? styles.titleColor : "var(--color-border-soft)"}`,
+          color: expanded ? styles.titleColor : "var(--color-muted)",
+          width: 32, height: 32, borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+          transition: "all 0.2s"
+        }}
+        title="View Insights"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
         </svg>
-        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: styles.titleColor, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {title}
-        </h4>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {findings.length > 0 && (
-          <div>
-            <strong style={{ color: styles.titleColor, display: "block", marginBottom: 2 }}>Key Observations:</strong>
-            <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
-              {findings.map((f, i) => <li key={i} style={{ marginBottom: 2 }}>{f}</li>)}
-            </ul>
+      </button>
+
+      {expanded && (
+        <div style={{
+          position: "absolute",
+          top: 40,
+          right: 0,
+          width: 320,
+          padding: "16px 20px",
+          borderRadius: "var(--radius-lg, 12px)",
+          borderTop: styles.borderLeft,
+          background: "var(--color-modal-bg)",
+          fontSize: 13,
+          lineHeight: 1.5,
+          boxShadow: "0 10px 40px rgba(0,0,0,0.12)",
+          border: "1px solid var(--color-border-soft)",
+          zIndex: 20
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: styles.titleColor, flexShrink: 0 }}>
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+            </svg>
+            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: styles.titleColor, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {title}
+            </h4>
           </div>
-        )}
-        {actions.length > 0 && (
-          <div>
-            <strong style={{ color: styles.titleColor, display: "block", marginBottom: 2 }}>Actionable BPLO Strategy:</strong>
-            <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
-              {actions.map((a, i) => <li key={i} style={{ marginBottom: 2, listStyleType: "square" }}>{a}</li>)}
-            </ul>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {findings.length > 0 && (
+              <div>
+                <strong style={{ color: styles.titleColor, display: "block", marginBottom: 4 }}>Key Observations:</strong>
+                <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
+                  {findings.map((f, i) => <li key={i} style={{ marginBottom: 4 }}>{f}</li>)}
+                </ul>
+              </div>
+            )}
+            {actions.length > 0 && (
+              <div>
+                <strong style={{ color: styles.titleColor, display: "block", marginBottom: 4 }}>Actionable Strategy:</strong>
+                <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
+                  {actions.map((a, i) => <li key={i} style={{ marginBottom: 4, listStyleType: "square" }}>{a}</li>)}
+                </ul>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -501,6 +545,8 @@ export default function AnalyticsPage() {
           0%   { background-position: -200% 0; }
           100% { background-position:  200% 0; }
         }
+        .saas-card { position: relative; }
+        .saas-card:focus-within, .saas-card:hover { z-index: 50; }
         .analytics-tab-btn {
           padding: 8px 18px;
           border-radius: 8px;

@@ -90,6 +90,7 @@ class ApiConfig {
     }
 
     // Wi-Fi network (Laptop's IP)
+    // We'll adjust this everytime the laptop's network chaneges
     add('http://192.168.1.2:5000');
 
     // USB + `adb reverse tcp:5000 tcp:5000` (physical device)

@@ -14,6 +14,7 @@ import '../component/inspection_modal.dart';
 
 import '../service/assignment_notifications.dart';
 import '../service/flag_service.dart';
+import '../service/boundary_service.dart';
 
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
@@ -33,7 +34,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _isDockerExpanded = false;
   bool _isFirstLoad = true;
   String _sortBy = 'newest'; // 'newest' or 'oldest'
+  String _dockerTab = 'tasks';
   bool _hasLocationPermission = false;
+  bool _isLegendOpen = false;
+  BitmapDescriptor? _blackMarker;
+
+  Future<void> _initMarkers() async {
+    final PictureRecorder pictureRecorder = PictureRecorder();
+    final Canvas canvas = Canvas(pictureRecorder);
+    final Paint paint = Paint()..color = Colors.black;
+    final Path path = Path()
+      ..moveTo(24, 48)
+      ..lineTo(34, 30)
+      ..arcToPoint(const Offset(14, 30), radius: const Radius.circular(12), clockwise: false)
+      ..lineTo(24, 48)
+      ..close();
+    canvas.drawPath(path, paint);
+    canvas.drawCircle(const Offset(24, 20), 6, Paint()..color = Colors.white);
+
+    final img = await pictureRecorder.endRecording().toImage(48, 48);
+    final data = await img.toByteData(format: ImageByteFormat.png);
+    if (data != null) {
+      _blackMarker = BitmapDescriptor.fromBytes(data.buffer.asUint8List());
+      if (mounted) setState(() {});
+    }
+  }
 
   Timer? _pollTimer;
   bool _assignmentNotifyPrimed = false;
@@ -73,6 +98,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initMarkers();
     _primePermissionsAndFetch();
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) {
@@ -203,13 +229,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // ── Assignment-task markers (pinned by the system) ──────────────────
     for (final t in _tasks) {
       if (t.latitude == null || t.longitude == null) continue;
-      final hue = switch (t.flagColor) {
-        'Red' => BitmapDescriptor.hueRed,
-        'Yellow' => BitmapDescriptor.hueYellow,
-        'Orange' => 15.0,  // deep orange hue — distinct from hueYellow (60) and hueOrange (30)
-        'Black' => BitmapDescriptor.hueViolet,
-        _ => BitmapDescriptor.hueGreen,
-      };
+      final icon = t.flagColor == 'Black' && _blackMarker != null
+          ? _blackMarker!
+          : BitmapDescriptor.defaultMarkerWithHue(switch (t.flagColor) {
+              'Red' => BitmapDescriptor.hueRed,
+              'Yellow' => BitmapDescriptor.hueYellow,
+              'Orange' => 15.0,  // deep orange hue — distinct from hueYellow (60) and hueOrange (30)
+              _ => BitmapDescriptor.hueGreen,
+            });
       markers.add(
         Marker(
           markerId: MarkerId('flag_${t.logID}'),
@@ -218,7 +245,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             title: t.detectedName,
             snippet: '${t.barangayName} · ${t.flagColor}',
           ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+          icon: icon,
           onTap: () => _onTaskTap(t),
         ),
       );
@@ -226,12 +253,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     // ── Inspector-reported yellow flag markers ──────────────────────────
     // These are flags this inspector submitted via the "Flag Business" button.
-    // They use a slightly orange-yellow hue (hueOrange) to visually differ
-    // from system-assigned yellow-flag tasks above, and show a "You flagged"
-    // snippet so the inspector knows it's their own submission.
+    // Show a "You flagged" snippet so the inspector knows it's their own submission.
     for (final f in _myFlags) {
       // Skip if this flag is already shown as an assigned task.
       if (_tasks.any((t) => t.logID == f.logID)) continue;
+
+      // Skip if it has been acted upon (resolved/completed)
+      final isActiveOrUnassigned = f.verificationStatus == null ||
+          const {'Assigned', 'Reassigned'}.contains(f.verificationStatus);
+      if (!isActiveOrUnassigned) continue;
+
+      // Skip if it was resolved to Green by admin without inspection
+      if (f.flagColor == 'Green') continue;
+
       markers.add(
         Marker(
           markerId: MarkerId('my_flag_${f.logID}'),
@@ -241,8 +275,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             snippet: 'You flagged this • ${f.flagColor}',
           ),
           icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueOrange,
+            BitmapDescriptor.hueYellow,
           ),
+          onTap: () => _onYellowFlagTap(f),
         ),
       );
     }
@@ -307,6 +342,112 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (mounted) setState(() => _isDrawerOpen = false);
   }
 
+  void _onYellowFlagTap(MyFlag flag) async {
+    if (_isDrawerOpen) return;
+    setState(() => _isDrawerOpen = true);
+    widget.onDrawerToggled?.call(true);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 0,
+            right: 16,
+            child: Image.asset(
+              'assets/images/standing.png',
+              height: 240,
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 110),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: context.adaptiveSurface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Reported Flag', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: context.adaptiveTextDark)),
+                  const SizedBox(height: 16),
+                  _buildDetailRow('Business Name', flag.detectedName),
+                  _buildDetailRow('Color', flag.flagColor),
+                  _buildDetailRow('Status', flag.verificationStatus ?? 'Pending'),
+                  if (flag.notes != null && flag.notes!.isNotEmpty)
+                    _buildDetailRow('Notes', flag.notes!),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline_rounded, color: AppColors.gold, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'This yellow flag needs to be reviewed by the admin before you can proceed with any official inspection.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: context.adaptiveTextDark,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.gold,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    widget.onDrawerToggled?.call(false);
+    if (mounted) setState(() => _isDrawerOpen = false);
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey)),
+          ),
+          Expanded(
+            child: Text(value, style: TextStyle(fontWeight: FontWeight.w600, color: context.adaptiveTextDark)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Open yellow flag sheet ────────────────────────────────────────────────
   void _showYellowFlagSheet() async {
     if (_isDrawerOpen) return;
@@ -337,19 +478,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              backgroundColor: const Color(0xFFD97706),
+              backgroundColor: AppColors.gold,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               content: const Row(
                 children: [
-                  Icon(Icons.flag_rounded, color: Colors.white, size: 20),
+                  Icon(Icons.flag_rounded, color: Colors.black87, size: 20),
                   SizedBox(width: 10),
                   Text(
                     'Yellow flag reported successfully.',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Colors.black87,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -362,6 +503,55 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     widget.onDrawerToggled?.call(false);
     if (mounted) setState(() => _isDrawerOpen = false);
+  }
+
+  Widget _buildMapLegend(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: context.adaptiveSurface.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: context.isDarkMode ? Colors.white24 : Colors.black12),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Map Legend', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: context.adaptiveTextDark)),
+              const SizedBox(width: 24),
+              GestureDetector(
+                onTap: () => setState(() => _isLegendOpen = false),
+                child: Icon(Icons.close, size: 16, color: context.adaptiveTextMid),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildLegendItem(Colors.red, 'Unregistered'),
+          _buildLegendItem(Colors.orange, 'Pending Action'),
+          _buildLegendItem(Colors.yellow, 'Inspector Flagged'),
+          _buildLegendItem(Colors.green, 'Verified / Clear'),
+          _buildLegendItem(Colors.black, 'Closed / Inactive'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(Color color, String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.location_on, color: color, size: 16),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(fontSize: 12, color: context.adaptiveTextDark)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -378,6 +568,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Align(
+            alignment: Alignment.center,
+            child: FloatingActionButton(
+              mini: true,
+              backgroundColor: context.isDarkMode ? Colors.black : Colors.white,
+              heroTag: 'legend_toggle',
+              onPressed: () => setState(() => _isLegendOpen = !_isLegendOpen),
+              child: Icon(Icons.legend_toggle_rounded, color: context.isDarkMode ? Colors.white : AppColors.darkGreen),
+            ),
+          ),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -426,6 +629,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               mapToolbarEnabled: false,
             ),
           ),
+
+          // ── 1.5. Legend ───────────────────────────────────────────────────
+          if (_isLegendOpen)
+            Positioned(
+              top: paddingTop + kToolbarHeight + 8,
+              left: 16,
+              child: _buildMapLegend(context),
+            ),
 
           // ── 2. Map View Controls (+/−/recenter) ─────────────────────────
           Positioned(
@@ -522,18 +733,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       decoration: BoxDecoration(
                         color: context.adaptiveSurface.withOpacity(0.85),
                       ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Handle — tap or swipe down to dismiss
-                    GestureDetector(
-                      onTap: _toggleDocker,
-                      onVerticalDragEnd: (details) {
-                        if ((details.primaryVelocity ?? 0) > 200) {
-                          _toggleDocker();
-                        }
-                      },
-                      behavior: HitTestBehavior.opaque,
+                child: GestureDetector(
+                  onVerticalDragUpdate: (details) {
+                    if (details.primaryDelta! > 10) {
+                      if (_isDockerExpanded) _toggleDocker();
+                    }
+                  },
+                  onVerticalDragEnd: (details) {
+                    if ((details.primaryVelocity ?? 0) > 200) {
+                      if (_isDockerExpanded) _toggleDocker();
+                    }
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Handle — tap to dismiss
+                      GestureDetector(
+                        onTap: _toggleDocker,
+                        behavior: HitTestBehavior.opaque,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         child: Center(
@@ -560,19 +778,43 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Expanded(
-                                  child: Text(
-                                    _isFirstLoad
-                                        ? "Saan ang Sinsay?"
-                                        : "My Assignments",
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: context.adaptiveTextDark,
+                                  child: _isFirstLoad ? Text(
+                                    "Saan ang Sinsay?",
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: context.adaptiveTextDark,
+                                    ),
+                                  ) : Row(
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () => setState(() => _dockerTab = 'tasks'),
+                                        child: Text(
+                                          "Tasks",
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: _dockerTab == 'tasks' ? context.adaptiveTextDark : Colors.grey,
+                                          ),
+                                        ),
                                       ),
+                                      const SizedBox(width: 16),
+                                      GestureDetector(
+                                        onTap: () => setState(() => _dockerTab = 'flags'),
+                                        child: Text(
+                                          "My Flags",
+                                          style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: _dockerTab == 'flags' ? context.adaptiveTextDark : Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 // Task count badge
-                                if (!_loadingTasks && _tasks.isNotEmpty)
+                                if (!_loadingTasks && (_dockerTab == 'tasks' ? _tasks.isNotEmpty : _myFlags.isNotEmpty))
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 10,
@@ -585,7 +827,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      '${_tasks.length} task${_tasks.length != 1 ? 's' : ''}',
+                                      _dockerTab == 'tasks' ? '${_tasks.length} task${_tasks.length != 1 ? 's' : ''}' : '${_myFlags.length} flag${_myFlags.length != 1 ? 's' : ''}',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
@@ -648,107 +890,140 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
                             // Task list
                             Flexible(
-                              child: _loadingTasks
-                                  ? ListView.builder(
-                                      shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
-                                      itemCount: 3,
-                                      padding: EdgeInsets.zero,
-                                      itemBuilder: (context, index) => Padding(
-                                        padding: const EdgeInsets.only(bottom: 12.0),
-                                        child: Shimmer.fromColors(
-                                          baseColor: context.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-                                          highlightColor: context.isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
-                                          child: Container(
-                                            height: 120,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(16),
+                              child: _dockerTab == 'flags'
+                                  ? _myFlags.isEmpty
+                                      ? Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 32),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.flag_outlined, color: Colors.grey[400], size: 48),
+                                                const SizedBox(height: 12),
+                                                Text('No yellow flags submitted yet.', style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+                                              ],
                                             ),
                                           ),
-                                        ),
-                                      ),
-                                    )
-                                  : _taskError != null
-                                  ? Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 32,
-                                      ),
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(
-                                              Icons.wifi_off,
-                                              color: Colors.grey,
-                                              size: 40,
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Text(
-                                              _taskError!,
-                                              style: const TextStyle(
-                                                color: Colors.grey,
+                                        )
+                                      : RefreshIndicator(
+                                          color: AppColors.gold,
+                                          onRefresh: () => _fetchMyFlags(),
+                                          child: ListView.builder(
+                                            shrinkWrap: true,
+                                            padding: EdgeInsets.zero,
+                                            physics: const AlwaysScrollableScrollPhysics(),
+                                            itemCount: _myFlags.length,
+                                            itemBuilder: (context, index) {
+                                              final f = _myFlags[_myFlags.length - 1 - index]; // reverse chronological
+                                              return GestureDetector(
+                                                onTap: () => _onYellowFlagTap(f),
+                                                child: Container(
+                                                  margin: const EdgeInsets.only(bottom: 12),
+                                                  padding: const EdgeInsets.all(16),
+                                                  decoration: BoxDecoration(
+                                                    color: context.isDarkMode ? Colors.grey[900] : Colors.white,
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    border: Border.all(color: context.isDarkMode ? Colors.grey[800]! : Colors.grey[200]!),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      Container(
+                                                        padding: const EdgeInsets.all(10),
+                                                        decoration: BoxDecoration(color: AppColors.gold.withOpacity(0.1), shape: BoxShape.circle),
+                                                        child: const Icon(Icons.flag_rounded, color: AppColors.gold, size: 20),
+                                                      ),
+                                                      const SizedBox(width: 16),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(f.detectedName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: context.adaptiveTextDark)),
+                                                            const SizedBox(height: 4),
+                                                            Text(f.verificationStatus ?? 'Pending', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        )
+                                  : _loadingTasks
+                                      ? ListView.builder(
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: 3,
+                                          padding: EdgeInsets.zero,
+                                          itemBuilder: (context, index) => Padding(
+                                            padding: const EdgeInsets.only(bottom: 12.0),
+                                            child: Shimmer.fromColors(
+                                              baseColor: context.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                                              highlightColor: context.isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+                                              child: Container(
+                                                height: 120,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  borderRadius: BorderRadius.circular(16),
+                                                ),
                                               ),
                                             ),
-                                            const SizedBox(height: 12),
-                                            TextButton(
-                                              onPressed: _fetchTasks,
-                                              child: const Text('Retry'),
+                                          ),
+                                        )
+                                      : _taskError != null
+                                      ? Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 32),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.wifi_off, color: Colors.grey, size: 40),
+                                                const SizedBox(height: 12),
+                                                Text(_taskError!, style: const TextStyle(color: Colors.grey)),
+                                                const SizedBox(height: 12),
+                                                TextButton(onPressed: _fetchTasks, child: const Text('Retry')),
+                                              ],
                                             ),
-                                          ],
+                                          ),
+                                        )
+                                      : _tasks.isEmpty
+                                      ? Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 32),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.check_circle_outline, color: Colors.grey[400], size: 48),
+                                                const SizedBox(height: 12),
+                                                Text('No assignments yet.', style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+                                              ],
+                                            ),
+                                          ),
+                                        )
+                                      : RefreshIndicator(
+                                          color: AppColors.darkGreen,
+                                          onRefresh: () => _fetchTasks(),
+                                          child: ListView.builder(
+                                            shrinkWrap: true,
+                                            padding: EdgeInsets.zero,
+                                            physics: const AlwaysScrollableScrollPhysics(),
+                                            itemCount: _sortedTasks.length,
+                                            itemBuilder: (context, index) =>
+                                                InspectionCard(
+                                                  task: _sortedTasks[index],
+                                                  onTap: () => _onTaskTap(_sortedTasks[index]),
+                                                ),
+                                          ),
                                         ),
-                                      ),
-                                    )
-                                  : _tasks.isEmpty
-                                  ? Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 32,
-                                      ),
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.check_circle_outline,
-                                              color: Colors.grey[400],
-                                              size: 48,
-                                            ),
-                                            const SizedBox(height: 12),
-                                            Text(
-                                              'No assignments yet.',
-                                              style: TextStyle(
-                                                color: Colors.grey[500],
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                  : RefreshIndicator(
-                                      color: AppColors.darkGreen,
-                                      onRefresh: () => _fetchTasks(),
-                                      child: ListView.builder(
-                                        shrinkWrap: true,
-                                        padding: EdgeInsets.zero,
-                                        physics:
-                                            const AlwaysScrollableScrollPhysics(),
-                                        itemCount: _sortedTasks.length,
-                                        itemBuilder: (context, index) =>
-                                            InspectionCard(
-                                              task: _sortedTasks[index],
-                                              onTap: () => _onTaskTap(
-                                                _sortedTasks[index],
-                                              ),
-                                            ),
-                                      ),
-                                    ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ],
+                    ],
+                  ),
                 ),
                 ),
               ),
@@ -895,6 +1170,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
   final _notesCtrl = TextEditingController();
 
   final FlagService _flagService = FlagService();
+  final BoundaryService _boundaryService = BoundaryService();
 
   List<Barangay> _barangays = [];
   Barangay? _selectedBarangay;
@@ -916,6 +1192,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
     _lngCtrl.text = widget.defaultLng?.toStringAsFixed(6) ?? '';
     _loadBarangays();
     _autoFillGps(silent: true);
+    _boundaryService.loadBoundaries();
   }
 
   Future<void> _autoFillGps({bool silent = false}) async {
@@ -931,6 +1208,27 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
       // touched location themselves (picked a spot, changed barangay, or
       // pressed the button directly), don't overwrite their choice.
       if (silent && _locationTouched) return;
+
+      if (_selectedBarangay != null) {
+        final inside = _boundaryService.isPointInBarangay(
+          pos.latitude,
+          pos.longitude,
+          _selectedBarangay!.name,
+        );
+        if (!inside) {
+          if (!silent) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Your current location is outside the selected barangay'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       setState(() {
         _latCtrl.text = pos.latitude.toStringAsFixed(6);
         _lngCtrl.text = pos.longitude.toStringAsFixed(6);
@@ -964,11 +1262,13 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
       builder: (ctx) => _LocationPickerDialog(
         initialLat: double.tryParse(_latCtrl.text.trim()),
         initialLng: double.tryParse(_lngCtrl.text.trim()),
+        selectedBarangayName: _selectedBarangay?.name,
         onLocationPicked: (lat, lng) {
           setState(() {
             _latCtrl.text = lat.toStringAsFixed(6);
             _lngCtrl.text = lng.toStringAsFixed(6);
             _locationTouched = true;
+            _errorMsg = null;
           });
         },
       ),
@@ -986,6 +1286,11 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
     final lng = double.tryParse(_lngCtrl.text.trim());
     if (lat == null || lng == null) {
       setState(() => _errorMsg = 'Coordinates must be valid numbers.');
+      return;
+    }
+
+    if (!_boundaryService.isPointInBarangay(lat, lng, _selectedBarangay!.name)) {
+      setState(() => _errorMsg = 'The selected coordinates are outside the boundaries of ${_selectedBarangay!.name}.');
       return;
     }
 
@@ -1061,12 +1366,12 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
+                    color: AppColors.lightGold,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
                     Icons.flag_rounded,
-                    color: Color(0xFFD97706),
+                    color: AppColors.gold,
                     size: 22,
                   ),
                 ),
@@ -1113,7 +1418,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                   children: [
                     const Icon(
                       Icons.warning_amber_rounded,
-                      color: Color(0xFFD97706),
+                      color: AppColors.gold,
                       size: 18,
                     ),
                     const SizedBox(width: 8),
@@ -1200,6 +1505,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                             _latCtrl.clear();
                             _lngCtrl.clear();
                             _locationTouched = true;
+                            _errorMsg = null;
                           }),
                     validator: (v) => v == null ? 'Required' : null,
                   ),
@@ -1355,8 +1661,8 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                     height: 52,
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD97706),
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.gold,
+                        foregroundColor: Colors.black87,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -1368,7 +1674,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
-                                color: Colors.white,
+                                color: Colors.black87,
                                 strokeWidth: 2,
                               ),
                             )
@@ -1396,11 +1702,13 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
 class _LocationPickerDialog extends StatefulWidget {
   final double? initialLat;
   final double? initialLng;
+  final String? selectedBarangayName;
   final Function(double lat, double lng) onLocationPicked;
 
   const _LocationPickerDialog({
     this.initialLat,
     this.initialLng,
+    this.selectedBarangayName,
     required this.onLocationPicked,
   });
 
@@ -1411,6 +1719,8 @@ class _LocationPickerDialog extends StatefulWidget {
 class _LocationPickerDialogState extends State<_LocationPickerDialog> {
   GoogleMapController? _mapController;
   LatLng? _selectedLocation;
+  Set<Polygon> _polygons = {};
+  LatLngBounds? _polygonBounds;
 
   static const CameraPosition _initialCamera = CameraPosition(
     target: LatLng(13.9667, 121.1167),
@@ -1423,9 +1733,70 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
     if (widget.initialLat != null && widget.initialLng != null) {
       _selectedLocation = LatLng(widget.initialLat!, widget.initialLng!);
     }
+    _loadBarangayPolygons();
+  }
+
+  void _loadBarangayPolygons() {
+    if (widget.selectedBarangayName == null) return;
+    
+    final polygonsRaw = BoundaryService().getPolygons(widget.selectedBarangayName!);
+    if (polygonsRaw != null) {
+      final Set<Polygon> polygons = {};
+      int i = 0;
+      double minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+      
+      for (final poly in polygonsRaw) {
+        final List<LatLng> points = poly.map((p) {
+          final lat = p[1];
+          final lng = p[0];
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;
+          return LatLng(lat, lng);
+        }).toList();
+        
+        polygons.add(Polygon(
+          polygonId: PolygonId('barangay_bounds_$i'),
+          points: points,
+          strokeColor: AppColors.gold,
+          strokeWidth: 3,
+          fillColor: AppColors.gold.withOpacity(0.15),
+        ));
+        i++;
+      }
+      
+      if (i > 0) {
+        _polygonBounds = LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        );
+      }
+      
+      setState(() {
+        _polygons = polygons;
+      });
+    }
   }
 
   void _onMapTap(LatLng tappedPoint) {
+    if (widget.selectedBarangayName != null) {
+      final inside = BoundaryService().isPointInBarangay(
+        tappedPoint.latitude,
+        tappedPoint.longitude,
+        widget.selectedBarangayName!,
+      );
+      if (!inside) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot place pin outside the selected barangay'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
     setState(() {
       _selectedLocation = tappedPoint;
     });
@@ -1439,10 +1810,14 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
     // The Google Maps SDK on Android often ignores camera updates while scaling.
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) {
-        final target = _selectedLocation ?? _initialCamera.target;
-        controller.moveCamera(
-          CameraUpdate.newLatLngZoom(target, 15),
-        );
+        if (_polygonBounds != null && _selectedLocation == null) {
+          controller.animateCamera(CameraUpdate.newLatLngBounds(_polygonBounds!, 40));
+        } else {
+          final target = _selectedLocation ?? _initialCamera.target;
+          controller.moveCamera(
+            CameraUpdate.newLatLngZoom(target, 15),
+          );
+        }
       }
     });
   }
@@ -1515,6 +1890,7 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
               myLocationButtonEnabled: true,
               zoomControlsEnabled: false,
               mapToolbarEnabled: false,
+              polygons: _polygons,
               markers: _selectedLocation != null
                   ? {
                       Marker(
@@ -1522,6 +1898,24 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
                         position: _selectedLocation!,
                         draggable: true,
                         onDragEnd: (newPosition) {
+                          if (widget.selectedBarangayName != null) {
+                            final inside = BoundaryService().isPointInBarangay(
+                              newPosition.latitude,
+                              newPosition.longitude,
+                              widget.selectedBarangayName!,
+                            );
+                            if (!inside) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Cannot drag pin outside the selected barangay'),
+                                  backgroundColor: Colors.red,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              setState(() {}); // Snap pin back
+                              return;
+                            }
+                          }
                           setState(() {
                             _selectedLocation = newPosition;
                           });

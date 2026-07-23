@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../service/auth_service.dart';
 import '../main.dart';
 import '../widgets/modern_segmented_filter.dart';
+import '../widgets/custom_app_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -120,22 +121,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
+      appBar: CustomAppBar(
+        title: 'Settings',
+        icon: Icons.settings_rounded,
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-              child: Text(
-                'Settings',
-                style: TextStyle(
-                  color: context.adaptiveTextDark,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 28,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ),
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -657,7 +650,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         controller: codeController,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Enter 6-Digit Code',
+                          labelText: 'Enter 6-Digit Code *',
                           border: OutlineInputBorder(),
                         ),
                         validator: (v) => v == null || v.length < 6
@@ -754,7 +747,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         controller: oldPasswordController,
                         obscureText: obscureOld,
                         decoration: InputDecoration(
-                          labelText: 'Current Password',
+                          labelText: 'Current Password *',
                           suffixIcon: IconButton(
                             icon: Icon(
                               obscureOld
@@ -773,7 +766,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         controller: newPasswordController,
                         obscureText: obscureNew,
                         decoration: InputDecoration(
-                          labelText: 'New Password (min. 8 chars)',
+                          labelText: 'New Password (min. 8 chars) *',
                           suffixIcon: IconButton(
                             icon: Icon(
                               obscureNew
@@ -796,7 +789,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         controller: confirmPasswordController,
                         obscureText: obscureConfirm,
                         decoration: InputDecoration(
-                          labelText: 'Confirm New Password',
+                          labelText: 'Confirm New Password *',
                           suffixIcon: IconButton(
                             icon: Icon(
                               obscureConfirm

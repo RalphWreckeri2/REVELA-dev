@@ -390,7 +390,7 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
 }
 
 // ── Detail Modal ───────────────────────────────────────────────────────────────
-function InspectionDetailModal({ report, onClose }) {
+function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose }) {
   const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
   const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
 
@@ -486,23 +486,47 @@ function InspectionDetailModal({ report, onClose }) {
           </div>
         )}
 
-        {report.verificationStatus === "Verified" && report.noticeLevel > 0 && report.noticeLevel < 4 && (
-          <div style={{ marginTop: 12, marginBottom: 20 }}>
-            <button
-              className="primary-btn"
-              style={{ width: "100%", height: 44, fontSize: 13, background: "#e65100", borderColor: "#e65100" }}
-              onClick={() => {
-                onClose();
-                // trigger assign by simulating a click on the card's button, or we can just assume they will do it from the card.
-              }}
-            >
-              <Icon.Send /> Close to Schedule Follow-up
-            </button>
+        {isAdmin && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
+            {(report.verificationStatus === "Assigned" ||
+              report.verificationStatus === "Reassigned") && (
+              <button className="ghost-btn" style={{ fontSize: 13, padding: "10px 16px", flex: 1, border: "1px solid var(--color-border)" }}
+                onClick={(e) => { e.stopPropagation(); onAssign(report); }}>
+                Reassign
+              </button>
+            )}
+            {report.verificationStatus === "Submitted" && (
+              <>
+                <button
+                  className="ghost-btn"
+                  style={{ fontSize: 13, padding: "10px 16px", flex: 1, border: "1px solid var(--color-border)" }}
+                  onClick={(e) => { e.stopPropagation(); onAssign(report); }}
+                >
+                  Send back
+                </button>
+                <button
+                  className="primary-btn"
+                  style={{ fontSize: 13, padding: "10px 16px", flex: 1 }}
+                  onClick={(e) => { e.stopPropagation(); onVerify(report); }}
+                >
+                  <Icon.Check /> Verify
+                </button>
+              </>
+            )}
+            {report.verificationStatus === "Verified" && report.noticeLevel > 0 && report.noticeLevel < 4 && (
+              <button
+                className="primary-btn"
+                style={{ fontSize: 13, padding: "10px 16px", flex: 1, background: "#e65100", borderColor: "#e65100" }}
+                onClick={(e) => { e.stopPropagation(); onAssign(report); }}
+              >
+                <Icon.Send /> Follow-up
+              </button>
+            )}
           </div>
         )}
 
-        <div style={{ ...s.modalFooter, marginTop: "auto", paddingTop: 20 }}>
-          <button className="ghost-btn" onClick={onClose}>Close</button>
+        <div style={{ ...s.modalFooter, marginTop: 10, paddingTop: 10 }}>
+          <button className="ghost-btn" style={{ width: "100%" }} onClick={onClose}>Close</button>
         </div>
       </div>
     </div>,
@@ -600,117 +624,47 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail, isC
     <div style={cardStyle} onClick={() => onViewDetail(report)}>
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-        <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text }}>
-          <Icon.Flag /> {getFriendlyFlagLabel(report.flagColor)}
-        </span>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>
-            #{report.reportID ?? report.logID}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text }}>
+            <Icon.Flag /> {getFriendlyFlagLabel(report.flagColor)}
           </span>
           {report.noticeLevel > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 800, padding: "3px 6px", borderRadius: 4, background: report.noticeLevel === 4 ? "var(--color-ink)" : "#ea580c", color: report.noticeLevel === 4 ? "var(--color-modal-bg)" : "#fff" }}>
-              {report.noticeLevel === 1 ? "1st Notice" : report.noticeLevel === 2 ? "2nd Notice" : report.noticeLevel === 3 ? "3rd Notice" : "Escalated"}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Business name & Address */}
-      <p style={{ fontSize: 15, fontWeight: 800, color: "var(--color-ink)", marginBottom: 6, lineHeight: 1.3 }}>
-        {report.detectedName}
-      </p>
-      <p style={{ fontSize: 12, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}>
-        <Icon.MapPin /> {report.barangayName ?? "Unknown barangay"}
-      </p>
-
-      {/* Result Context */}
-      {report.inspectionResult && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: FLAG_COLOR[report.inspectionResult]?.text || "var(--color-modal-bg)", background: FLAG_COLOR[report.inspectionResult]?.bg || "var(--color-ink)", padding: "4px 10px", borderRadius: 12 }}>
-            Result: {formatResult(report.inspectionResult)}
-          </span>
-        </div>
-      )}
-
-      {/* Actions */}
-      {isAdmin && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {(report.verificationStatus === "Assigned" ||
-            report.verificationStatus === "Reassigned") && (
-            <button className="ghost-btn" style={{ fontSize: 12, padding: "6px 12px", flex: 1 }}
-              onClick={(e) => { e.stopPropagation(); onAssign(report); }}>
-              Reassign
-            </button>
-          )}
-          {report.verificationStatus === "Submitted" && (
             <>
-              <button
-                className="ghost-btn"
-                style={{ fontSize: 12, padding: "6px 12px", flex: 1 }}
-                onClick={(e) => { e.stopPropagation(); onAssign(report); }}
-              >
-                Send back
-              </button>
-              <button
-                className="primary-btn"
-                style={{ fontSize: 12, padding: "6px 12px", flex: 1 }}
-                onClick={(e) => { e.stopPropagation(); onVerify(report); }}
-              >
-                <Icon.Check /> Verify
-              </button>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-muted)" strokeWidth="2.5">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+              <span style={{ fontSize: 10, fontWeight: 800, padding: "3px 6px", borderRadius: 4, background: report.noticeLevel === 4 ? "var(--color-ink)" : "#ea580c", color: report.noticeLevel === 4 ? "var(--color-modal-bg)" : "#fff" }}>
+                {report.noticeLevel === 1 ? "1st Notice" : report.noticeLevel === 2 ? "2nd Notice" : report.noticeLevel === 3 ? "3rd Notice" : "Escalated"}
+              </span>
             </>
           )}
-          {report.verificationStatus === "Verified" && report.noticeLevel > 0 && report.noticeLevel < 4 && (
-            <button
-              className="primary-btn"
-              style={{ fontSize: 12, padding: "6px 12px", flex: 1, background: "#e65100", borderColor: "#e65100" }}
-              onClick={(e) => { e.stopPropagation(); onAssign(report); }}
-            >
-              <Icon.Send /> Follow-up
-            </button>
-          )}
         </div>
-      )}
+        <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>
+          #{report.reportID ?? report.logID}
+        </span>
+      </div>
 
-      {/* Bleeding Assignee Footer */}
-      <div style={{ 
-        display: "flex", justifyContent: "space-between", alignItems: "center", 
-        marginTop: 16, padding: "12px 20px", 
-        background: "var(--color-hover)", // Subtle tint
-        margin: "16px -20px -16px -20px", 
-        borderTop: "1px solid var(--color-border-soft)",
-        borderBottomLeftRadius: "var(--radius-lg)",
-        borderBottomRightRadius: "var(--radius-lg)"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 24, height: 24, borderRadius: "50%",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 800, color: "#fff",
-            background: report.inspectorName ? "var(--color-primary)" : "var(--color-border)",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-          }}>
-            {report.inspectorName ? report.inspectorName.charAt(0).toUpperCase() : "?"}
-          </div>
-          <span style={{ fontSize: 12, color: report.inspectorName ? "var(--color-ink)" : "var(--color-muted)", fontWeight: 700 }}>
-            {report.inspectorName ? report.inspectorName.split(" ")[0] : "Unassigned"}
-          </span>
+      {/* Business name, Address & View Button Row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div style={{ paddingRight: 12 }}>
+          <p style={{ fontSize: 15, fontWeight: 800, color: "var(--color-ink)", marginBottom: 6, lineHeight: 1.3 }}>
+            {report.detectedName}
+          </p>
+          <p style={{ fontSize: 12, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+            <Icon.MapPin /> {report.barangayName ?? "Unknown barangay"}
+          </p>
         </div>
-
-        {report.deadline && (
-          <span style={{ 
-            fontSize: 11, 
-            color: isOverdue ? "var(--color-danger)" : "var(--color-muted)", 
-            display: "flex", alignItems: "center", gap: 4,
-            fontWeight: isOverdue ? 800 : 600,
-            background: isOverdue ? "rgba(239, 68, 68, 0.1)" : "transparent",
-            padding: isOverdue ? "2px 8px" : 0,
-            borderRadius: 12
-          }}>
-            <Icon.Clock />
-            {isOverdue ? "OVERDUE" : new Date(report.deadline).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-          </span>
-        )}
+        
+        <button 
+          className="ghost-btn" 
+          style={{ width: 36, height: 36, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0, background: "var(--color-hover)" }}
+          onClick={(e) => { e.stopPropagation(); onViewDetail(report); }}
+          title="View Details"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
       </div>
     </div>
   );
@@ -999,6 +953,9 @@ export default function InspectionPage() {
       {detailTarget && (
         <InspectionDetailModal
           report={detailTarget}
+          isAdmin={isAdmin}
+          onAssign={(r) => { setDetailTarget(null); setAssignTarget(r); }}
+          onVerify={(r) => { setDetailTarget(null); setVerifyTarget(r); }}
           onClose={() => setDetailTarget(null)}
         />
       )}

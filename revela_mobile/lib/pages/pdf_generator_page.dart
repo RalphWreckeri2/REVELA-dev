@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../service/inspection_service.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import '../theme/app_theme.dart';
+import '../widgets/custom_app_bar.dart';
 
 class PdfGeneratorPage extends StatefulWidget {
   final InspectionTask? initialTask;
@@ -277,7 +278,10 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
   }
 
   void _handlePrint() async {
-    if (_selectedTask == null) return;
+    if (_selectedTask == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an establishment first.'), backgroundColor: Colors.redAccent));
+      return;
+    }
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => _generatePdfDocument(format),
       name: 'BPLO_Notice_${_selectedTask!.reportID}.pdf',
@@ -285,7 +289,10 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
   }
 
   void _handleExportPdf() async {
-    if (_selectedTask == null) return;
+    if (_selectedTask == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an establishment first.'), backgroundColor: Colors.redAccent));
+      return;
+    }
     try {
       final bytes = await _generatePdfDocument(PdfPageFormat.a4);
       await Printing.sharePdf(
@@ -306,11 +313,9 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
     final selectedBarangay = _selectedTask?.barangayName ?? '';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Notice & PDF Generator',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+      appBar: const CustomAppBar(
+        title: 'Notice Generator',
+        icon: Icons.picture_as_pdf_rounded,
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
@@ -350,7 +355,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             borderRadius: BorderRadius.circular(4),
                             child: InputDecorator(
                               decoration: const InputDecoration(
-                                labelText: 'Select Establishment',
+                                labelText: 'Select Establishment *',
                                 border: OutlineInputBorder(),
                                 prefixIcon: Icon(Icons.search),
                                 suffixIcon: Icon(Icons.arrow_drop_down),

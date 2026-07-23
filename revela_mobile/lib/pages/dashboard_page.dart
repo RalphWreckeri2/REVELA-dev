@@ -6,6 +6,7 @@ import '../component/inspection_modal.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/task_card.dart';
+import '../widgets/custom_app_bar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'inspection_page.dart';
 
@@ -19,6 +20,8 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  final PageController _pageController = PageController(viewportFraction: 1.0);
+  double _currentPage = 0.0;
   final InspectionService _inspectionService = InspectionService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
@@ -32,11 +35,19 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    _pageController.addListener(() {
+      if (_pageController.hasClients && _pageController.positions.length == 1 && _pageController.position.haveDimensions) {
+        setState(() {
+          _currentPage = _pageController.page!;
+        });
+      }
+    });
     _loadDashboardData();
   }
 
   @override
   void dispose() {
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -114,38 +125,28 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-
+      appBar: CustomAppBar(
+        title: 'Dashboard',
+        icon: Icons.dashboard_rounded,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: IconButton(
+              icon: Icon(
+                Icons.refresh_rounded,
+                color: context.adaptiveTextMid,
+                size: 26,
+              ),
+              onPressed: _isLoading ? null : _loadDashboardData,
+            ),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           SafeArea(
             child: Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Dashboard',
-                          style: TextStyle(
-                            color: context.adaptiveTextDark,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 28,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(
-                          Icons.refresh_rounded,
-                          color: context.adaptiveTextMid,
-                          size: 22,
-                        ),
-                        onPressed: _isLoading ? null : _loadDashboardData,
-                      ),
-                    ],
-                  ),
-                ),
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () async => _loadDashboardData(),
@@ -187,183 +188,122 @@ class _DashboardPageState extends State<DashboardPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // ── Modern Welcome Banner ──
-                                Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 60),
-                                      width: double.infinity,
-                                      clipBehavior: Clip.antiAlias,
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFF0F172A),
-                                            Color(0xFF1E293B),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                        borderRadius: BorderRadius.circular(28),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: const Color(
-                                              0xFF0F172A,
-                                            ).withValues(alpha: 0.3),
-                                            blurRadius: 20,
-                                            offset: const Offset(0, 10),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Stack(
-                                        children: [
-                                          // Background pattern/circles
-                                          Positioned(
-                                            right: -30,
-                                            top: -30,
-                                            child: Container(
-                                              width: 120,
-                                              height: 120,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.05,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Positioned(
-                                            right: 40,
-                                            bottom: -40,
-                                            child: Container(
-                                              width: 100,
-                                              height: 100,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.05,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.all(24.0),
-                                            child: Row(
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.all(
-                                                    3,
+                                SizedBox(
+                                  height: 280,
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Container(
+                                        margin: const EdgeInsets.only(top: 60, bottom: 20),
+                                        width: double.infinity,
+                                        child: PageView.builder(
+                                          controller: _pageController,
+                                          itemCount: 3,
+                                          itemBuilder: (context, index) {
+                                            return AnimatedBuilder(
+                                              animation: _pageController,
+                                              builder: (context, child) {
+                                                double page = _pageController.hasClients && _pageController.positions.length == 1 && _pageController.position.haveDimensions 
+                                                    ? _pageController.page! 
+                                                    : _currentPage;
+                                                double value = 1 - ((page - index).abs() * 0.15);
+                                                value = value.clamp(0.85, 1.0);
+                                                double opacity = 1 - ((page - index).abs() * 0.5);
+                                                opacity = opacity.clamp(0.4, 1.0);
+                                                return Transform.scale(
+                                                  scale: value,
+                                                  child: Opacity(
+                                                    opacity: opacity,
+                                                    child: child,
                                                   ),
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    border: Border.all(
-                                                      color: AppColors.gold
-                                                          .withValues(
-                                                            alpha: 0.5,
-                                                          ),
-                                                      width: 2,
-                                                    ),
-                                                  ),
-                                                  child: CircleAvatar(
-                                                    radius: 32,
-                                                    backgroundColor:
-                                                        AppColors.gold,
-                                                    child: Text(
-                                                      _inspectorName.isNotEmpty
-                                                          ? _inspectorName[0]
-                                                                .toUpperCase()
-                                                          : 'I',
-                                                      style: const TextStyle(
-                                                        fontSize: 28,
-                                                        fontWeight:
-                                                            FontWeight.w900,
-                                                        color: Color(
-                                                          0xFF0F3E22,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 20),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
+                                                );
+                                              },
+                                              child: index == 0 ? _buildBannerCard(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(24.0),
+                                                  child: Row(
                                                     children: [
-                                                      Text(
-                                                        _getGreeting(),
-                                                        style: TextStyle(
-                                                          color: Colors.white
-                                                              .withValues(
-                                                                alpha: 0.7,
-                                                              ),
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          letterSpacing: 0.5,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        _inspectorName,
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 24,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                      const SizedBox(
-                                                        height: 12,
-                                                      ),
                                                       Container(
-                                                        padding:
-                                                            const EdgeInsets.symmetric(
-                                                              horizontal: 12,
-                                                              vertical: 6,
-                                                            ),
                                                         decoration: BoxDecoration(
-                                                          color: Colors.white
-                                                              .withValues(
-                                                                alpha: 0.1,
-                                                              ),
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                12,
-                                                              ),
+                                                          shape: BoxShape.circle,
                                                           border: Border.all(
-                                                            color: Colors.white
-                                                                .withValues(
-                                                                  alpha: 0.1,
-                                                                ),
+                                                            color: Colors.white,
+                                                            width: 2,
+                                                          ),
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: AppColors.gold.withValues(alpha: 0.4),
+                                                              blurRadius: 20,
+                                                              spreadRadius: 8,
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        child: CircleAvatar(
+                                                          radius: 32,
+                                                          backgroundColor: AppColors.gold,
+                                                          child: Text(
+                                                            _inspectorName.isNotEmpty ? _inspectorName[0].toUpperCase() : 'I',
+                                                            style: const TextStyle(
+                                                              fontSize: 28,
+                                                              fontWeight: FontWeight.w500,
+                                                              color: Color(0xFF0F3E22),
+                                                            ),
                                                           ),
                                                         ),
-                                                        child: Row(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
+                                                      ),
+                                                      const SizedBox(width: 20),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          mainAxisAlignment: MainAxisAlignment.center,
                                                           children: [
-                                                            const Icon(
-                                                              Icons
-                                                                  .verified_user_rounded,
-                                                              color: AppColors
-                                                                  .gold,
-                                                              size: 14,
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 6,
-                                                            ),
                                                             Text(
-                                                              _inspectorRole,
+                                                              _getGreeting(),
+                                                              style: TextStyle(
+                                                                color: Colors.white.withValues(alpha: 0.7),
+                                                                fontSize: 14,
+                                                                fontWeight: FontWeight.w500,
+                                                                letterSpacing: 0.5,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 4),
+                                                            Text(
+                                                              _inspectorName,
                                                               style: const TextStyle(
-                                                                color: Colors
-                                                                    .white,
-                                                                fontSize: 12,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
+                                                                color: Colors.white,
+                                                                fontSize: 24,
+                                                                fontWeight: FontWeight.bold,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                            const SizedBox(height: 12),
+                                                            Container(
+                                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors.white.withValues(alpha: 0.15),
+                                                                borderRadius: BorderRadius.circular(12),
+                                                                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                                              ),
+                                                              child: Row(
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                children: [
+                                                                  const Icon(Icons.verified, color: AppColors.gold, size: 16),
+                                                                  const SizedBox(width: 6),
+                                                                  Container(
+                                                                    width: 4,
+                                                                    height: 4,
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors.white.withValues(alpha: 0.5),
+                                                                      shape: BoxShape.circle,
+                                                                    ),
+                                                                  ),
+                                                                  const SizedBox(width: 6),
+                                                                  Text(
+                                                                    _inspectorRole,
+                                                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                                                  ),
+                                                                ],
                                                               ),
                                                             ),
                                                           ],
@@ -372,32 +312,142 @@ class _DashboardPageState extends State<DashboardPage> {
                                                     ],
                                                   ),
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
+                                              ) : index == 1 ? _buildBannerCard(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(24.0),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Text(
+                                                        "Today's Focus",
+                                                        style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        redFlagsCount > 0 ? 'Prioritize ${redFlagsCount} red flags' : 'You have ${assignedCount} pending tasks',
+                                                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                                                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 12),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            const Icon(Icons.bolt_rounded, color: AppColors.gold, size: 14),
+                                                            const SizedBox(width: 6),
+                                                            const Text('Stay safe on the field', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ) : _buildBannerCard(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(24.0),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Text(
+                                                        'Quick Tip',
+                                                        style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      const Text(
+                                                        'Ensure clear photos of all violations.',
+                                                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                                                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 12),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            const Icon(Icons.lightbulb_rounded, color: AppColors.gold, size: 14),
+                                                            const SizedBox(width: 6),
+                                                            const Text('Documentation is key', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
                                       ),
-                                    ),
-
-                                    // Mascot Leaning on Banner
-                                    Positioned(
-                                      top: 0,
-                                      left: 32,
-                                      child: ClipRect(
-                                        child: Align(
-                                          alignment: Alignment.topCenter,
-                                          heightFactor:
-                                              0.5, // 120 * 0.5 = 60px (perfectly meets the 60px top margin)
-                                          child: Image.asset(
-                                            'assets/images/standing.png',
-                                            height: 120,
-                                            fit: BoxFit.contain,
+                                      // Page Indicators
+                                      Positioned(
+                                        bottom: 0,
+                                        left: 0,
+                                        right: 0,
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: List.generate(3, (index) {
+                                            return AnimatedContainer(
+                                              duration: const Duration(milliseconds: 300),
+                                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                                              width: _currentPage.round() == index ? 24.0 : 8.0,
+                                              height: 8.0,
+                                              decoration: BoxDecoration(
+                                                color: _currentPage.round() == index 
+                                                    ? AppColors.gold 
+                                                    : Colors.grey.withValues(alpha: 0.4),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                            );
+                                          }),
+                                        ),
+                                      ),
+                                      // Mascot Peaking Above Banner — moves left → center → right across the 3 cards
+                                      Positioned(
+                                        top: -30,
+                                        left: 24,
+                                        right: 24,
+                                        child: AnimatedBuilder(
+                                          animation: _pageController,
+                                          builder: (context, child) {
+                                            double page = 0.0;
+                                            if (_pageController.hasClients && _pageController.positions.length == 1 && _pageController.position.haveDimensions) {
+                                              page = _pageController.page ?? _currentPage;
+                                            } else {
+                                              page = _currentPage;
+                                            }
+                                            // page 0 -> -1.0 (left), page 1 -> 0.0 (center), page 2 -> 1.0 (right)
+                                            final double x = (page - 1.0) * 0.85;
+                                            return Align(
+                                              alignment: Alignment(x, -1.0),
+                                              child: child,
+                                            );
+                                          },
+                                          // Fixed-width box so Align has a definite size to position against —
+                                          // this is what stops the mascot from clipping oddly at the left/right extremes.
+                                          child: SizedBox(
+                                            width: 140,
+                                            child: ClipRect(
+                                              child: Align(
+                                                alignment: Alignment.topCenter,
+                                                heightFactor: 0.5,
+                                                child: Image.asset(
+                                                  'assets/images/standing.png',
+                                                  height: 180,
+                                                  fit: BoxFit.contain,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
+                                    ],
+                                  ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
+                                ),
                                 const SizedBox(height: 24),
 
                                 Row(
@@ -798,7 +848,43 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildProgressLegend(String label, int value, Color color) {
+  Widget _buildBannerCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF2A5934),
+            Color(0xFF3B7243),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2A5934).withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Grid overlay
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _GridPainter(),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+
+Widget _buildProgressLegend(String label, int value, Color color) {
     return Row(
       children: [
         Container(
@@ -818,4 +904,39 @@ class _DashboardPageState extends State<DashboardPage> {
       ],
     );
   }
+}
+
+class _GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.05)
+      ..strokeWidth = 1.0;
+
+    const double spacing = 30.0;
+
+    for (double i = 0; i < size.width; i += spacing) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
+    }
+
+    for (double i = 0; i < size.height; i += spacing) {
+      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
+    }
+
+    final plusPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.15)
+      ..strokeWidth = 1.5;
+
+    const double plusSize = 4.0;
+
+    for (double x = 0; x < size.width; x += spacing) {
+      for (double y = 0; y < size.height; y += spacing) {
+        canvas.drawLine(Offset(x - plusSize / 2, y), Offset(x + plusSize / 2, y), plusPaint);
+        canvas.drawLine(Offset(x, y - plusSize / 2), Offset(x, y + plusSize / 2), plusPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

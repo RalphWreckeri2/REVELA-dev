@@ -31,6 +31,7 @@ class _InspectionModalState extends State<InspectionModal> {
   /// API Result options: Green, Yellow, Red, Orange, Black
   String _inspectionResult = '';
   int _currentStep = 0;
+  bool _showResultError = false;
 
   @override
   void dispose() {
@@ -205,6 +206,9 @@ class _InspectionModalState extends State<InspectionModal> {
 
   void _nextStep() {
     if (_currentStep == 0 && _inspectionResult.isEmpty) {
+      setState(() {
+        _showResultError = true;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Please select an on-site compliance result to proceed.', style: TextStyle(color: Colors.white)),
@@ -214,6 +218,7 @@ class _InspectionModalState extends State<InspectionModal> {
       return;
     }
     setState(() {
+      _showResultError = false;
       if (_currentStep < 2) _currentStep++;
     });
   }
@@ -393,7 +398,7 @@ class _InspectionModalState extends State<InspectionModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionLabel(label: 'On-site result', icon: Icons.flag_outlined),
+                    const _SectionLabel(label: 'On-site result', icon: Icons.flag_outlined, isRequired: true),
                     SizedBox(height: 8),
                     Text(
                       'Choose the inspection outcome flag to record.',
@@ -411,6 +416,7 @@ class _InspectionModalState extends State<InspectionModal> {
                           onTap: () => setState(() {
                             _inspectionResult = 'Green';
                             _noticeLevel = 0;
+                            _showResultError = false;
                           }),
                         ),
                         _ResultChip(
@@ -420,6 +426,7 @@ class _InspectionModalState extends State<InspectionModal> {
                           onTap: () => setState(() {
                             _inspectionResult = 'Yellow';
                             _noticeLevel = 0;
+                            _showResultError = false;
                           }),
                         ),
                         _ResultChip(
@@ -429,6 +436,7 @@ class _InspectionModalState extends State<InspectionModal> {
                           onTap: () => setState(() {
                             _inspectionResult = 'Red';
                             _noticeLevel = 0;
+                            _showResultError = false;
                           }),
                         ),
                         if (widget.task.currentNoticeLevel < 3)
@@ -439,6 +447,7 @@ class _InspectionModalState extends State<InspectionModal> {
                             onTap: () => setState(() {
                               _inspectionResult = 'Orange';
                               _noticeLevel = widget.task.currentNoticeLevel == 0 ? 1 : (widget.task.currentNoticeLevel == 1 ? 2 : 3);
+                              _showResultError = false;
                             }),
                           ),
                         _ResultChip(
@@ -448,13 +457,28 @@ class _InspectionModalState extends State<InspectionModal> {
                           onTap: () => setState(() {
                             _inspectionResult = 'Black';
                             _noticeLevel = widget.task.currentNoticeLevel == 3 ? 4 : 0;
+                            _showResultError = false;
                           }),
                         ),
                       ],
                     ),
+                    if (_showResultError)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 16),
+                            const SizedBox(width: 4),
+                            Text(
+                              'This field is required',
+                              style: TextStyle(color: Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
                     SizedBox(height: 24),
 
-                    const _SectionLabel(label: 'Administrative Notice', icon: Icons.gavel_outlined),
+                    const _SectionLabel(label: 'Administrative Notice', icon: Icons.gavel_outlined, isRequired: true),
                     SizedBox(height: 8),
                     Text(
                       'Select the non-compliance notice level. Enforces sequential escalation.',
@@ -475,11 +499,11 @@ class _InspectionModalState extends State<InspectionModal> {
                           dropdownColor: context.adaptiveSurface,
                           items: [
                             DropdownMenuItem(value: 0, child: Text('No Notice Issued', style: TextStyle(color: context.adaptiveTextDark))),
-                            if (widget.task.currentNoticeLevel < 1)
+                            if (widget.task.currentNoticeLevel == 0)
                               DropdownMenuItem(value: 1, child: Text('1st Notice: Warning', style: TextStyle(color: const Color(0xFFE65100), fontWeight: FontWeight.bold))),
-                            if (widget.task.currentNoticeLevel < 2)
+                            if (widget.task.currentNoticeLevel == 1)
                               DropdownMenuItem(value: 2, child: Text('2nd Notice: Warning for Closure', style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold))),
-                            if (widget.task.currentNoticeLevel < 3)
+                            if (widget.task.currentNoticeLevel == 2)
                               DropdownMenuItem(value: 3, child: Text('3rd Notice: Closure', style: TextStyle(color: const Color(0xFFBF360C), fontWeight: FontWeight.bold))),
                             if (widget.task.currentNoticeLevel == 3)
                               DropdownMenuItem(value: 4, child: Text('Escalate to Black (Final)', style: TextStyle(color: context.isDarkMode ? Colors.white : Colors.black, fontWeight: FontWeight.bold))),
@@ -513,7 +537,7 @@ class _InspectionModalState extends State<InspectionModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionLabel(label: 'Evidence Photo', icon: Icons.photo_library_outlined),
+                    const _SectionLabel(label: 'Evidence Photo', icon: Icons.photo_library_outlined, isOptional: true),
                     SizedBox(height: 8),
                     Text(
                       'Capture photo evidence before submitting. This step is crucial for auditing.',
@@ -636,7 +660,7 @@ class _InspectionModalState extends State<InspectionModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionLabel(label: 'Remarks (Optional)', icon: Icons.comment_outlined),
+                    const _SectionLabel(label: 'Remarks', icon: Icons.comment_outlined, isOptional: true),
                     SizedBox(height: 8),
                     Text(
                       'Any additional notes for the admin review process?',
@@ -753,7 +777,15 @@ class _ResultChip extends StatelessWidget {
 class _SectionLabel extends StatelessWidget {
   final String label;
   final IconData icon;
-  const _SectionLabel({required this.label, required this.icon});
+  final bool isRequired;
+  final bool isOptional;
+
+  const _SectionLabel({
+    required this.label, 
+    required this.icon,
+    this.isRequired = false,
+    this.isOptional = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -762,6 +794,14 @@ class _SectionLabel extends StatelessWidget {
         Icon(icon, size: 18, color: context.adaptivePrimary),
         SizedBox(width: 8),
         Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: context.adaptiveTextDark)),
+        if (isRequired) ...[
+          SizedBox(width: 4),
+          Text('*', style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
+        ],
+        if (isOptional) ...[
+          SizedBox(width: 6),
+          Text('(Optional)', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.normal)),
+        ],
       ],
     );
   }

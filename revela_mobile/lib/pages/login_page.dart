@@ -388,38 +388,123 @@ class _LoginPageState extends State<LoginPage> {
       builder: (dialogCtx) {
         return Scaffold(
           backgroundColor: context.adaptiveSurface,
-          body: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const FloatingMascot(
-                  imagePath: 'assets/images/standing.png',
-                  height: 180,
+          body: Stack(
+            children: [
+              // Mascot at the bottom
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 40.0),
+                  child: FloatingMascot(
+                    imagePath: 'assets/images/waiting.png',
+                    height: MediaQuery.of(dialogCtx).size.height * 0.45,
+                  ).animate().fadeIn(duration: 800.ms, curve: Curves.easeOut).slideY(begin: 0.1, curve: Curves.easeOut),
                 ),
-                const SizedBox(height: 32),
-                Text(
-                  'Welcome Back!',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: context.adaptivePrimary,
-                  ),
+              ),
+              
+              // Text and Premium Loader as a Thought Bubble
+              Align(
+                alignment: const Alignment(0, -0.4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Main Bubble
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: context.adaptivePrimary.withOpacity(0.1), 
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Welcome Back!',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: context.adaptivePrimary,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Just a moment while I prepare your workspace...',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: context.adaptiveTextMid,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: context.adaptivePrimary.withOpacity(0.08),
+                            ),
+                            child: CircularProgressIndicator(
+                              color: context.adaptivePrimary,
+                              strokeWidth: 3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate()
+                     .fadeIn(delay: 200.ms, duration: 600.ms, curve: Curves.easeOutCubic)
+                     .scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutCubic)
+                     .slideY(begin: 0.1),
+                    
+                    // Thought bubble trailing circles
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06), 
+                            blurRadius: 8, 
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.5),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06), 
+                            blurRadius: 8, 
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 650.ms).slideY(begin: 0.5),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Preparing your dashboard...',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: context.adaptiveTextMid,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                CircularProgressIndicator(
-                  color: context.adaptivePrimary,
-                  strokeWidth: 3,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -477,7 +562,10 @@ class _LoginPageState extends State<LoginPage> {
                       ? null
                       : () async {
                           final email = emailController.text.trim();
-                          if (email.isEmpty) return;
+                          if (email.isEmpty) {
+                            _showSnackBar('Please enter your email address.', backgroundColor: Colors.redAccent);
+                            return;
+                          }
 
                           setDialogState(() => isSubmitting = true);
 
@@ -943,7 +1031,7 @@ class _LoginPageState extends State<LoginPage> {
 
                       // Email Field
                       Text(
-                        'Email',
+                        'Email *',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -985,7 +1073,7 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 16), // Reduced from 20
                       // Password Field
                       Text(
-                        'Password',
+                        'Password *',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,

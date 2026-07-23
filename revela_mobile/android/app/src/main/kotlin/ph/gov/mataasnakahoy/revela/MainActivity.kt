@@ -1,4 +1,4 @@
-package com.example.revela_mobile
+package ph.gov.mataasnakahoy.revela
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

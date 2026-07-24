@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:async';
 import '../component/inspection_modal.dart';
-import '../service/api_config.dart';
 import '../service/in_app_notifications_service.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_app_bar.dart';
 import '../widgets/floating_mascot.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'main_layout.dart';
 import '../widgets/task_card.dart';
 import '../widgets/modern_segmented_filter.dart';
 import '../utils/date_utils.dart';
@@ -184,20 +184,26 @@ class _NotificationsPageState extends State<NotificationsPage> {
           children: [
 
             // ── Filter Tabs ──
-            ModernSegmentedFilter(
-              options: [
-                hasUnread ? 'Assignments ●' : 'Assignments',
-                nearingTasks.isNotEmpty ? 'Deadlines ●' : 'Deadlines',
-              ],
-              selectedIndex: _currentFilterIndex,
-              onSelected: (idx) {
-                _pageController.animateToPage(
-                  idx,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+            Showcase(
+              key: MainLayout.notificationsTourKey,
+              title: 'Notifications',
+              description: 'Important alerts and messages will appear here.',
+              targetPadding: const EdgeInsets.all(4),
+              child: ModernSegmentedFilter(
+                options: [
+                  hasUnread ? 'Assignments •' : 'Assignments',
+                  nearingTasks.isNotEmpty ? 'Deadlines •' : 'Deadlines',
+                ],
+                selectedIndex: _currentFilterIndex,
+                onSelected: (idx) {
+                  _pageController.animateToPage(
+                    idx,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+              ),
             ),
             const SizedBox(height: 8),
 
@@ -316,7 +322,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
       itemCount: _items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) {
         final n = _items[i];
         return Dismissible(

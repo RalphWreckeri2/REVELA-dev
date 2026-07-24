@@ -35,7 +35,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Row(
         children: [
           if (icon != null) ...[
-            Icon(icon, color: AppColors.darkGreen, size: 32),
+            Icon(icon, color: context.isDarkMode ? Colors.white : AppColors.darkGreen, size: 32),
             const SizedBox(width: 12),
           ],
           Expanded(

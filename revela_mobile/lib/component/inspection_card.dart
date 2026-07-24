@@ -112,12 +112,12 @@ class InspectionCard extends StatelessWidget {
           border: context.isDarkMode ? Border.all(color: Colors.grey, width: 1) : null,
           boxShadow: [
             BoxShadow(
-              color: context.isDarkMode ? Colors.transparent : Colors.black.withOpacity(0.06),
+              color: context.isDarkMode ? Colors.transparent : Colors.black.withValues(alpha: 0.06),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: context.isDarkMode ? Colors.transparent : Colors.black.withOpacity(0.03),
+              color: context.isDarkMode ? Colors.transparent : Colors.black.withValues(alpha: 0.03),
               blurRadius: 4,
               offset: const Offset(0, 1),
             ),
@@ -237,36 +237,43 @@ class InspectionCard extends StatelessWidget {
             SizedBox(width: 10),
 
             // ── Right: ID + time ────────────────────────────────────────────
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '#${task.reportID}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: context.adaptiveTextMid,
-                    fontFamily: 'monospace',
+            Container(
+              constraints: const BoxConstraints(maxWidth: 90),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '#${task.reportID}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: context.adaptiveTextMid,
+                      fontFamily: 'monospace',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  _formatDate(task.irTimestamp),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: context.adaptiveTextMid,
-                    fontWeight: FontWeight.w400,
+                  SizedBox(height: 4),
+                  Text(
+                    _formatDate(task.irTimestamp),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: context.adaptiveTextMid,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  textAlign: TextAlign.right,
-                ),
-                SizedBox(height: 8),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 12,
-                  color: context.adaptiveTextLight,
-                ),
-              ],
+                  SizedBox(height: 8),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 12,
+                    color: context.adaptiveTextLight,
+                  ),
+                ],
+              ),
             ),
           ],
         ),

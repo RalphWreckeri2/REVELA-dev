@@ -88,6 +88,40 @@ def me():
     }), 200
 
 
+# ── PATCH /api/auth/me ────────────────────────────────────────────────────────
+@auth_bp.route("/me", methods=["PATCH"])
+@jwt_required()
+def update_me():
+    """Allow users to update their own profile (name, email)."""
+    user_id = int(get_jwt_identity())
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    user = find_user_by_id(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # If email is being changed, ensure it's not already taken
+    if "email" in data and data["email"].lower() != user["email"].lower():
+        if find_user_by_email(data["email"]):
+            return jsonify({"error": "Email already in use by another account"}), 409
+
+    from api.models.user import update_user
+    
+    # Update user (keeping their existing role and phone if not provided)
+    update_user(
+        user_id=user_id,
+        full_name=data.get("fullName", user["fullName"]),
+        email=data.get("email", user["email"]),
+        role=user["userRole"], # Cannot change own role
+        phone=user.get("phone")
+    )
+
+    return jsonify({"message": "Profile updated successfully"}), 200
+
+
 # ── PATCH /api/auth/me/preferences ────────────────────────────────────────────
 @auth_bp.route("/me/preferences", methods=["PATCH"])
 @jwt_required()

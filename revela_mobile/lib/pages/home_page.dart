@@ -19,6 +19,8 @@ import '../service/boundary_service.dart';
 import '../service/inspection_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/map_styles.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'main_layout.dart';
 
 class HomePage extends StatefulWidget {
   final ValueChanged<bool>? onDrawerToggled;
@@ -31,6 +33,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   static const Set<String> _activeStatuses = {'Assigned', 'Reassigned'};
 
+  GoogleMapController? _mapController;
   bool _isDockerExpanded = false;
   bool _isFirstLoad = true;
   String _sortBy = 'newest'; // 'newest' or 'oldest'
@@ -38,6 +41,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _hasLocationPermission = false;
   bool _isLegendOpen = false;
   BitmapDescriptor? _blackMarker;
+  BitmapDescriptor? _municipalMarker;
 
   Future<void> _initMarkers() async {
     final PictureRecorder pictureRecorder = PictureRecorder();
@@ -55,9 +59,43 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final img = await pictureRecorder.endRecording().toImage(48, 48);
     final data = await img.toByteData(format: ImageByteFormat.png);
     if (data != null) {
-      _blackMarker = BitmapDescriptor.fromBytes(data.buffer.asUint8List());
-      if (mounted) setState(() {});
+      _blackMarker = BitmapDescriptor.bytes(data.buffer.asUint8List());
     }
+
+    try {
+      final PictureRecorder muniRecorder = PictureRecorder();
+      final Canvas muniCanvas = Canvas(muniRecorder);
+      final Paint muniPaint = Paint()..color = Colors.blue.shade800;
+      final Paint whitePaint = Paint()..color = Colors.white;
+
+      // Draw outer white border and inner blue circle
+      muniCanvas.drawCircle(const Offset(24, 24), 22, whitePaint);
+      muniCanvas.drawCircle(const Offset(24, 24), 19, muniPaint);
+
+      // Draw building icon in the center
+      final TextPainter textPainter = TextPainter(textDirection: TextDirection.ltr);
+      textPainter.text = TextSpan(
+        text: String.fromCharCode(Icons.account_balance.codePoint),
+        style: TextStyle(
+          fontSize: 22.0,
+          fontFamily: Icons.account_balance.fontFamily,
+          package: Icons.account_balance.fontPackage,
+          color: Colors.white,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(muniCanvas, const Offset(13, 13));
+
+      final muniImg = await muniRecorder.endRecording().toImage(48, 48);
+      final muniData = await muniImg.toByteData(format: ImageByteFormat.png);
+      if (muniData != null) {
+        _municipalMarker = BitmapDescriptor.bytes(muniData.buffer.asUint8List());
+      }
+    } catch (e) {
+      debugPrint('Error loading municipal icon for map: $e');
+    }
+
+    if (mounted) setState(() {});
   }
 
   Timer? _pollTimer;
@@ -65,7 +103,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _isDrawerOpen = false;
 
   // ── Google Map ─────────────────────────────────────────────────────────────
-  GoogleMapController? _mapController;
+  
   MapType _currentMapType = MapType.normal;
   bool _is3DView = false;
   CameraPosition? _currentCameraPosition;
@@ -225,6 +263,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Set<Marker> _buildFlagMarkers() {
     final markers = <Marker>{};
+
+    // ── Municipality Hall Marker ─────────────────────────────────────────────
+    markers.add(
+      Marker(
+        markerId: const MarkerId('mataasnakahoy_municipal_hall'),
+        position: const LatLng(13.960416, 121.114547),
+        infoWindow: const InfoWindow(
+          title: 'Mataasnakahoy Municipal Hall',
+          snippet: 'Center of operations',
+        ),
+        icon: _municipalMarker ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+      ),
+    );
 
     // ── Assignment-task markers (pinned by the system) ──────────────────
     for (final t in _tasks) {
@@ -460,6 +511,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       defaultLat = pos?.latitude;
       defaultLng = pos?.longitude;
     } catch (_) {}
+    if (!mounted) return;
 
     await showModalBottomSheet(
       context: context,
@@ -509,7 +561,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: context.adaptiveSurface.withOpacity(0.95),
+        color: context.adaptiveSurface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: context.isDarkMode ? Colors.white24 : Colors.black12),
         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
@@ -560,7 +612,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final paddingTop = MediaQuery.of(context).padding.top;
 
     // Reactively update map style if theme changes while map is already created
-    _mapController?.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
+    
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -572,12 +624,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           padding: const EdgeInsets.only(left: 12),
           child: Align(
             alignment: Alignment.center,
-            child: FloatingActionButton(
-              mini: true,
-              backgroundColor: context.isDarkMode ? Colors.black : Colors.white,
-              heroTag: 'legend_toggle',
-              onPressed: () => setState(() => _isLegendOpen = !_isLegendOpen),
-              child: Icon(Icons.legend_toggle_rounded, color: context.isDarkMode ? Colors.white : AppColors.darkGreen),
+            child: Showcase(
+              key: MainLayout.mapLegendsTourKey,
+              title: 'Legends',
+              description: 'Tap this to see what the different colored map markers represent.',
+              targetPadding: const EdgeInsets.all(4),
+              child: FloatingActionButton(
+                mini: true,
+                backgroundColor: context.isDarkMode ? Colors.black : Colors.white,
+                heroTag: 'legend_toggle',
+                onPressed: () => setState(() => _isLegendOpen = !_isLegendOpen),
+                child: Icon(Icons.legend_toggle_rounded, color: context.isDarkMode ? Colors.white : AppColors.darkGreen),
+              ),
             ),
           ),
         ),
@@ -607,7 +665,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         children: [
           // ── 1. Google Map ────────────────────────────────────────────────
           Positioned.fill(
-            child: GoogleMap(
+            child: GoogleMap(style: context.isDarkMode ? AppMapStyles.darkMapStyle : "[]",
               padding: EdgeInsets.only(
                 bottom: _isDockerExpanded ? screenHeight * 0.5 : 0.0,
               ),
@@ -619,7 +677,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               },
               onMapCreated: (controller) async {
                 _mapController = controller;
-                controller.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
+                
                 await _goToCurrentLocation();
                 _syncMapToTasks();
               },
@@ -642,7 +700,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           Positioned(
             top: paddingTop + kToolbarHeight + 16,
             right: 16,
-            child: Column(
+            child: Showcase(
+              key: MainLayout.mapControlsTourKey,
+              title: 'Map Controls',
+              description: 'Use these to zoom, center on your location, or toggle 3D view.',
+              targetPadding: const EdgeInsets.all(4),
+              child: Column(
               children: [
                 _MapControlButton(
                   icon: Icons.add,
@@ -708,6 +771,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ],
             ),
+            ),
           ),
 
           // ── 3. Animated Bottom Docker (short-file behavior) ──────────────
@@ -731,7 +795,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     child: Container(
                       height: screenHeight * 0.5,
                       decoration: BoxDecoration(
-                        color: context.adaptiveSurface.withOpacity(0.85),
+                        color: context.adaptiveSurface.withValues(alpha: 0.85),
                       ),
                 child: GestureDetector(
                   onVerticalDragUpdate: (details) {
@@ -821,7 +885,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       vertical: 4,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: context.isDarkMode ? Colors.black : AppColors.darkGreen.withOpacity(
+                                      color: context.isDarkMode ? Colors.black : AppColors.darkGreen.withValues(alpha: 
                                         0.1,
                                       ),
                                       borderRadius: BorderRadius.circular(12),
@@ -929,7 +993,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                     children: [
                                                       Container(
                                                         padding: const EdgeInsets.all(10),
-                                                        decoration: BoxDecoration(color: AppColors.gold.withOpacity(0.1), shape: BoxShape.circle),
+                                                        decoration: BoxDecoration(color: AppColors.gold.withValues(alpha: 0.1), shape: BoxShape.circle),
                                                         child: const Icon(Icons.flag_rounded, color: AppColors.gold, size: 20),
                                                       ),
                                                       const SizedBox(width: 16),
@@ -1050,22 +1114,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                   child: Column(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.assignment_rounded),
-                        color: context.adaptiveTextDark,
-                        tooltip: 'Inspection Tasks',
-                        onPressed: _toggleDocker,
+                      Showcase(
+                        key: MainLayout.mapAssignmentsBtnTourKey,
+                        title: 'Tasks Menu',
+                        description: 'Swipe up or tap here to view and manage your inspection assignments.',
+                        targetPadding: const EdgeInsets.all(4),
+                        child: IconButton(
+                          icon: const Icon(Icons.assignment_rounded),
+                          color: context.adaptiveTextDark,
+                          tooltip: 'Inspection Tasks',
+                          onPressed: _toggleDocker,
+                        ),
                       ),
                       Container(
                         width: 32,
                         height: 1,
                         color: context.isDarkMode ? Colors.white24 : Colors.black12,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.flag_rounded),
-                        color: const Color(0xFFF59E0B),
-                        tooltip: 'Flag Business',
-                        onPressed: _showYellowFlagSheet,
+                      Showcase(
+                        key: MainLayout.mapAddFlagBtnTourKey,
+                        title: 'Add Yellow Flag',
+                        description: 'Notice an unregistered business? Tap here to flag it directly from the map.',
+                        targetPadding: const EdgeInsets.all(4),
+                        child: IconButton(
+                          icon: const Icon(Icons.flag_rounded),
+                          color: const Color(0xFFF59E0B),
+                          tooltip: 'Flag Business',
+                          onPressed: _showYellowFlagSheet,
+                        ),
                       ),
                     ],
                   ),
@@ -1108,7 +1184,7 @@ class _MapControlButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
-              BoxShadow(blurRadius: 6, color: Colors.black.withOpacity(0.12)),
+              BoxShadow(blurRadius: 6, color: Colors.black.withValues(alpha: 0.12)),
             ],
           ),
           child: ClipRRect(
@@ -1118,10 +1194,10 @@ class _MapControlButton extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: active
-                      ? AppColors.darkGreen.withOpacity(0.9)
+                      ? AppColors.darkGreen.withValues(alpha: 0.9)
                       : context.isDarkMode
-                          ? Colors.black.withOpacity(0.5)
-                          : Colors.white.withOpacity(0.7),
+                          ? Colors.black.withValues(alpha: 0.5)
+                          : Colors.white.withValues(alpha: 0.7),
                 ),
                 child: Icon(
                   icon,
@@ -1235,6 +1311,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
         _locationTouched = true;
       });
     } catch (_) {}
+    if (!mounted) return;
   }
 
   Future<void> _loadBarangays() async {
@@ -1488,7 +1565,7 @@ class _YellowFlagSheetState extends State<_YellowFlagSheet> {
                     hint: _loadingBarangays
                         ? const Text('Loading barangays…')
                         : const Text('Select barangay'),
-                    value: _selectedBarangay,
+                    initialValue: _selectedBarangay,
                     items: _barangays.map((b) {
                       return DropdownMenuItem<Barangay>(
                         value: b,
@@ -1717,7 +1794,7 @@ class _LocationPickerDialog extends StatefulWidget {
 }
 
 class _LocationPickerDialogState extends State<_LocationPickerDialog> {
-  GoogleMapController? _mapController;
+  
   LatLng? _selectedLocation;
   Set<Polygon> _polygons = {};
   LatLngBounds? _polygonBounds;
@@ -1761,7 +1838,7 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
           points: points,
           strokeColor: AppColors.gold,
           strokeWidth: 3,
-          fillColor: AppColors.gold.withOpacity(0.15),
+          fillColor: AppColors.gold.withValues(alpha: 0.15),
         ));
         i++;
       }
@@ -1803,8 +1880,8 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
   }
 
   void _onMapCreated(GoogleMapController controller) {
-    _mapController = controller;
-    controller.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
+    
+    
     
     // Wait for the Dialog's entrance animation to completely finish (usually 300-400ms).
     // The Google Maps SDK on Android often ignores camera updates while scaling.
@@ -1825,7 +1902,7 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
   @override
   Widget build(BuildContext context) {
     // Reactively update map style if theme changes while map is already created
-    _mapController?.setMapStyle(context.isDarkMode ? AppMapStyles.darkMapStyle : "[]");
+    
 
     return Dialog(
       backgroundColor: context.adaptiveSurface,
@@ -1880,7 +1957,7 @@ class _LocationPickerDialogState extends State<_LocationPickerDialog> {
           // Map
           SizedBox(
             height: 400,
-            child: GoogleMap(
+            child: GoogleMap(style: context.isDarkMode ? AppMapStyles.darkMapStyle : "[]",
               initialCameraPosition: _selectedLocation != null
                   ? CameraPosition(target: _selectedLocation!, zoom: 15)
                   : _initialCamera,

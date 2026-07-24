@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../main.dart';
 import '../service/api_config.dart';
 import '../service/auth_service.dart';
 import '../service/assignment_notifications.dart';
-import 'main_layout.dart';
 import 'welcome_page.dart';
 import 'login_page.dart';
 

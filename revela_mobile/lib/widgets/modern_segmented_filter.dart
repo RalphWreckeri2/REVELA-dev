@@ -22,8 +22,8 @@ class ModernSegmentedFilter extends StatelessWidget {
         height: 48,
         decoration: BoxDecoration(
           color: Theme.of(context).brightness == Brightness.dark 
-              ? Colors.white.withOpacity(0.05) 
-              : Colors.black.withOpacity(0.04),
+              ? Colors.white.withValues(alpha: 0.05) 
+              : Colors.black.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(24),
         ),
         padding: const EdgeInsets.all(4),
@@ -42,14 +42,14 @@ class ModernSegmentedFilter extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white.withOpacity(0.15)
+                          ? Colors.white.withValues(alpha: 0.15)
                           : Colors.white,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: Theme.of(context).brightness == Brightness.dark
                           ? []
                           : [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 8,
                                 offset: const Offset(0, 2),
                               )

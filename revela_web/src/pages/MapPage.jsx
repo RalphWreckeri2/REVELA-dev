@@ -1,13 +1,16 @@
 /**
  * MapPage.jsx
- * Map & Flags — Google Maps with color-coded pin markers, click-to-open detail
+ * Map & Flags â€” Google Maps with color-coded pin markers, click-to-open detail
  * modal, working zoom controls, fixed "See Full List" modal.
  */
 
 import { useState, useEffect, useCallback, useRef, useContext, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
 import { useLoadScript, GoogleMap, Data } from "@react-google-maps/api";
 import DashboardLayout from "../components/DashboardLayout";
+import InspectorReportsModal from "../components/InspectorReportsModal";
 import StatusBadge from "../components/StatusBadge";
 import { AuthContext } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -28,7 +31,7 @@ import {
 } from "../services/api";
 import Swal from "sweetalert2";
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const Icon = {
   Layers: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -113,7 +116,7 @@ const Icon = {
   ),
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DEFAULT_MAP_CENTER = { lat: 13.9667, lng: 121.1167 };
 const MAP_LIBRARIES = ["places", "marker"];
 
@@ -137,10 +140,11 @@ const LAYER_OPTIONS = [
   { id: "diagnostics", label: "Risk Heatmap" },
 ];
 
-// Flag color → UI color mapping
+// Flag color â†’ UI color mapping
 const FLAG_COLORS = {
   Red: { marker: "#ef4444", bg: "var(--flag-red-bg)", text: "var(--flag-red-text)", label: "Detected Unregistered" },
   Yellow: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered" },
+  Yellow_Inspector: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered from Inspectors" },
   Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "1st/2nd Warning / 3rd Notice Closure" },
   Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Closed / Nonconforming" },
   Green: { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
@@ -179,7 +183,7 @@ const HEATMAP_RISK_STYLE = {
     strokeWeight: 1,
     zIndex: 2,
   },
-  /** No red flags (or no data) — “very low” style */
+  /** No red flags (or no data) â€” â€œvery lowâ€ style */
   none: {
     fillColor: "#BBDEFB",
     fillOpacity: 0.72,
@@ -201,7 +205,7 @@ function getFlagColor(flagColor) {
   return FLAG_COLORS[flagColor] ?? defaultColor;
 }
 
-/** Higher = more severe — used so mixed clusters show the worst color, not green. */
+/** Higher = more severe â€” used so mixed clusters show the worst color, not green. */
 const FLAG_SEVERITY_RANK = { Green: 1, Orange: 2, Yellow: 3, Red: 4, Black: 5 };
 
 function flagSeverityRank(flagColor) {
@@ -233,12 +237,12 @@ function canonicalFlagColor(raw) {
   return FLAG_COLORS[cap] ? cap : "Red";
 }
 
-// ── Normalise flag from API → UI shape ────────────────────────────────────────
+// â”€â”€ Normalise flag from API â†’ UI shape â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function normalizeFlag(flag) {
   const color = canonicalFlagColor(flag.flagColor);
   const coords =
     flag.latitude != null && flag.longitude != null
-      ? `${Number(flag.latitude).toFixed(6)}°N, ${Number(flag.longitude).toFixed(6)}°E`
+      ? `${Number(flag.latitude).toFixed(6)}Â°N, ${Number(flag.longitude).toFixed(6)}Â°E`
       : "No coordinates";
 
   const hasActiveInspection = flag.verificationStatus === 'Assigned' ||
@@ -253,7 +257,7 @@ function normalizeFlag(flag) {
     address: flag.resolvedAddress ?? flag.nearestLandmark ?? "",
     notes: flag.notes || "",
     source: flag.flagSource ?? "registry_only",
-    size: flag.businessSize ?? "—",
+    size: flag.businessSize ?? "â€”",
     coords,
     color,
     verificationStatus: flag.verificationStatus,
@@ -261,7 +265,7 @@ function normalizeFlag(flag) {
   };
 }
 
-// ── Flag Detail Modal ─────────────────────────────────────────────────────────
+// â”€â”€ Flag Detail Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocation, onDelete, onUpdateColor, isAdmin, actionLoading }) {
   const fc = getFlagColor(flag.color);
 
@@ -277,15 +281,16 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
   const isInspectorReported = flag.source === "inspector_reported";
 
   return (
-    <div style={styles.modalBackdrop} onClick={onClose}>
+    <div className="modal-backdrop" style={styles.modalBackdrop} onClick={onClose}>
       <div
+        className="modal-panel"
         style={{
           ...styles.detailModal,
           width: "min(100%, 460px)",
           borderRadius: 24,
           background: "var(--color-modal-bg)",
           boxShadow: "0 20px 50px rgba(15, 23, 42, 0.12), 0 0 30px rgba(148, 163, 184, 0.03)",
-          border: "1px solid rgba(226, 232, 240, 0.8)",
+          border: "1px solid var(--color-border)",
           overflow: "hidden"
         }}
         onClick={e => e.stopPropagation()}
@@ -319,11 +324,12 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
             </span>
           </div>
           <button
+            className="modal-close-btn"
             style={{
               width: 32,
               height: 32,
               borderRadius: "50%",
-              border: "1px solid rgba(226, 232, 240, 0.8)",
+              border: "1px solid var(--color-border)",
               background: "var(--color-modal-bg)",
               display: "flex",
               alignItems: "center",
@@ -333,15 +339,13 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
               transition: "all 0.2s"
             }}
             onClick={onClose}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#0f172a"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.color = "var(--color-muted)"; }}
           >
             <Icon.X />
           </button>
         </div>
 
         {/* Subtle separator */}
-        <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", margin: "0 24px" }} />
+        <div style={{ borderBottom: "1px solid var(--color-border-soft)", margin: "0 24px" }} />
 
         {/* Modal Body */}
         <div style={{ padding: "20px 24px" }}>
@@ -424,7 +428,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
           </div>
 
           {/* Section Divider */}
-          <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+          <div style={{ borderBottom: "1px solid var(--color-border-soft)", marginBottom: 18 }} />
 
           {/* Location & Address Row (Seamless) */}
           {flag.address && (
@@ -457,7 +461,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
               </div>
 
               {/* Section Divider */}
-              <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+              <div style={{ borderBottom: "1px solid var(--color-border-soft)", marginBottom: 18 }} />
             </>
           )}
 
@@ -495,7 +499,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
               </div>
 
               {/* Section Divider */}
-              <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+              <div style={{ borderBottom: "1px solid var(--color-border-soft)", marginBottom: 18 }} />
             </>
           )}
 
@@ -562,7 +566,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
           </div>
 
           {/* Section Divider */}
-          <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+          <div style={{ borderBottom: "1px solid var(--color-border-soft)", marginBottom: 18 }} />
 
           {/* Active Inspection Warning Pill (Seamless overlay) */}
           {flag.hasActiveInspection && (
@@ -583,7 +587,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                 <span style={{ display: "flex", color: "#2563eb" }}><Icon.Radar /></span>
                 <span>Active inspection patrol is ongoing at this location.</span>
               </div>
-              <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", marginBottom: 18 }} />
+              <div style={{ borderBottom: "1px solid var(--color-border-soft)", marginBottom: 18 }} />
             </>
           )}
 
@@ -592,7 +596,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
         </div>
 
         {/* Subtle separator */}
-        <div style={{ borderBottom: "1px solid rgba(226, 232, 240, 0.65)", margin: "0" }} />
+        <div style={{ borderBottom: "1px solid var(--color-border-soft)", margin: "0" }} />
 
         {/* Footer Actions (Seamless pure white container) */}
         <div style={{ padding: "20px 24px 24px", background: "var(--color-modal-bg)", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -621,8 +625,6 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                 }}
                 disabled={actionLoading}
                 onClick={() => onUpdateColor(flag.id, "Orange")}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#d94e0b"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#ea580c"; e.currentTarget.style.transform = "none"; }}
               >
                 Mark as Closed
               </button>
@@ -649,8 +651,6 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                 }}
                 disabled={actionLoading}
                 onClick={() => onUpdateColor(flag.id, "Green")}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#15803d"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#16a34a"; e.currentTarget.style.transform = "none"; }}
               >
                 Mark as Active
               </button>
@@ -660,8 +660,8 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
               <button
                 className="primary-btn"
                 style={{
-                  background: "#3b82f6",
-                  borderColor: "#3b82f6",
+                  background: "var(--color-primary)",
+                  borderColor: "var(--color-primary)",
                   color: "#ffffff",
                   flex: 1.4,
                   display: "flex",
@@ -673,13 +673,10 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                   fontWeight: 700,
                   fontSize: 13,
                   cursor: "pointer",
-                  boxShadow: "0 4px 12px rgba(59, 130, 246, 0.15)",
                   transition: "all 0.2s"
                 }}
                 disabled={actionLoading}
                 onClick={() => onDispatch(flag)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#2563eb"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#3b82f6"; e.currentTarget.style.transform = "none"; }}
               >
                 <Icon.Send /> {flag.hasActiveInspection ? "Reassign Patrol" : "Dispatch Inspector"}
               </button>
@@ -688,7 +685,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
 
           {/* Secondary Utility Controls */}
           {isAdmin && (flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange") && (
-            <div style={{ display: "flex", gap: 8, width: "100%", borderBottom: "1px solid rgba(226, 232, 240, 0.5)", paddingBottom: 12, marginBottom: 4 }}>
+            <div style={{ display: "flex", gap: 8, width: "100%", borderBottom: "1px solid var(--color-border-soft)", paddingBottom: 12, marginBottom: 4 }}>
               <button
                 style={{
                   flex: 1,
@@ -700,7 +697,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                   fontWeight: 600,
                   height: 34,
                   borderRadius: 8,
-                  border: "1px solid rgba(226, 232, 240, 0.8)",
+                  border: "1px solid var(--color-border-soft)",
                   background: "var(--color-modal-bg)",
                   color: "var(--color-muted)",
                   cursor: "pointer",
@@ -708,8 +705,6 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                 }}
                 disabled={actionLoading}
                 onClick={() => onAdjustLocation(flag)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.color = "#0f172a"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.color = "var(--color-muted)"; }}
               >
                 <Icon.Crosshair /> Adjust pin
               </button>
@@ -724,7 +719,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                   fontWeight: 600,
                   height: 34,
                   borderRadius: 8,
-                  border: "1px solid rgba(220, 38, 38, 0.15)",
+                  border: "1px solid var(--color-error-border)",
                   background: "var(--color-modal-bg)",
                   color: "#dc2626",
                   cursor: "pointer",
@@ -732,8 +727,6 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                 }}
                 disabled={actionLoading}
                 onClick={() => onEscalate(flag.id)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(220, 38, 38, 0.03)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
               >
                 <Icon.AlertTriangle /> Escalate Black
               </button>
@@ -759,8 +752,6 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                   }}
                   disabled={actionLoading}
                   onClick={() => onDelete(flag.id)}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239, 68, 68, 0.05)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                 >
                   Delete Flag
                 </button>
@@ -779,8 +770,6 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                   transition: "background 0.15s"
                 }}
                 onClick={onClose}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#f1f5f9"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
               >
                 Dismiss
               </button>
@@ -806,8 +795,6 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
                   color: "#2563eb",
                   transition: "all 0.15s"
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(59, 130, 246, 0.04)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#ffffff"; }}
               >
                 <Icon.ExternalLink /> Open Map
               </a>
@@ -820,144 +807,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
   );
 }
 
-// ── Full Flag List Modal ───────────────────────────────────────────────────────
-function FullFlagListModal({ flags, onClose, onSelectFlag }) {
-  const [search, setSearch] = useState("");
-  const [filterColor, setFilterColor] = useState("all");
-  const [sortConfig, setSortConfig] = useState("date_desc");
-
-  const displayed = flags.filter(f => {
-    const matchColor = filterColor === "all" || f.color === filterColor;
-    const matchSearch = (f.name || "").toLowerCase().includes(search.toLowerCase()) ||
-      (f.barangay || "").toLowerCase().includes(search.toLowerCase()) ||
-      (f.address || "").toLowerCase().includes(search.toLowerCase());
-    return matchColor && matchSearch;
-  });
-
-  displayed.sort((a, b) => {
-    if (sortConfig === "date_desc") {
-      return (new Date(b.detectedDate || 0).getTime()) - (new Date(a.detectedDate || 0).getTime());
-    } else if (sortConfig === "date_asc") {
-      return (new Date(a.detectedDate || 0).getTime()) - (new Date(b.detectedDate || 0).getTime());
-    } else if (sortConfig === "name_asc") {
-      return (a.name || "").localeCompare(b.name || "");
-    } else if (sortConfig === "name_desc") {
-      return (b.name || "").localeCompare(a.name || "");
-    } else if (sortConfig === "id_desc") {
-      return Number(b.id) - Number(a.id);
-    } else if (sortConfig === "id_asc") {
-      return Number(a.id) - Number(b.id);
-    }
-    return 0;
-  });
-
-  return (
-    <div style={styles.modalBackdrop} onClick={onClose}>
-      <div style={styles.fullListModal} onClick={e => e.stopPropagation()}>
-
-        <div style={{ ...styles.fullListHeader, flexDirection: "column", gap: 16, alignItems: "stretch" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <h3 style={styles.modalTitle}>All Flagged Locations</h3>
-              <p style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 2 }}>
-                {displayed.length} result{displayed.length !== 1 ? 's' : ''} · click a row to view on map
-              </p>
-            </div>
-            <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
-          </div>
-
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div className="search-bar" style={{ flex: 1, minWidth: 200, padding: "0 12px", height: 40 }}>
-              <Icon.Search />
-              <input
-                type="text"
-                placeholder="Search name, barangay, or address…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            <select style={styles.modalSelect} value={filterColor} onChange={e => setFilterColor(e.target.value)}>
-              <option value="all">All Colors</option>
-              <option value="Red">Red Flags</option>
-              <option value="Yellow">Yellow Flags</option>
-              <option value="Black">Black Flags</option>
-              <option value="Green">Green Flags</option>
-            </select>
-            <select style={styles.modalSelect} value={sortConfig} onChange={e => setSortConfig(e.target.value)}>
-              <option value="date_desc">Newest First</option>
-              <option value="date_asc">Oldest First</option>
-              <option value="name_asc">Name (A-Z)</option>
-              <option value="name_desc">Name (Z-A)</option>
-              <option value="id_desc">ID (High to Low)</option>
-              <option value="id_asc">ID (Low to High)</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(80vh - 140px)" }}>
-          <table style={styles.fullListTable}>
-            <thead>
-              <tr>
-                {["ID", "Name", "Barangay", "Address", "Detected", "Flag", ""].map(h => (
-                  <th key={h} style={styles.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {displayed.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "40px 16px", color: "var(--color-muted)", fontSize: 13 }}>
-                    No flags match your criteria.
-                  </td>
-                </tr>
-              ) : displayed.map((f, i) => {
-                const fc = getFlagColor(f.color);
-                return (
-                  <tr
-                    key={f.id}
-                    style={{ background: i % 2 === 0 ? "var(--color-input-bg)" : "transparent", cursor: "pointer" }}
-                    onClick={() => { onSelectFlag(f.id); onClose(); }}
-                  >
-                    <td style={styles.td}>
-                      <span style={{ fontFamily: "monospace", fontSize: 11, color: "var(--color-muted)" }}>#{f.id}</span>
-                    </td>
-                    <td style={{ ...styles.td, fontWeight: 600, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {f.name}
-                    </td>
-                    <td style={styles.td}>{f.barangay || "—"}</td>
-                    <td style={{ ...styles.td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {f.address || "—"}
-                    </td>
-                    <td style={{ ...styles.td, fontSize: 11 }}>
-                      {f.detectedDate ? f.detectedDate.slice(0, 10) : "—"}
-                    </td>
-                    <td style={styles.td}>
-                      <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text }}>{fc.label}</span>
-                      {f.hasActiveInspection && (
-                        <span style={{ marginLeft: 6, fontSize: 11 }} title="Inspection Ongoing">🔍</span>
-                      )}
-                    </td>
-                    <td style={styles.td}>
-                      <button
-                        className="ghost-btn"
-                        style={{ fontSize: 11, padding: "4px 10px" }}
-                        onClick={e => { e.stopPropagation(); onSelectFlag(f.id); onClose(); }}
-                      >
-                        View on Map
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Map Canvas ────────────────────────────────────────────────────────────────
+// — Map Canvas —————————————————————————————————————————————————————————————————————————————————————————————————————
 const darkMapStyle = [
   { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
   { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
@@ -986,7 +836,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
   const diagnosticCircleRefs = useRef([]);
   const geoJsonDataRef = useRef(null);
 
-  // ── Draw / clear DBSCAN cluster circles ─────────────────────────────────
+  // — Draw / clear DBSCAN cluster circles ————————————————————————————————————————————————————————————————————————
   useEffect(() => {
     // Clean up previous circles regardless of whether we're drawing new ones
     diagnosticCircleRefs.current.forEach(c => c.setMap(null));
@@ -1054,7 +904,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
               ${cl.size} Red Flag${cl.size !== 1 ? "s" : ""} within ${cl.radius_m} m
             </span><br/>
             <span style="color:#94a3b8;font-size:11px;">
-              eps = 20 m · MinPts = 3 &nbsp;·&nbsp;
+              eps = 20 m · MinPts = 3  · 
               IDs: ${cl.logIDs.slice(0, 6).map(id => `#${id}`).join(", ")}${cl.logIDs.length > 6 ? "…" : ""}
             </span>
           </div>
@@ -1097,7 +947,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
       if (!layers.heatmap && !layers.barangay) return { visible: false };
 
       if (layers.heatmap) {
-        // ── Name resolution (unchanged from original) ────────────────────
+        // — Name resolution (unchanged from original) —————————————————————————————————————————————————————————
         const rawName = (
           feature.getProperty('ADM4_EN') ||
           feature.getProperty('NAME_4') ||
@@ -1136,7 +986,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
                 ? "Low"
                 : undefined;
         } else {
-          // ── Red Flag count for this barangay ───────────────────────────
+          // — Red Flag count for this barangay —————————————————————————————————————————————————————————————
           count = barangayRedFlagCounts?.[bName] ?? 0;
           if (count === 0) {
             const fuzzyKey = Object.keys(barangayRedFlagCounts || {}).find(
@@ -1525,7 +1375,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
               <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span style={{ fontSize: 11, color: "#a8e063", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.03em" }}>
-                    {detectionProgress?.stage === "scanning" ? "🔍 Bounded Map Scan" : detectionProgress?.stage === "matching" ? "📑 Cross-Referencing" : "⚡ Initializing"}
+                    {detectionProgress?.stage === "scanning" ? "🔍 Bounded Map Scan" : detectionProgress?.stage === "matching" ? "📄 Cross-Referencing" : "⚡ Initializing"}
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 800, color: "#f1f5f9" }}>
                     {detectionProgress?.percentage ?? 0}%
@@ -1588,7 +1438,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
   );
 }
 
-// ── Side panel flag card ───────────────────────────────────────────────────────
+// — Side panel flag card ————————————————————————————————————————————————————————————————————————————————————————
 function FlagCard({ flag, selected, onClick }) {
   const fc = getFlagColor(flag.color);
   return (
@@ -1606,22 +1456,17 @@ function FlagCard({ flag, selected, onClick }) {
           <p style={styles.flagName}>{flag.name}</p>
           <p style={styles.flagMeta}>{flag.barangay}</p>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text, flexShrink: 0, marginLeft: 8 }}>
-            {fc.label}
-          </span>
-          {flag.hasActiveInspection && (
-            <span style={{ fontSize: 9, fontWeight: 700, color: "#3b82f6", background: "#eff6ff", padding: "2px 6px", borderRadius: 10, border: "1px solid #bfdbfe", whiteSpace: "nowrap", marginLeft: 8 }}>
-              INSPECTING
+        <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          {flag.noticeLevel && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: "var(--flag-orange-bg)", color: "var(--flag-orange-text)", display: "inline-block" }}>
+              {flag.noticeLevel}
             </span>
           )}
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 12, background: fc.bg || "var(--color-hover)", color: fc.text || "var(--color-ink)" }}>
+            {fc.label}
+          </span>
         </div>
       </div>
-      {flag.address && (
-        <p style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {flag.address}
-        </p>
-      )}
     </div>
   );
 }
@@ -1667,31 +1512,28 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
   };
 
   const isOrange = form.flagColor === "Orange";
-  const headerBg = isOrange ? "#fff3e0" : "#fef3c7";
-  const headerBorder = isOrange ? "#ffcc80" : "#fde68a";
-  const headerColor = isOrange ? "#bf360c" : "#92400e";
-  const dotBg = isOrange ? "#e65100" : "#f59e0b";
+  const dotBg = isOrange ? "var(--color-danger)" : "var(--color-warning)";
   const headerLabel = isOrange ? "Flag 1st/2nd Warning / Closure" : "Flag Suspected Business";
-  const btnBg = isOrange ? "#e65100" : "#d97706";
+  const btnBg = isOrange ? "var(--color-danger)" : "var(--color-warning)";
   const btnLabel = loading ? "Saving…" : (isOrange ? "+ Flag 1st/2nd Warning / Closure" : "+ Flag Suspected Business");
 
-  return (
-    <div style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
-      <div style={{ ...styles.detailModal, padding: 0 }} onClick={e => e.stopPropagation()}>
-
+  return createPortal(
+    <div className="modal-backdrop" onClick={!loading ? onClose : undefined} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ width: 640, maxWidth: "95vw", maxHeight: "85vh", display: "flex", flexDirection: "column", padding: 32, borderRadius: 24, background: "var(--color-modal-bg)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}>
+        
         {/* Header */}
-        <div style={{ ...styles.detailHeader, background: headerBg, borderBottom: `1px solid ${headerBorder}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ width: 12, height: 12, borderRadius: "50%", background: dotBg, display: "inline-block" }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: headerColor, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {headerLabel}
-            </span>
-          </div>
-          <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: dotBg, display: "inline-block" }}></span>
+            {headerLabel}
+          </h2>
+          <button className="modal-close-btn" onClick={onClose}>
+            <Icon.X />
+          </button>
         </div>
 
         {/* Body */}
-        <div style={styles.detailBody}>
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
             <p style={{ fontSize: 13, color: "var(--color-muted)", lineHeight: 1.6, maxWidth: "70%" }}>
               Manually flag a suspected or closed establishment. It will appear on the map immediately.
@@ -1707,8 +1549,8 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
           </div>
 
           {error && (
-            <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 14 }}>
-              {error}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 14 }}>
+              <Icon.AlertTriangle /> {error}
             </div>
           )}
 
@@ -1722,7 +1564,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
                 {label}
               </label>
               <input
-                style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", outline: "none" }}
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-input-bg)", outline: "none" }}
                 placeholder={placeholder}
                 value={form[key]}
                 onChange={e => set(key, e.target.value)}
@@ -1735,7 +1577,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
               Flag Color / Type *
             </label>
             <select
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-modal-bg)", cursor: "pointer" }}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-input-bg)", cursor: "pointer" }}
               value={form.flagColor}
               onChange={e => set("flagColor", e.target.value)}
             >
@@ -1749,7 +1591,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
               Notes
             </label>
             <input
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", outline: "none" }}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-input-bg)", outline: "none" }}
               placeholder="Reason for flagging…"
               value={form.notes}
               onChange={e => set("notes", e.target.value)}
@@ -1761,7 +1603,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
               Barangay *
             </label>
             <select
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-modal-bg)", cursor: "pointer" }}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-input-bg)", cursor: "pointer" }}
               value={form.barangayID}
               onChange={e => set("barangayID", e.target.value)}
             >
@@ -1774,7 +1616,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
         </div>
 
         {/* Footer */}
-        <div style={styles.detailFooter}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24, paddingTop: 24, borderTop: "1px solid var(--color-border-soft)" }}>
           <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
           <button
             className="primary-btn"
@@ -1786,11 +1628,12 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
-// ── Dispatch Modal ────────────────────────────────────────────────────────────
+// — Dispatch Modal —————————————————————————————————————————————————————————————————————————————————————————————
 function DispatchModal({ flag, token, onClose, onSuccess }) {
   const [inspectors, setInspectors] = useState([]);
   const [selectedUID, setSelectedUID] = useState("");
@@ -1846,11 +1689,11 @@ function DispatchModal({ flag, token, onClose, onSuccess }) {
   const fc = getFlagColor(flag.color);
 
   return (
-    <div style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
-      <div style={{ ...styles.detailModal, padding: 24, width: 440 }} onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
+      <div className="modal-panel" style={{ ...styles.detailModal, padding: 24, width: 440 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h3 style={styles.modalTitle}>Dispatch Inspector</h3>
-          {!loading && <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>}
+          {!loading && <button className="modal-close-btn" onClick={onClose}><Icon.X /></button>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--color-hover)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 20 }}>
           <span style={{ ...styles.flagPill, background: fc.bg, color: fc.text }}>{fc.label}</span>
@@ -1860,16 +1703,16 @@ function DispatchModal({ flag, token, onClose, onSuccess }) {
           </div>
         </div>
         {error && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 16 }}>
             <Icon.AlertTriangle /> &nbsp;{error}
           </div>
         )}
         <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Select Inspector</label>
         {fetching ? (
-          <p style={{ fontSize: 13, color: "var(--color-muted)" }}>Loading inspectors…</p>
+          <p style={{ fontSize: 13, color: "var(--color-muted)" }}>Loading inspectorsâ€¦</p>
         ) : (
           <select style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-modal-bg)", cursor: "pointer", marginBottom: 4 }} value={selectedUID} onChange={e => setSelectedUID(e.target.value)}>
-            <option value="">Choose an inspector…</option>
+            <option value="">Choose an inspectorâ€¦</option>
             {inspectors.map(u => (<option key={u.userID} value={u.userID}>{u.fullName}</option>))}
           </select>
         )}
@@ -1884,15 +1727,16 @@ function DispatchModal({ flag, token, onClose, onSuccess }) {
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 24 }}>
           <button className="ghost-btn" onClick={onClose} disabled={loading}>Cancel</button>
-          <button className="primary-btn" style={{ background: "#3b82f6", borderColor: "#3b82f6", display: "flex", alignItems: "center", gap: 6 }} onClick={handleAssign} disabled={loading || fetching}>{loading ? "Dispatching…" : <><Icon.Send /> Dispatch</>}</button>
+          <button className="primary-btn" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={handleAssign} disabled={loading || fetching}>{loading ? "Dispatching…" : <><Icon.Send /> Dispatch</>}</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function MapPage() {
+  const navigate = useNavigate();
   const { token, user } = useContext(AuthContext);
   const { isDark } = useTheme();
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
@@ -1921,7 +1765,7 @@ export default function MapPage() {
   const [layers, setLayers] = useState({ base: true, heatmap: false, flags: true, barangay: false, diagnostics: false });
   const [selectedFlag, setSelectedFlag] = useState(null);   // logID of selected flag
   const [modalFlag, setModalFlag] = useState(null);   // flag object shown in detail modal
-  const [showFullList, setShowFullList] = useState(false);
+  const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [filterColor, setFilterColor] = useState("all");
   const [search, setSearch] = useState("");
@@ -1941,7 +1785,7 @@ export default function MapPage() {
   const [adjustingLatLng, setAdjustingLatLng] = useState(null);
   const [saveAdjustLoading, setSaveAdjustLoading] = useState(false);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Fetch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchFlags = useCallback(async () => {
     if (!token) return;
     setLoadingFlags(true);
@@ -1994,6 +1838,36 @@ export default function MapPage() {
   useEffect(() => { fetchFlags(); }, [fetchFlags]);
 
   useEffect(() => {
+    if (!token || !isAdmin) return;
+    getBarangaysRequest(token)
+      .then(data => {
+        // API may return a bare array or a {data: [...]} wrapper â€” handle
+        // both so the dropdown doesn't silently end up empty.
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+        setBarangays(list);
+      })
+      .catch(err => console.error("Failed to load barangays", err));
+  }, [token, isAdmin]);
+
+  const [inspectors, setInspectors] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${import.meta.env.VITE_API_ORIGIN || "http://127.0.0.1:5000"}/api/users/?role=Inspector`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        const list = Array.isArray(data) ? data : (data.data ?? []);
+        setInspectors(list.filter(u => u.isActive !== 0 && u.isActive !== false && u.userRole === 'Inspector'));
+      })
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
     const handleProgress = (event) => {
       const { detail } = event;
       setDetectionProgress(detail);
@@ -2020,21 +1894,6 @@ export default function MapPage() {
     return () => window.removeEventListener("revela:yellow-flag", handleYellowFlag);
   }, [fetchFlags]);
 
-  useEffect(() => {
-    if (!token || !isAdmin) return;
-    getBarangaysRequest(token)
-      .then(data => {
-        // API may return a bare array or a {data: [...]} wrapper — handle
-        // both so the dropdown doesn't silently end up empty.
-        const list = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.data)
-            ? data.data
-            : [];
-        setBarangays(list);
-      })
-      .catch(err => console.error("Failed to load barangays", err));
-  }, [token, isAdmin]);
 
   useEffect(() => {
     if (!layers.diagnostics || !token) return;
@@ -2051,7 +1910,7 @@ export default function MapPage() {
       .finally(() => setClustersLoading(false));
   }, [layers.diagnostics, token]);
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  // â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleEscalate = async (logId) => {
     setActionLoading(true);
     setActionError("");
@@ -2116,7 +1975,7 @@ export default function MapPage() {
       setClusters([]);
       // Show result summary briefly
       if (result?.new_flags !== undefined) {
-        setActionError(`Detection complete — ${result.new_flags} new Red Flag${result.new_flags !== 1 ? "s" : ""} found.`);
+        setActionError(`Detection complete â€” ${result.new_flags} new Red Flag${result.new_flags !== 1 ? "s" : ""} found.`);
         setTimeout(() => setActionError(""), 5000);
       }
     } catch (err) {
@@ -2156,7 +2015,7 @@ export default function MapPage() {
     }
   };
 
-  // ── Drag & Drop Adjust Location ───────────────────────────────────────────
+  // â”€â”€ Drag & Drop Adjust Location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleStartAdjustLocation = (flag) => {
     setModalFlag(null);
     setSelectedFlag(null);
@@ -2205,7 +2064,7 @@ export default function MapPage() {
     }
   };
 
-  // ── Marker click → pan map + open detail modal ────────────────────────────
+  // â”€â”€ Marker click â†’ pan map + open detail modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleMarkerClick = useCallback((id) => {
     const flag = flags.find(f => f.id === id);
     if (!flag) return;
@@ -2220,7 +2079,7 @@ export default function MapPage() {
     }
   }, [flags]);
 
-  // ── When user clicks a flag in the side panel ─────────────────────────────
+  // â”€â”€ When user clicks a flag in the side panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleSidePanelClick = (flag) => {
     setSelectedFlag(flag.id);
     setModalFlag(flag);
@@ -2230,7 +2089,7 @@ export default function MapPage() {
     }
   };
 
-  // ── Map click (for "Drop a Pin" feature) ──────────────────────────────────
+  // â”€â”€ Map click (for "Drop a Pin" feature) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleMapClick = useCallback((e) => {
     if (isPickingYellowLocation) {
       const lat = e.latLng.lat();
@@ -2288,9 +2147,12 @@ export default function MapPage() {
     }
   }, [isPickingYellowLocation, barangays]);
 
-  // ── Filters ────────────────────────────────────────────────────────────────
+  // â”€â”€ Filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const visibleFlags = flags.filter(f => {
-    const matchColor = filterColor === "all" || f.color === filterColor;
+    let matchColor = filterColor === "all" || f.color === filterColor;
+    if (filterColor === "Yellow_Inspector") {
+      matchColor = f.color === "Yellow" && f.reportedByUserID;
+    }
     const matchSearch = (f.name || "").toLowerCase().includes(search.toLowerCase()) ||
       (f.barangay || "").toLowerCase().includes(search.toLowerCase());
     const matchSource = filterSource === "all" || f.source === filterSource;
@@ -2342,7 +2204,7 @@ export default function MapPage() {
                 + Add Flag
               </button>
               <button className="primary-btn" type="button" onClick={handleRunDetection} disabled={runDetectionLoading}>
-                {runDetectionLoading ? "Running…" : "Run Detection"}
+                {runDetectionLoading ? "Runningâ€¦" : "Run Detection"}
               </button>
             </>
           )}
@@ -2408,7 +2270,7 @@ export default function MapPage() {
                   {l.label}
                   {l.id === "diagnostics" && layers.diagnostics && clustersLoading && (
                     <span style={{ fontSize: 11, color: "var(--color-muted)", marginLeft: 4 }}>
-                      loading…
+                      loadingâ€¦
                     </span>
                   )}
                 </button>
@@ -2444,7 +2306,7 @@ export default function MapPage() {
               cancellingDetection={cancellingDetection}
               handleCancelDetection={handleCancelDetection}
             />
-            {/* Discrete risk legend — matches HEATMAP_RISK_STYLE on the Data layer */}
+            {/* Discrete risk legend â€” matches HEATMAP_RISK_STYLE on the Data layer */}
             {layers.heatmap && (
               <div style={{
                 position: "absolute",
@@ -2519,31 +2381,22 @@ export default function MapPage() {
               <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", flex: 1 }}>
                 Flagged Locations
               </h3>
-              <button
-                className="ghost-btn"
-                type="button"
-                style={{ fontSize: 11, padding: "5px 10px" }}
-                onClick={() => setShowFullList(true)}
-              >
-                See Full List
-              </button>
+              {(filterColor !== "all" || search !== "" || filterSource !== "all") && (
+                <button
+                  type="button"
+                  style={{ background: "transparent", border: "none", color: "var(--color-primary)", fontSize: 11, fontWeight: 600, cursor: "pointer", padding: "0 8px" }}
+                  onClick={() => { setFilterColor("all"); setSearch(""); setFilterSource("all"); }}
+                >
+                  Clear Filters
+                </button>
+              )}
               <span style={styles.countBadge}>{visibleFlags.length}</span>
             </div>
-
-            {/* Search */}
-            <div className="search-bar" style={{ marginBottom: 10 }}>
-              <Icon.Search />
-              <input
-                type="text"
-                placeholder="Search name or barangay…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
+            <hr style={{ border: "none", borderTop: "1px solid var(--color-border-soft)", margin: "0 0 14px 0" }} />
 
             {/* Color filter pills */}
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["all", "Green", "Yellow", "Orange", "Red", "Black"].map(c => (
+              {["all", "Green", "Yellow", "Yellow_Inspector", "Orange", "Red", "Black"].map(c => (
                 <button
                   key={c}
                   onClick={() => {
@@ -2553,7 +2406,7 @@ export default function MapPage() {
                   style={{
                     ...styles.filterPill,
                     background: filterColor === c ? (c === "all" ? "var(--color-ink)" : FLAG_COLORS[c]?.marker ?? "var(--color-ink)") : "var(--color-hover)",
-                    color: filterColor === c ? "#fff" : "var(--color-muted)",
+                    color: filterColor === c ? (c === "all" ? "var(--color-surface)" : "#fff") : "var(--color-muted)",
                     borderColor: filterColor === c ? "transparent" : "var(--color-border-soft)",
                   }}
                 >
@@ -2562,13 +2415,13 @@ export default function MapPage() {
               ))}
             </div>
 
-            {/* Source filter — shows only when Green is selected */}
+            {/* Source filter â€” shows only when Green is selected */}
             {filterColor === "Green" && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 {[
                   { value: "all", label: "All Sources" },
-                  { value: "registry_only", label: "📋 Registry Only" },
-                  { value: "registry_and_maps", label: "🗺️ Registry + Maps" },
+                  { value: "registry_only", label: "ðŸ“‹ Registry Only" },
+                  { value: "registry_and_maps", label: "ðŸ—ºï¸ Registry + Maps" },
                 ].map(s => (
                   <button
                     key={s.value}
@@ -2604,7 +2457,7 @@ export default function MapPage() {
                       <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af", marginBottom: 2 }}>{i + 1}. {r.barangayName}</div>
                       <div style={{ fontSize: 10, color: "var(--color-muted)", fontWeight: 600 }}>
                         OPS: <span style={{ color: r.ops_score >= 60 ? "#dc2626" : r.ops_score >= 30 ? "#d97706" : "#16a34a" }}>{r.ops_score}</span>
-                        <span style={{ margin: "0 4px" }}>•</span>
+                        <span style={{ margin: "0 4px" }}>â€¢</span>
                         {r.flagged_count} flagged
                       </div>
                     </div>
@@ -2624,34 +2477,29 @@ export default function MapPage() {
             </div>
           )}
 
-          {/* Flag list */}
-          <div style={styles.flagList}>
-            {loadingFlags ? (
-              <div style={styles.emptyPanel}>Loading flags…</div>
-            ) : visibleFlags.length === 0 ? (
-              <div style={styles.emptyPanel}>
-                <Icon.AlertTriangle />
-                <p>{search || filterColor !== "all" ? "No flags match this filter." : "No flags detected yet."}</p>
-              </div>
-            ) : visibleFlags.map(f => (
-              <FlagCard
-                key={f.id}
-                flag={f}
-                selected={selectedFlag === f.id}
-                onClick={() => handleSidePanelClick(f)}
-              />
-            ))}
+          {/* Action Buttons at Bottom */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
+            {isAdmin && (
+              <button 
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "12px", borderRadius: 12, background: "#5fa635", color: "#fff", border: "none", fontWeight: 700, cursor: "pointer", fontSize: 14 }} 
+                onClick={() => setIsInspectorModalOpen(true)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 8 }}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                View Inspector Backlog
+              </button>
+            )}
           </div>
+
         </div>
       </div>
 
       {/* Footer */}
       <footer className="saas-footer frosted-glass">
         <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
-        <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
+        <p className="footer-links"><span>BPLO Portal</span> â€¢ <span>System Settings</span></p>
       </footer>
 
-      {/* Flag detail modal — opens on marker or side panel click */}
+      {/* Flag detail modal â€” opens on marker or side panel click */}
       {modalFlag && (
         <FlagDetailModal
           flag={modalFlag}
@@ -2666,17 +2514,7 @@ export default function MapPage() {
         />
       )}
 
-      {/* Full list modal */}
-      {showFullList && (
-        <FullFlagListModal
-          flags={flags}
-          onClose={() => setShowFullList(false)}
-          onSelectFlag={(id) => {
-            const flag = flags.find(f => f.id === id);
-            if (flag) handleSidePanelClick(flag);
-          }}
-        />
-      )}
+
 
       {dispatchTarget && (
         <DispatchModal
@@ -2706,11 +2544,19 @@ export default function MapPage() {
         />
       )}
 
+      {/* Modals */}
+      <InspectorReportsModal 
+        isOpen={isInspectorModalOpen} 
+        onClose={() => setIsInspectorModalOpen(false)} 
+        flags={flags} 
+        inspectors={inspectors} 
+        navigate={navigate} 
+      />
     </DashboardLayout>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const styles = {
   livePill: { display: "inline-flex", alignItems: "center", gap: 6, background: "#fee2e2", color: "#b91c1c", padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700 },
   liveDot: { width: 7, height: 7, borderRadius: "50%", background: "#ef4444" },
@@ -2746,7 +2592,7 @@ const styles = {
   emptyPanel: { textAlign: "center", padding: "40px 0", color: "var(--color-muted)", fontSize: 13, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 },
 
   // Detail modal
-  modalBackdrop: { position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
   detailModal: { width: "min(100%, 480px)", borderRadius: 20, background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)", overflow: "hidden" },
   detailHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px" },
   detailBody: { padding: "20px 24px" },

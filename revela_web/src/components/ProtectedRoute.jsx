@@ -31,11 +31,12 @@ export default function ProtectedRoute({ children }) {
         <div style={{
            position: 'absolute',
            top: '35%',
+           left: '50%',
            display: 'flex',
            flexDirection: 'column',
            alignItems: 'center',
            gap: '20px',
-           transform: 'translateY(-50%)'
+           transform: 'translate(-50%, -50%)'
         }}>
           <div style={{
             width: '48px', height: '48px',

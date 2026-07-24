@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -8,7 +9,11 @@ import '../theme/app_theme.dart';
 import '../widgets/task_card.dart';
 import '../widgets/custom_app_bar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'inspection_page.dart';
+import 'profile_page.dart';
+import 'main_layout.dart';
 
 class DashboardPage extends StatefulWidget {
   final ValueChanged<bool>? onDrawerToggled;
@@ -19,7 +24,8 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
+  Timer? _pollTimer;
   final PageController _pageController = PageController(viewportFraction: 1.0);
   double _currentPage = 0.0;
   final InspectionService _inspectionService = InspectionService();
@@ -32,9 +38,23 @@ class _DashboardPageState extends State<DashboardPage> {
   List<InspectionTask> _historyTasks = [];
   bool _isDrawerOpen = false;
 
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay = DateTime.now();
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+
+  List<InspectionTask> _getTasksForDay(DateTime day) {
+    return _activeTasks.where((task) {
+      if (task.deadline == null) return false;
+      final deadline = DateTime.tryParse(task.deadline!);
+      if (deadline == null) return false;
+      return isSameDay(deadline, day);
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pageController.addListener(() {
       if (_pageController.hasClients && _pageController.positions.length == 1 && _pageController.position.haveDimensions) {
         setState(() {
@@ -43,12 +63,26 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     });
     _loadDashboardData();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        _loadDashboardData(silent: true);
+      }
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadDashboardData(silent: true);
+    }
   }
 
   void _openTask(InspectionTask task) async {
@@ -76,7 +110,9 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _loadDashboardData({bool silent = false}) async {
-    setState(() => _isLoading = true);
+    if (!silent && mounted) {
+      setState(() => _isLoading = true);
+    }
     try {
       final name =
           await _storage.read(key: 'user_fullName') ?? 'Field Inspector';
@@ -113,8 +149,11 @@ class _DashboardPageState extends State<DashboardPage> {
     final int yellowFlagsCount = _activeTasks
         .where((t) => t.flagColor.toLowerCase() == 'yellow')
         .length;
-    final int greenFlagsCount = _activeTasks
-        .where((t) => t.flagColor.toLowerCase() == 'green')
+    final int orangeFlagsCount = _activeTasks
+        .where((t) => t.flagColor.toLowerCase() == 'orange')
+        .length;
+    final int blackFlagsCount = _activeTasks
+        .where((t) => t.flagColor.toLowerCase() == 'black')
         .length;
     final int submittedCount = _historyTasks
         .where((t) => t.verificationStatus.toLowerCase() == 'submitted')
@@ -188,9 +227,14 @@ class _DashboardPageState extends State<DashboardPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // ── Modern Welcome Banner ──
-                                SizedBox(
-                                  height: 280,
-                                  child: Stack(
+                                Showcase(
+                                  key: MainLayout.dashboardCardsTourKey,
+                                  title: 'Welcome Cards',
+                                  description: 'Here you can quickly see your most urgent tasks and overall progress.',
+                                  targetPadding: const EdgeInsets.all(8),
+                                  child: SizedBox(
+                                    height: 280,
+                                    child: Stack(
                                     clipBehavior: Clip.none,
                                     children: [
                                       Container(
@@ -218,8 +262,20 @@ class _DashboardPageState extends State<DashboardPage> {
                                                   ),
                                                 );
                                               },
-                                              child: index == 0 ? _buildBannerCard(
-                                                child: Padding(
+                                              child: index == 0 ? GestureDetector(
+                                                onTap: () async {
+                                                  final result = await Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => const ProfilePage(),
+                                                    ),
+                                                  );
+                                                  if (result == true) {
+                                                    _loadDashboardData();
+                                                  }
+                                                },
+                                                child: _buildBannerCard(
+                                                  child: Padding(
                                                   padding: const EdgeInsets.all(24.0),
                                                   child: Row(
                                                     children: [
@@ -312,7 +368,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                                     ],
                                                   ),
                                                 ),
-                                              ) : index == 1 ? _buildBannerCard(
+                                              ),
+                                            ) : index == 1 ? _buildBannerCard(
                                                 child: Padding(
                                                   padding: const EdgeInsets.all(24.0),
                                                   child: Column(
@@ -325,7 +382,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                                       ),
                                                       const SizedBox(height: 4),
                                                       Text(
-                                                        redFlagsCount > 0 ? 'Prioritize ${redFlagsCount} red flags' : 'You have ${assignedCount} pending tasks',
+                                                        redFlagsCount > 0 ? 'Prioritize $redFlagsCount red flags' : 'You have $assignedCount pending tasks',
                                                         style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                                                         maxLines: 2, overflow: TextOverflow.ellipsis,
                                                       ),
@@ -448,6 +505,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                     ],
                                   ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05),
                                 ),
+                                ),
                                 const SizedBox(height: 24),
 
                                 Row(
@@ -482,14 +540,20 @@ class _DashboardPageState extends State<DashboardPage> {
                                   ],
                                 ).animate().fadeIn(delay: 100.ms),
                                 const SizedBox(height: 16),
-                                Builder(
+                                Showcase(
+                                  key: MainLayout.dashboardProgressTourKey,
+                                  title: 'Overall Progress Bar',
+                                  description: 'Track your workload: Assigned (Grey), Submitted (Gold), and Verified (Green).',
+                                  targetPadding: const EdgeInsets.all(4),
+                                  child: Builder(
                                       builder: (context) {
                                         int total =
                                             assignedCount +
                                             submittedCount +
                                             verifiedCount;
-                                        if (total == 0)
+                                        if (total == 0) {
                                           total = 1; // prevent division by zero
+                                        }
                                         return Column(
                                           children: [
                                             Container(
@@ -556,7 +620,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                           ],
                                         );
                                       },
-                                    )
+                                    ),
+                                )
                                     .animate()
                                     .fadeIn(delay: 200.ms)
                                     .slideY(begin: 0.1),
@@ -578,12 +643,17 @@ class _DashboardPageState extends State<DashboardPage> {
                                   ],
                                 ).animate().fadeIn(delay: 300.ms),
                                 const SizedBox(height: 16),
-                                Row(
-                                  children: [
+                                Showcase(
+                                  key: MainLayout.dashboardFlagsTourKey,
+                                  title: 'Flag Reports',
+                                  description: 'Quickly gauge risk levels. Red flags indicate unregistered establishments requiring priority.',
+                                  targetPadding: const EdgeInsets.all(4),
+                                  child: Row(
+                                    children: [
                                     Expanded(
                                       child: redFlagsCount > 0
                                           ? _buildGlassMetricCard(
-                                                  'Red Flags',
+                                                  'Red',
                                                   '$redFlagsCount',
                                                   Icons.flag_rounded,
                                                   Colors.red,
@@ -610,7 +680,7 @@ class _DashboardPageState extends State<DashboardPage> {
                                                   ),
                                                 )
                                           : _buildGlassMetricCard(
-                                                  'Red Flags',
+                                                  'Red',
                                                   '0',
                                                   Icons.flag_rounded,
                                                   Colors.red,
@@ -625,14 +695,14 @@ class _DashboardPageState extends State<DashboardPage> {
                                                   ),
                                                 ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child:
                                           _buildGlassMetricCard(
-                                                'Yellow Flags',
+                                                'Yellow',
                                                 '$yellowFlagsCount',
                                                 Icons.flag_rounded,
-                                                Colors.orange,
+                                                Colors.amber,
                                                 isZero: yellowFlagsCount == 0,
                                               )
                                               .animate()
@@ -641,15 +711,15 @@ class _DashboardPageState extends State<DashboardPage> {
                                                 begin: const Offset(0.95, 0.95),
                                               ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child:
                                           _buildGlassMetricCard(
-                                                'Green Flags',
-                                                '$greenFlagsCount',
+                                                'Orange',
+                                                '$orangeFlagsCount',
                                                 Icons.flag_rounded,
-                                                Colors.green,
-                                                isZero: greenFlagsCount == 0,
+                                                Colors.orange,
+                                                isZero: orangeFlagsCount == 0,
                                               )
                                               .animate()
                                               .fadeIn(delay: 450.ms)
@@ -657,12 +727,190 @@ class _DashboardPageState extends State<DashboardPage> {
                                                 begin: const Offset(0.95, 0.95),
                                               ),
                                     ),
-                                  ],
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child:
+                                          _buildGlassMetricCard(
+                                                'Black',
+                                                '$blackFlagsCount',
+                                                Icons.flag_rounded,
+                                                context.isDarkMode ? Colors.white70 : Colors.black87,
+                                                isZero: blackFlagsCount == 0,
+                                              )
+                                              .animate()
+                                              .fadeIn(delay: 500.ms)
+                                              .scale(
+                                                begin: const Offset(0.95, 0.95),
+                                              ),
+                                    ),
+                                    ],
+                                  ),
                                 ),
                                 const SizedBox(height: 32),
 
-                                // ── Recent Active Tasks ──
+                                // ── Calendar ──
                                 Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Deadlines Calendar',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.adaptiveTextDark,
+                                      ),
+                                    ),
+                                  ],
+                                ).animate().fadeIn(delay: 400.ms),
+                                const SizedBox(height: 16),
+                                Showcase(
+                                  key: MainLayout.dashboardCalendarTourKey,
+                                  title: 'Deadlines Calendar',
+                                  description: 'Visually manage your schedule. Dates with a dot indicate upcoming task deadlines.',
+                                  targetPadding: const EdgeInsets.all(4),
+                                  child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: context.adaptiveSurface,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                      color: context.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      TableCalendar<InspectionTask>(
+                                        firstDay: DateTime.utc(2020, 1, 1),
+                                        lastDay: DateTime.utc(2030, 12, 31),
+                                        focusedDay: _focusedDay,
+                                        calendarFormat: _calendarFormat,
+                                        onFormatChanged: (format) {
+                                          if (_calendarFormat != format) {
+                                            setState(() {
+                                              _calendarFormat = format;
+                                            });
+                                          }
+                                        },
+                                        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                                        onDaySelected: (selectedDay, focusedDay) {
+                                          if (!isSameDay(_selectedDay, selectedDay)) {
+                                            setState(() {
+                                              _selectedDay = selectedDay;
+                                              _focusedDay = focusedDay;
+                                            });
+                                          }
+                                        },
+                                        onPageChanged: (focusedDay) {
+                                          _focusedDay = focusedDay;
+                                        },
+                                        eventLoader: _getTasksForDay,
+                                        calendarBuilders: CalendarBuilders<InspectionTask>(
+                                          selectedBuilder: (context, day, focusedDay) {
+                                            bool hasLateEvent = false;
+                                            final tasks = _getTasksForDay(day);
+                                            for (final task in tasks) {
+                                              if (task.deadline != null) {
+                                                final deadline = DateTime.tryParse(task.deadline!);
+                                                if (deadline != null && deadline.isBefore(DateTime.now())) {
+                                                  hasLateEvent = true;
+                                                  break;
+                                                }
+                                              }
+                                            }
+                                            return Container(
+                                              margin: const EdgeInsets.all(6.0),
+                                              alignment: Alignment.center,
+                                              decoration: BoxDecoration(
+                                                color: hasLateEvent ? Colors.redAccent : AppColors.darkGreen,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Text(
+                                                '${day.day}',
+                                                style: const TextStyle(color: Colors.white),
+                                              ),
+                                            );
+                                          },
+                                          singleMarkerBuilder: (context, day, task) {
+                                            bool isLate = false;
+                                            if (task.deadline != null) {
+                                              final deadline = DateTime.tryParse(task.deadline!);
+                                              if (deadline != null && deadline.isBefore(DateTime.now())) {
+                                                isLate = true;
+                                              }
+                                            }
+                                            return Container(
+                                              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                                              width: 7.0,
+                                              height: 7.0,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: isLate ? Colors.redAccent : AppColors.darkGreen,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        calendarStyle: CalendarStyle(
+                                          todayDecoration: BoxDecoration(
+                                            color: AppColors.gold,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          selectedDecoration: const BoxDecoration(
+                                            color: AppColors.darkGreen,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          defaultTextStyle: TextStyle(color: context.adaptiveTextDark),
+                                          weekendTextStyle: TextStyle(color: context.adaptiveTextDark),
+                                          outsideTextStyle: TextStyle(color: context.adaptiveTextMid),
+                                        ),
+                                        headerStyle: HeaderStyle(
+                                          formatButtonVisible: true,
+                                          formatButtonTextStyle: TextStyle(color: context.adaptiveTextDark),
+                                          formatButtonDecoration: BoxDecoration(
+                                            border: Border.all(color: context.adaptiveTextMid),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          titleCentered: true,
+                                          titleTextStyle: TextStyle(color: context.adaptiveTextDark),
+                                          leftChevronIcon: Icon(Icons.chevron_left, color: context.adaptiveTextDark),
+                                          rightChevronIcon: Icon(Icons.chevron_right, color: context.adaptiveTextDark),
+                                        ),
+                                        daysOfWeekStyle: DaysOfWeekStyle(
+                                          weekdayStyle: TextStyle(color: context.adaptiveTextDark),
+                                          weekendStyle: TextStyle(color: context.adaptiveTextDark),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      if (_getTasksForDay(_selectedDay ?? DateTime.now()).isNotEmpty)
+                                        ListView.builder(
+                                          padding: EdgeInsets.zero,
+                                          shrinkWrap: true,
+                                          physics: const NeverScrollableScrollPhysics(),
+                                          itemCount: _getTasksForDay(_selectedDay ?? DateTime.now()).length,
+                                          itemBuilder: (context, index) {
+                                            final tasksForDay = _getTasksForDay(_selectedDay ?? DateTime.now());
+                                            return TaskCard(
+                                              task: tasksForDay[index],
+                                              isCurrent: true,
+                                              onTap: () => _openTask(tasksForDay[index]),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ).animate().fadeIn(delay: 450.ms),
+                                const SizedBox(height: 32),
+
+                                // ── Recent Active Tasks ──
+                                Showcase(
+                                  key: MainLayout.dashboardAssignmentsTourKey,
+                                  title: 'Recent Assignments',
+                                  description: 'View actionable tasks. Tap a task to open the Inspection Modal. Select a date on the calendar to filter this list.',
+                                  targetPadding: const EdgeInsets.all(4),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
@@ -775,7 +1023,10 @@ class _DashboardPageState extends State<DashboardPage> {
                                           .slideX(begin: 0.05);
                                     },
                                   ),
-                              ],
+                                ],
+                              ),
+                            ),
+                          ],
                             ),
                           ),
                   ),
@@ -797,10 +1048,10 @@ class _DashboardPageState extends State<DashboardPage> {
   }) {
     final effectiveColor = isZero ? Colors.grey : color;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
         color: context.adaptiveSurface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: context.isDarkMode
               ? Colors.grey.shade800
@@ -815,21 +1066,21 @@ class _DashboardPageState extends State<DashboardPage> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: effectiveColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: effectiveColor, size: 24),
+            child: Icon(icon, color: effectiveColor, size: 20),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             value,
             style: TextStyle(
-              fontSize: 28,
+              fontSize: 22,
               fontWeight: FontWeight.w900,
               color: isZero ? Colors.grey[400] : context.adaptiveTextDark,
             ),
@@ -838,10 +1089,11 @@ class _DashboardPageState extends State<DashboardPage> {
           Text(
             title,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: context.adaptiveTextMid,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

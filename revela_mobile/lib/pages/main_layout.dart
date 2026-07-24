@@ -12,10 +12,30 @@ import '../widgets/app_background.dart';
 import '../service/in_app_notifications_service.dart';
 import '../widgets/scale_tap.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 class MainLayout extends StatefulWidget {
   final int initialIndex;
   const MainLayout({super.key, this.initialIndex = 0});
+
+  static final GlobalKey dashboardCardsTourKey = GlobalKey();
+  static final GlobalKey dashboardProgressTourKey = GlobalKey();
+  static final GlobalKey dashboardFlagsTourKey = GlobalKey();
+  static final GlobalKey dashboardCalendarTourKey = GlobalKey();
+  static final GlobalKey dashboardAssignmentsTourKey = GlobalKey();
+  static final GlobalKey mapControlsTourKey = GlobalKey();
+  static final GlobalKey mapLegendsTourKey = GlobalKey();
+  static final GlobalKey mapAssignmentsBtnTourKey = GlobalKey();
+  static final GlobalKey mapAddFlagBtnTourKey = GlobalKey();
+  static final GlobalKey tasksSearchTourKey = GlobalKey();
+  static final GlobalKey tasksFilterTourKey = GlobalKey();
+  static final GlobalKey tasksTabsTourKey = GlobalKey();
+  static final GlobalKey tasksPdfTourKey = GlobalKey();
+  static final GlobalKey notificationsTourKey = GlobalKey();
+  static final GlobalKey settingsAccountTourKey = GlobalKey();
+  static final GlobalKey settingsPreferencesTourKey = GlobalKey();
+  static final GlobalKey settingsOtherTourKey = GlobalKey();
 
   @override
   State<MainLayout> createState() => _MainLayoutState();
@@ -47,6 +67,7 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   void initState() {
     super.initState();
+    ShowcaseView.register();
     _selectedIndex = widget.initialIndex;
     _pages = [
       DashboardPage(
@@ -84,6 +105,76 @@ class _MainLayoutState extends State<MainLayout> {
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _fetchUnreadCount();
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkTabTour(_selectedIndex);
+    });
+  }
+
+  Future<void> _checkTabTour(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    String prefKey;
+    List<GlobalKey> targetKeys;
+    
+    switch (index) {
+      case 0:
+        prefKey = 'has_seen_tour_dashboard';
+        targetKeys = [
+          MainLayout.dashboardCardsTourKey,
+          MainLayout.dashboardProgressTourKey,
+          MainLayout.dashboardFlagsTourKey,
+          MainLayout.dashboardCalendarTourKey,
+          MainLayout.dashboardAssignmentsTourKey,
+        ];
+        break;
+      case 1:
+        prefKey = 'has_seen_tour_map';
+        targetKeys = [
+          MainLayout.mapControlsTourKey,
+          MainLayout.mapLegendsTourKey,
+          MainLayout.mapAssignmentsBtnTourKey,
+          MainLayout.mapAddFlagBtnTourKey,
+        ];
+        break;
+      case 2:
+        prefKey = 'has_seen_tour_tasks';
+        targetKeys = [
+          MainLayout.tasksSearchTourKey,
+          MainLayout.tasksFilterTourKey,
+          MainLayout.tasksTabsTourKey,
+          MainLayout.tasksPdfTourKey,
+        ];
+        break;
+      case 3:
+        prefKey = 'has_seen_tour_notifications';
+        targetKeys = [MainLayout.notificationsTourKey];
+        break;
+      case 4:
+        prefKey = 'has_seen_tour_settings';
+        targetKeys = [
+          MainLayout.settingsAccountTourKey,
+          MainLayout.settingsPreferencesTourKey,
+          MainLayout.settingsOtherTourKey,
+        ];
+        break;
+      default:
+        return;
+    }
+
+    final hasSeenTour = prefs.getBool(prefKey) ?? false;
+    if (!hasSeenTour) {
+      void tryStartShowcase() {
+        if (!mounted || _selectedIndex != index) return;
+        if (targetKeys.isNotEmpty && ShowcaseView.get().isTargetRendered(targetKeys.first)) {
+          ShowcaseView.get().startShowCase(targetKeys);
+          prefs.setBool(prefKey, true);
+        } else {
+          Future.delayed(const Duration(milliseconds: 500), tryStartShowcase);
+        }
+      }
+      tryStartShowcase();
+    }
   }
 
   Future<void> _fetchUnreadCount() async {
@@ -110,6 +201,7 @@ class _MainLayoutState extends State<MainLayout> {
       _selectedIndex = index;
     });
     _popIndicator();
+    _checkTabTour(index);
   }
 
   // Pops the indicator taller than the pill right away, then — once it's
@@ -126,7 +218,7 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Scaffold paints its own opaque background by default; without this,
+          // Scaffold paints its own opaque background by default; without this,
       // that base color shows through the navbar's transparent gaps.
       backgroundColor: Colors.transparent,
       extendBody: true, // Allows the body to flow underneath the bottom nav bar
@@ -334,77 +426,78 @@ class _MainLayoutState extends State<MainLayout> {
                                       default:
                                         iconData = Icons.circle;
                                     }
+                                    
                                     final isSelected =
                                         effectiveSelectedIndex == index;
                                     return ScaleTap(
                                       scaleMinValue: 0.80,
-                                      onTap: () => _onItemTapped(index),
-                                      child: SizedBox(
-                                        width: tabWidth,
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 14,
-                                          ),
-                                          child: Stack(
-                                            alignment: Alignment.center,
-                                            clipBehavior: Clip.none,
-                                            children: [
-                                              AnimatedScale(
-                                                scale: isSelected ? 1.25 : 1.0,
-                                                duration: const Duration(
-                                                  milliseconds: 300,
-                                                ),
-                                                curve: Curves.easeOutBack,
-                                                child: Icon(
-                                                  iconData,
-                                                  size: 24,
-                                                  color: isSelected
-                                                      ? Colors.white
-                                                      : context.adaptiveTextMid,
-                                                ),
-                                              ),
-                                              if (hasAlert)
-                                                Positioned(
-                                                  right: (tabWidth / 2) - 20,
-                                                  top: -4,
-                                                  child: Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 5,
-                                                          vertical: 2,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.redAccent,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            10,
-                                                          ),
-                                                    ),
-                                                    constraints:
-                                                        const BoxConstraints(
-                                                          minWidth: 18,
-                                                          minHeight: 18,
-                                                        ),
-                                                    child: Text(
-                                                      _unreadAlerts > 9
-                                                          ? '9+'
-                                                          : '$_unreadAlerts',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 10,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        height: 1.4,
-                                                      ),
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                    ),
+                                        onTap: () => _onItemTapped(index),
+                                        child: SizedBox(
+                                          width: tabWidth,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
+                                            child: Stack(
+                                              alignment: Alignment.center,
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                AnimatedScale(
+                                                  scale: isSelected ? 1.25 : 1.0,
+                                                  duration: const Duration(
+                                                    milliseconds: 300,
+                                                  ),
+                                                  curve: Curves.easeOutBack,
+                                                  child: Icon(
+                                                    iconData,
+                                                    size: 24,
+                                                    color: isSelected
+                                                        ? Colors.white
+                                                        : context.adaptiveTextMid,
                                                   ),
                                                 ),
-                                            ],
+                                                if (hasAlert)
+                                                  Positioned(
+                                                    right: (tabWidth / 2) - 20,
+                                                    top: -4,
+                                                    child: Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 5,
+                                                            vertical: 2,
+                                                          ),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.redAccent,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              10,
+                                                            ),
+                                                      ),
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                            minWidth: 18,
+                                                            minHeight: 18,
+                                                          ),
+                                                      child: Text(
+                                                        _unreadAlerts > 9
+                                                            ? '9+'
+                                                            : '$_unreadAlerts',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          height: 1.4,
+                                                        ),
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                      ),
                                     );
                                   }),
                                 ),

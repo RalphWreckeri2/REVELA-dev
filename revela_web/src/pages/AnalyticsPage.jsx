@@ -550,22 +550,22 @@ export default function AnalyticsPage() {
         .analytics-tab-btn {
           padding: 8px 18px;
           border-radius: 8px;
-          border: 1px solid rgba(226,232,240,0.8);
-          background: "var(--color-input-bg)";
-          color: #64748b;
+          border: 1px solid var(--color-border);
+          background: var(--color-input-bg);
+          color: var(--color-muted);
           font-size: 13px;
           font-weight: 600;
           cursor: pointer;
           transition: all 0.18s;
         }
         .analytics-tab-btn.active {
-          background: #1a202c;
-          color: #fff;
-          border-color: #1a202c;
+          background: var(--color-ink);
+          color: var(--color-surface);
+          border-color: var(--color-ink);
         }
         .analytics-tab-btn:hover:not(.active) {
-          background: "var(--color-modal-bg)";
-          color: #1a202c;
+          background: var(--color-hover);
+          color: var(--color-ink);
         }
         .ops-row:hover { background: "var(--color-modal-bg)" !important; }
         .ops-score-bar {
@@ -1059,7 +1059,8 @@ export default function AnalyticsPage() {
                 Sectoral Distribution
               </h3>
               {loading ? <Skeleton h={300} /> : sectoralData.length === 0 ? (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: COLOR.muted, gap: 12 }}>
+                  <img src="/searching.png" alt="No sector data" style={{ height: 100, objectFit: "contain", opacity: 0.9 }} />
                   No sector data available
                 </div>
               ) : (
@@ -1119,7 +1120,8 @@ export default function AnalyticsPage() {
               </p>
 
               {loading ? <Skeleton h={220} /> : leaderboardData.length === 0 ? (
-                <div style={{ padding: "40px 0", textAlign: "center", color: COLOR.muted }}>
+                <div style={{ padding: "40px 0", textAlign: "center", color: COLOR.muted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                  <img src="/searching.png" alt="No compliance data" style={{ height: 100, objectFit: "contain", opacity: 0.9 }} />
                   No compliance data available.
                 </div>
               ) : (

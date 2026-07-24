@@ -256,8 +256,8 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={s.backdrop} onClick={!loading ? onClose : undefined}>
-      <div style={s.card} onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" style={s.backdrop} onClick={!loading ? onClose : undefined}>
+      <div className="modal-panel" style={s.card} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={s.header}>
@@ -269,7 +269,7 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
                 : (isSync ? "Import BPLO Registry" : "Upload BPLO Registry")}
           </h3>
           {!loading && (
-            <button style={s.closeBtn} onClick={handleDone}>
+            <button className="modal-close-btn" onClick={handleDone}>
               <Icon.X />
             </button>
           )}
@@ -479,7 +479,7 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
 // ── Styles ─────────────────────────────────────────────────────────────────────
 const s = {
   backdrop: {
-    position: "fixed", inset: 0, background: "rgba(26,32,44,0.45)",
+    position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)",
     backdropFilter: "blur(4px)", display: "flex",
     alignItems: "center", justifyContent: "center", zIndex: 100,
   },
@@ -566,12 +566,12 @@ const s = {
   },
   summaryRow: { display: "flex", justifyContent: "space-between", fontSize: 13 },
   errorList: {
-    background: "#fff5f5", border: "1px solid #fed7d7",
+    background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)",
     borderRadius: "var(--radius-sm)", padding: "10px 14px", marginBottom: 16,
   },
   errorBanner: {
     display: "flex", alignItems: "center", gap: 8,
-    background: "#fff5f5", border: "1px solid #fed7d7",
+    background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)",
     borderRadius: "var(--radius-sm)", padding: "10px 14px",
     fontSize: 13, color: "var(--color-danger)", marginBottom: 16,
   },

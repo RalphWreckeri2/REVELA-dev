@@ -10,10 +10,9 @@ import { useNavigate } from "react-router-dom";
 import { useLoadScript, GoogleMap } from "@react-google-maps/api";
 import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest } from "../services/api";
+import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest, getInspectorsRequest } from "../services/api";
 import "../styles/HomePage.css";
 
 const MAP_LIBRARIES = ["places", "marker"];
@@ -88,111 +87,6 @@ function OnboardingPanel({ onDismiss }) {
   );
 }
 
-// ── New Features / Widgets ──────────────────────────────────────────────────
-
-function QuickActionsWidget({ navigate }) {
-  return (
-    <div className="dashboard-widget frosted-glass saas-card">
-      <div className="widget-header">
-        <h3>Quick Actions</h3>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <button className="primary-btn" onClick={() => navigate('/inspections')} style={{ justifyContent: 'center' }}>
-          Dispatch Inspector
-        </button>
-        <button className="ghost-btn" onClick={() => navigate('/map')} style={{ justifyContent: 'center' }}>
-          Manually Add Flag
-        </button>
-        <button className="ghost-btn" onClick={() => navigate('/map')} style={{ justifyContent: 'center' }}>
-          Run Detection Engine
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SystemHealthWidget() {
-  return (
-    <div className="dashboard-widget frosted-glass saas-card">
-      <div className="widget-header">
-        <h3>System Health</h3>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 4 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: "var(--color-muted)", fontWeight: 500 }}>Detection Engine</span>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 12, background: "#dcfce7", color: "#15803d" }}>Idle</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: "var(--color-muted)", fontWeight: 500 }}>Registry Sync</span>
-          <span style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 600 }}>Up to date</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 13, color: "var(--color-muted)", fontWeight: 500 }}>Places API Polling</span>
-          <span style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 600 }}>2 hrs ago</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ActiveInspectionsWidget({ navigate, stats }) {
-  return (
-    <div className="dashboard-widget frosted-glass saas-card">
-      <div className="widget-header">
-        <h3>Active Inspections Tracker</h3>
-        <button className="ghost-btn" onClick={() => navigate('/inspections')} style={{ fontSize: 11, padding: "4px 10px" }}>
-          View Kanban
-        </button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, textAlign: "center", marginTop: 8 }}>
-        <div style={{ background: "var(--color-hover)", padding: "20px 10px", borderRadius: 12, border: "1px solid var(--color-border-soft)" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6", lineHeight: 1 }}>{stats.assigned}</div>
-          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>ASSIGNED</div>
-        </div>
-        <div style={{ background: "var(--color-hover)", padding: "20px 10px", borderRadius: 12, border: "1px solid var(--color-border-soft)" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#f59e0b", lineHeight: 1 }}>{stats.reassigned}</div>
-          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>REASSIGNED</div>
-        </div>
-        <div style={{ background: "var(--color-hover)", padding: "20px 10px", borderRadius: 12, border: "1px solid var(--color-border-soft)" }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: "#22c55e", lineHeight: 1 }}>{stats.verified}</div>
-          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, marginTop: 8, letterSpacing: "0.05em" }}>VERIFIED</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ComplianceTrendWidget() {
-  // Static mock trend for visual representation
-  const trendData = [
-    { day: '1', rate: 75 }, { day: '5', rate: 76 }, { day: '10', rate: 78 },
-    { day: '15', rate: 77 }, { day: '20', rate: 80 }, { day: '25', rate: 82 },
-    { day: '30', rate: 83 }
-  ];
-
-  return (
-    <div className="dashboard-widget frosted-glass saas-card" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="widget-header" style={{ marginBottom: 0 }}>
-        <div>
-          <h3 style={{ margin: 0 }}>Compliance Trend</h3>
-          <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--color-muted)" }}>Trailing 30 Days</p>
-        </div>
-        <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 700, background: "#dcfce7", padding: "4px 10px", borderRadius: 20 }}>
-          +8% ↑
-        </span>
-      </div>
-      <div style={{ flex: 1, minHeight: 140, marginTop: 16 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={trendData}>
-            <YAxis domain={['dataMin - 2', 'dataMax + 2']} hide />
-            <Line type="monotone" dataKey="rate" stroke="#22c55e" strokeWidth={3} dot={{ r: 3, fill: "#22c55e", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
 function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
   // Map severity for sorting
   const severity = { Black: 3, Red: 2, Yellow: 1, Green: 0 };
@@ -242,13 +136,16 @@ function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
           return (
             <div 
               key={f.logID || f.id} 
-              style={{ background: fc.bg, border: `1px solid ${fc.marker}`, padding: "10px 12px", borderRadius: 10, cursor: "pointer", transition: "transform 0.15s" }} 
+              style={{ background: "var(--color-surface)", border: "1px solid var(--color-border-soft)", padding: "10px 12px", borderRadius: "10px", cursor: "pointer", transition: "transform 0.15s" }} 
               onClick={() => navigate('/map')}
               onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
               onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
-              <div style={{ fontSize: 13, fontWeight: 700, color: fc.text, marginBottom: 2 }}>{f.detectedName || f.name || "Unknown Establishment"}</div>
-              <div style={{ fontSize: 11, color: fc.text, opacity: 0.9 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: fc.marker, display: "inline-block", flexShrink: 0 }}></span>
+                {f.detectedName || f.name || "Unknown Establishment"}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--color-muted)", paddingLeft: 12 }}>
                 {alertReason}
               </div>
             </div>
@@ -386,52 +283,282 @@ const miniMapFallback = {
   background: "var(--color-surface)", color: "var(--color-muted)", fontSize: 13, textAlign: "center",
 };
 
-// ── Recent Detections Widget ──────────────────────────────────────────────────
-function RecentFlagsWidget({ flags, loading, onViewAll, onOpenMap, totalFetched }) {
+// ── Visual Calendar Widget ──────────────────────────────────────────────────
+function VisualCalendarWidget({ inspections, navigate }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(null);
+  
+  // Get days in month
+  const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+  const daysInMonth = getDaysInMonth(currentDate);
+  const firstDay = getFirstDayOfMonth(currentDate);
+
+  const prevMonth = () => { setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)); setSelectedDay(null); };
+  const nextMonth = () => { setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)); setSelectedDay(null); };
+
+  const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Map deadlines
+  const activeTasksWithDeadline = inspections
+    .filter(i => (i.verificationStatus === "Assigned" || i.verificationStatus === "Reassigned") && i.deadline);
+
+  // statusByDate: day -> 'overdue' | 'upcoming'
+  const statusByDate = {};
+  const tasksByDate = {};
+
+  activeTasksWithDeadline.forEach(t => {
+    const d = new Date(t.deadline);
+    if (d.getFullYear() === currentDate.getFullYear() && d.getMonth() === currentDate.getMonth()) {
+      const day = d.getDate();
+      if (!tasksByDate[day]) tasksByDate[day] = [];
+      tasksByDate[day].push(t);
+      
+      const isOverdue = d < new Date();
+      if (statusByDate[day] !== 'overdue') {
+        statusByDate[day] = isOverdue ? 'overdue' : 'upcoming';
+      }
+    }
+  });
+
+  const displayedTasks = selectedDay && tasksByDate[selectedDay]
+    ? tasksByDate[selectedDay].sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+    : activeTasksWithDeadline.sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 3);
+
   return (
-    <div className="dashboard-widget frosted-glass saas-card">
-      <div className="widget-header">
-        <h3>Recent Detections</h3>
-        <button className="ghost-btn" type="button" onClick={onViewAll}>View All</button>
+    <div className="dashboard-widget frosted-glass saas-card" style={{ padding: "20px 0" }}>
+      <div className="widget-header" style={{ padding: "0 20px", marginBottom: 16 }}>
+        <h3 style={{ display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          {monthName}
+        </h3>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="ghost-btn" onClick={prevMonth} style={{ padding: "4px 8px" }}>&larr;</button>
+          <button className="ghost-btn" onClick={nextMonth} style={{ padding: "4px 8px" }}>&rarr;</button>
+        </div>
+      </div>
+      
+      <div style={{ padding: "0 20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center", gap: 4, marginBottom: 8 }}>
+          {weekDays.map(day => (
+            <div key={day} style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase" }}>{day}</div>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, textAlign: "center" }}>
+          {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const day = i + 1;
+            const status = statusByDate[day];
+            const isToday = new Date().getDate() === day && new Date().getMonth() === currentDate.getMonth() && new Date().getFullYear() === currentDate.getFullYear();
+            const isSelected = selectedDay === day;
+            
+            let color = isToday ? "var(--color-primary)" : "var(--color-ink)";
+            let dotColor = null;
+            if (status === 'overdue') {
+              dotColor = "#ef4444";
+            } else if (status === 'upcoming') {
+              dotColor = "#10b981";
+            }
+            
+            let bg = isSelected ? "var(--color-border-soft)" : "transparent";
+
+            return (
+              <div key={day} style={{ 
+                padding: "4px 0", 
+                fontSize: 13, 
+                fontWeight: isToday || isSelected ? 700 : 500,
+                color: color,
+                background: bg,
+                borderRadius: "8px",
+                cursor: "pointer",
+                width: 28,
+                height: 32,
+                margin: "0 auto",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: isSelected ? "0 0 0 1px var(--color-border-soft)" : "none",
+                transform: isSelected ? "scale(1.1)" : "scale(1)",
+                transition: "all 0.15s"
+              }}
+              onClick={() => setSelectedDay(day === selectedDay ? null : day)}
+              >
+                <span style={{ lineHeight: 1 }}>{day}</span>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: dotColor || "transparent", marginTop: 2 }} />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="flag-list">
-        {loading ? (
-          [1, 2, 3].map(i => (
-            <div key={i} style={{
-              height: 56, borderRadius: 10, marginBottom: 8,
-              background: "linear-gradient(90deg,rgba(226,232,240,0.5) 25%,rgba(241,245,249,0.5) 50%,rgba(226,232,240,0.5) 75%)",
-              backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
-            }} />
-          ))
-        ) : flags.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 0", color: "var(--color-muted)", fontSize: 13 }}>
-            {totalFetched > 0
-              ? "No recent log entries in the current batch."
-              : "No flags detected yet. Run the detection engine from the map or quick actions."}
-          </div>
-        ) : flags.map((f) => {
-          const fc = getFlagColor(parseColor(f));
-          return (
-            <div className="flag-item" key={f.logID || f.id}>
-              <div style={{
-                width: 10, height: 10, borderRadius: "50%",
-                background: fc.marker, flexShrink: 0,
-              }} />
-              <div className="flag-details">
-                <h4>{f.detectedName || f.name || "Unknown Establishment"}</h4>
-                <p>{shortBarangay(f.barangayName || f.barangay || "—")}</p>
+      <div style={{ padding: "20px 20px 0", marginTop: 16, borderTop: "1px solid var(--color-border-soft)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h4 style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>
+            {selectedDay ? `Tasks for ${monthName.split(' ')[0]} ${selectedDay}` : "Upcoming Tasks"}
+          </h4>
+          {selectedDay && <button className="ghost-btn" style={{ padding: "2px 6px", fontSize: 10 }} onClick={() => setSelectedDay(null)}>Clear</button>}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {displayedTasks.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "10px 0", color: "var(--color-muted)", fontSize: 13 }}>No tasks for this date.</div>
+          ) : displayedTasks.map(task => {
+            const isOverdue = new Date(task.deadline) < new Date();
+            return (
+              <div 
+                key={task.reportID} 
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-hover)", border: "1px solid var(--color-border-soft)", borderLeft: isOverdue ? "4px solid #ef4444" : "4px solid #10b981", padding: "10px 12px", borderRadius: 10, cursor: "pointer" }} 
+                onClick={() => navigate('/inspections')}
+              >
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>{task.detectedName}</div>
+                  <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 2 }}>Inspector: {task.inspectorName || "Unknown"}</div>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: isOverdue ? "#ef4444" : "var(--color-primary)" }}>
+                  {isOverdue ? "⚠ Overdue" : new Date(task.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </div>
               </div>
-              <span style={{
-                fontSize: 10, fontWeight: 700, padding: "2px 8px",
-                borderRadius: 10, background: fc.bg, color: fc.text,
-                whiteSpace: "nowrap",
-              }}>
-                {fc.label}
-              </span>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Recent Detections Widget ──────────────────────────────────────────────────
+
+
+function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterInspector, setFilterInspector] = useState("");
+
+  if (!isOpen) return null;
+
+  const filteredFlags = flags.filter(f => {
+    // Show only flags reported by an inspector that are not verified as compliant (Green)
+    if (!f.reportedByUserID || parseColor(f) === 'Green') return false;
+    if (searchTerm && !f.detectedName?.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    if (filterInspector && f.reportedByUserID !== Number(filterInspector)) return false;
+    return true;
+  });
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="modal-panel modal-content saas-card" onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: "95vw", height: "85vh", display: "flex", flexDirection: "column", padding: 32, borderRadius: 24, background: "var(--color-modal-bg)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}>
+        
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#10b981", display: "inline-block" }}></span>
+            Submitted Backlog <span style={{ color: "var(--color-muted)", fontSize: 16, fontWeight: 600 }}>({filteredFlags.length})</span>
+          </h2>
+          
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <select 
+              className="saas-input" 
+              value={filterInspector} 
+              onChange={e => setFilterInspector(e.target.value)}
+              style={{ padding: "8px 14px", minWidth: 160, borderRadius: 8, background: "transparent" }}
+            >
+              <option value="">All Flags</option>
+              {inspectors.map(insp => (
+                <option key={insp.userID} value={insp.userID}>{insp.fullName}</option>
+              ))}
+            </select>
+            
+            <div style={{ position: "relative" }}>
+              <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--color-muted)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input 
+                type="text" 
+                placeholder="Search..." 
+                className="saas-input" 
+                style={{ padding: "8px 14px 8px 36px", width: 220, borderRadius: 8, background: "transparent" }}
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
             </div>
-          );
-        })}
+            
+            <button className="modal-close-btn" onClick={onClose} style={{ marginLeft: 12 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Grid Content */}
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: 16 }}>
+          {filteredFlags.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 0", color: "var(--color-muted)", fontSize: 15, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <img src="/searching.png" alt="No backlog items" style={{ height: 100, objectFit: "contain", opacity: 0.9 }} />
+              No backlog items found matching your criteria.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+              {filteredFlags.map(f => {
+                const fc = getFlagColor(parseColor(f));
+                const isRed = parseColor(f) === "Red";
+                
+                return (
+                  <div 
+                    key={f.logID || f.id}
+                    onClick={() => { onClose(); navigate('/map?flag=' + (f.logID || f.id)); }}
+                    style={{ 
+                      background: "var(--color-surface)", 
+                      border: isRed ? "1px solid #ef4444" : "1px solid var(--color-border-soft)", 
+                      borderRadius: 16, 
+                      padding: 20, 
+                      display: "flex", 
+                      flexDirection: "column", 
+                      justifyContent: "space-between",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+                      transition: "transform 0.15s, box-shadow 0.15s",
+                      minHeight: 120
+                    }}
+                    onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.06)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)'; }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: fc.bg, color: fc.text, display: "flex", alignItems: "center", gap: 6 }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                          {fc.label}
+                        </span>
+                        {f.noticeLevel && (
+                          <>
+                            <span style={{ color: "var(--color-muted)", fontSize: 12 }}>&gt;</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: "var(--flag-orange-bg)", color: "var(--flag-orange-text)" }}>
+                              {f.noticeLevel}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-muted)" }}>#{f.logID || f.id}</span>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                      <div style={{ flex: 1, paddingRight: 16 }}>
+                        <h4 style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 800, color: "var(--color-ink)", lineHeight: 1.3 }}>{f.detectedName || f.name || "Unknown Establishment"}</h4>
+                        <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                          {shortBarangay(f.barangayName || f.barangay || "—")}
+                        </p>
+                      </div>
+                      
+                      <button style={{ width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--color-border-soft)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-ink)", flexShrink: 0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -459,11 +586,12 @@ export default function HomePage() {
   const [kpiError, setKpiError] = useState(false);
 
   // Flags
-  const [recentFlags,   setRecentFlags]   = useState([]);
   const [allFlags,      setAllFlags]      = useState([]);
   const [flagsLoading,  setFlagsLoading]  = useState(true);
-
-  const [inspectionStats, setInspectionStats] = useState({ assigned: 0, reassigned: 0, verified: 0 });
+  
+  const [inspections, setInspections] = useState([]);
+  const [inspectors, setInspectors] = useState([]);
+  const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -479,17 +607,6 @@ export default function HomePage() {
       .then(res => {
         const data = res?.data ?? [];
         setAllFlags(data);
-        // Recent detections: newest activity first (all colors). Non-green surfaces first, then by date.
-        const byDate = (a, b) =>
-          new Date(b.detectedDate || 0) - new Date(a.detectedDate || 0);
-        const nonGreen = data
-          .filter(f => parseColor(f) !== "Green")
-          .sort(byDate);
-        const greenOnly = data
-          .filter(f => parseColor(f) === "Green")
-          .sort(byDate);
-        const recent = [...nonGreen, ...greenOnly].slice(0, 5);
-        setRecentFlags(recent);
       })
       .catch(() => {})
       .finally(() => setFlagsLoading(false));
@@ -498,14 +615,13 @@ export default function HomePage() {
     getInspectionsRequest({ limit: 1000 }, token)
       .then(res => {
         const data = res?.data ?? [];
-        let assigned = 0, reassigned = 0, verified = 0;
-        data.forEach(r => {
-          if (r.verificationStatus === "Assigned") assigned++;
-          else if (r.verificationStatus === "Reassigned") reassigned++;
-          else if (r.verificationStatus === "Verified") verified++;
-        });
-        setInspectionStats({ assigned, reassigned, verified });
+        setInspections(data);
       })
+      .catch(() => {});
+
+    // Fetch inspectors
+    getInspectorsRequest(token)
+      .then(res => setInspectors(res || []))
       .catch(() => {});
   }, [token]);
 
@@ -559,64 +675,58 @@ export default function HomePage() {
         }
       `}</style>
 
-      {showWelcome && <OnboardingPanel onDismiss={() => setShowWelcome(false)} />}
+      {/* Main Layout: 2 Columns */}
+      <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 24, alignItems: "start" }}>
+        
+        {/* Left Column (Main Content) */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {showWelcome && <OnboardingPanel onDismiss={() => setShowWelcome(false)} />}
+          
+          {/* Page header */}
+          <div className="page-header" style={{ marginBottom: 0 }}>
+            <div>
+              <h1 className="page-title">Overview Dashboard</h1>
+              <p className="page-subtitle">Real-time compliance metrics for Mataasnakahoy.</p>
+            </div>
+          </div>
 
-      {/* Page header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Overview Dashboard</h1>
-          <p className="page-subtitle">Real-time compliance metrics for Mataasnakahoy.</p>
+          {kpiError && (
+            <div style={{
+              background: "rgba(239,68,68,0.1)", border: "1px solid #ef4444",
+              borderRadius: 8, padding: "10px 16px",
+              color: "#ef4444", fontSize: 13, fontWeight: 600,
+            }}>
+              ⚠ Could not load live metrics — check that the backend is running.
+            </div>
+          )}
+
+          {/* KPI row */}
+          <div className="kpi-grid">
+            {kpiCards.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
+          </div>
+
+          {/* Map */}
+          <div style={{ height: "400px" }}>
+            <MiniMapWidget
+              flags={allFlags}
+              isDark={isDark}
+              onOpenMap={() => navigate("/map")}
+              isLoaded={isLoaded}
+              loadError={loadError}
+            />
+          </div>
         </div>
-      </div>
 
-      {kpiError && (
-        <div style={{
-          background: "rgba(239,68,68,0.1)", border: "1px solid #ef4444",
-          borderRadius: 8, padding: "10px 16px", marginBottom: 16,
-          color: "#ef4444", fontSize: 13, fontWeight: 600,
-        }}>
-          ⚠ Could not load live metrics — check that the backend is running.
+        {/* Right Column (Sidebar) */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <VisualCalendarWidget inspections={inspections} navigate={navigate} />
+          
+          <HighPriorityAlertsWidget
+            flags={allFlags}
+            navigate={navigate}
+            hasLoadedFlags={!flagsLoading}
+          />
         </div>
-      )}
-
-      {/* KPI row */}
-      <div className="kpi-grid">
-        {kpiCards.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
-      </div>
-
-      {/* New Widgets: Trends & Inspections */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, marginTop: 24 }}>
-        <ComplianceTrendWidget />
-        <ActiveInspectionsWidget navigate={navigate} stats={inspectionStats} />
-      </div>
-
-      {/* New Widgets: Actions & Alerts */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, marginTop: 24 }}>
-        <QuickActionsWidget navigate={navigate} />
-        <HighPriorityAlertsWidget
-          flags={allFlags}
-          navigate={navigate}
-          hasLoadedFlags={!flagsLoading}
-        />
-        <SystemHealthWidget />
-      </div>
-
-      {/* Original Widget row */}
-      <div className="widget-grid" style={{ marginTop: 24 }}>
-        <MiniMapWidget
-          flags={allFlags}
-          isDark={isDark}
-          onOpenMap={() => navigate("/map")}
-          isLoaded={isLoaded}
-          loadError={loadError}
-        />
-        <RecentFlagsWidget
-          flags={recentFlags}
-          loading={flagsLoading}
-          onViewAll={() => navigate("/map")}
-          onOpenMap={() => navigate("/map")}
-          totalFetched={allFlags.length}
-        />
       </div>
 
       {/* Footer */}
@@ -626,6 +736,15 @@ export default function HomePage() {
           <span>BPLO Portal</span> • <span>System Settings</span>
         </p>
       </footer>
+
+      {/* Modals */}
+      <InspectorReportsModal 
+        isOpen={isInspectorModalOpen} 
+        onClose={() => setIsInspectorModalOpen(false)} 
+        flags={allFlags} 
+        inspectors={inspectors} 
+        navigate={navigate} 
+      />
     </DashboardLayout>
   );
 }

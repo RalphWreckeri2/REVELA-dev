@@ -4,7 +4,6 @@ import 'package:flutter/gestures.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
-import '../service/api_config.dart';
 import '../widgets/floating_mascot.dart';
 import '../service/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -203,7 +202,7 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _acceptPrivacyPolicy(BuildContext dialogContext) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_privacyPolicyAcceptedKey, _privacyPolicyVersion);
-    if (mounted) Navigator.pop(dialogContext);
+    if (dialogContext.mounted) Navigator.pop(dialogContext);
     _checkBiometrics();
   }
 
@@ -388,24 +387,16 @@ class _LoginPageState extends State<LoginPage> {
       builder: (dialogCtx) {
         return Scaffold(
           backgroundColor: context.adaptiveSurface,
-          body: Stack(
-            children: [
-              // Mascot at the bottom
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 40.0),
-                  child: FloatingMascot(
-                    imagePath: 'assets/images/waiting.png',
-                    height: MediaQuery.of(dialogCtx).size.height * 0.45,
-                  ).animate().fadeIn(duration: 800.ms, curve: Curves.easeOut).slideY(begin: 0.1, curve: Curves.easeOut),
-                ),
-              ),
-              
-              // Text and Premium Loader as a Thought Bubble
-              Align(
-                alignment: const Alignment(0, -0.4),
-                child: Column(
+          body: SafeArea(
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(flex: 3),
+                
+                // Text and Premium Loader as a Thought Bubble
+                Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Main Bubble
@@ -417,13 +408,13 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
+                            color: Colors.black.withValues(alpha: 0.08),
                             blurRadius: 24,
                             offset: const Offset(0, 12),
                           ),
                         ],
                         border: Border.all(
-                          color: context.adaptivePrimary.withOpacity(0.1), 
+                          color: context.adaptivePrimary.withValues(alpha: 0.1), 
                           width: 1,
                         ),
                       ),
@@ -443,9 +434,9 @@ class _LoginPageState extends State<LoginPage> {
                           Text(
                             'Just a moment while I prepare your workspace...',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15,
-                              color: context.adaptiveTextMid,
+                              color: Colors.black54,
                               height: 1.4,
                             ),
                           ),
@@ -454,7 +445,7 @@ class _LoginPageState extends State<LoginPage> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: context.adaptivePrimary.withOpacity(0.08),
+                              color: context.adaptivePrimary.withValues(alpha: 0.08),
                             ),
                             child: CircularProgressIndicator(
                               color: context.adaptivePrimary,
@@ -478,7 +469,7 @@ class _LoginPageState extends State<LoginPage> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.06), 
+                            color: Colors.black.withValues(alpha: 0.06), 
                             blurRadius: 8, 
                             offset: const Offset(0, 4),
                           ),
@@ -494,7 +485,7 @@ class _LoginPageState extends State<LoginPage> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.06), 
+                            color: Colors.black.withValues(alpha: 0.06), 
                             blurRadius: 8, 
                             offset: const Offset(0, 4),
                           ),
@@ -503,8 +494,19 @@ class _LoginPageState extends State<LoginPage> {
                     ).animate().fadeIn(delay: 650.ms).slideY(begin: 0.5),
                   ],
                 ),
-              ),
-            ],
+                
+                const Spacer(flex: 1),
+                
+                // Mascot at the bottom
+                FloatingMascot(
+                  imagePath: 'assets/images/waiting.png',
+                  height: MediaQuery.of(dialogCtx).size.height * 0.35,
+                ).animate().fadeIn(duration: 800.ms, curve: Curves.easeOut).slideY(begin: 0.1, curve: Curves.easeOut),
+                
+                const Spacer(flex: 2),
+              ],
+            ),
+            ),
           ),
         );
       },
@@ -572,7 +574,7 @@ class _LoginPageState extends State<LoginPage> {
                           final authService = AuthService();
                           await authService.requestManualPasswordReset(email);
 
-                          if (mounted) {
+                          if (ctx.mounted) {
                             Navigator.pop(ctx);
                             _showSnackBar(
                               'If your email is registered, the administrator has been notified.',
@@ -852,8 +854,9 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Required';
-                          if (v.length < 8)
+                          if (v.length < 8) {
                             return 'Must be at least 8 characters';
+                          }
                           return null;
                         },
                       ),
@@ -876,8 +879,9 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                         validator: (v) {
-                          if (v != newController.text)
+                          if (v != newController.text) {
                             return 'Passwords do not match';
+                          }
                           return null;
                         },
                       ),
@@ -956,7 +960,7 @@ class _LoginPageState extends State<LoginPage> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Center(
@@ -1042,7 +1046,7 @@ class _LoginPageState extends State<LoginPage> {
                       Container(
                         decoration: BoxDecoration(
                           color: context.isDarkMode
-                              ? Colors.black.withOpacity(0.15)
+                              ? Colors.black.withValues(alpha: 0.15)
                               : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: context.adaptiveBorder),
@@ -1084,7 +1088,7 @@ class _LoginPageState extends State<LoginPage> {
                       Container(
                         decoration: BoxDecoration(
                           color: context.isDarkMode
-                              ? Colors.black.withOpacity(0.15)
+                              ? Colors.black.withValues(alpha: 0.15)
                               : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: context.adaptiveBorder),
@@ -1135,7 +1139,7 @@ class _LoginPageState extends State<LoginPage> {
                           onPressed: _showForgotPasswordDialog,
                           style: TextButton.styleFrom(
                             foregroundColor: context.adaptivePrimary
-                                .withOpacity(0.8),
+                                .withValues(alpha: 0.8),
                             padding: EdgeInsets.zero,
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1210,7 +1214,7 @@ class _LoginPageState extends State<LoginPage> {
                             style: OutlinedButton.styleFrom(
                               foregroundColor: context.adaptivePrimary,
                               side: BorderSide(
-                                color: context.adaptivePrimary.withOpacity(0.3),
+                                color: context.adaptivePrimary.withValues(alpha: 0.3),
                                 width: 1.5,
                               ),
                               shape: RoundedRectangleBorder(
@@ -1236,7 +1240,7 @@ class _LoginPageState extends State<LoginPage> {
                             TextSpan(
                               text: 'Terms & Conditions',
                               style: TextStyle(
-                                color: context.adaptivePrimary.withOpacity(0.8),
+                                color: context.adaptivePrimary.withValues(alpha: 0.8),
                                 fontWeight: FontWeight.bold,
                                 decoration: TextDecoration.underline,
                               ),
@@ -1249,7 +1253,7 @@ class _LoginPageState extends State<LoginPage> {
                             TextSpan(
                               text: 'Privacy Policy',
                               style: TextStyle(
-                                color: context.adaptivePrimary.withOpacity(0.8),
+                                color: context.adaptivePrimary.withValues(alpha: 0.8),
                                 fontWeight: FontWeight.bold,
                                 decoration: TextDecoration.underline,
                               ),

@@ -187,7 +187,7 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
                                 return;
                               }
                             }
-                            if (mounted) {
+                            if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You have already completed this inspection, or it was reassigned.')));
                             }
                           }
@@ -196,12 +196,12 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                           color: n.isUnread
-                              ? AppColors.darkGreen.withOpacity(0.06)
+                              ? AppColors.darkGreen.withValues(alpha: 0.06)
                               : Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.grey[50],
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: n.isUnread
-                                ? AppColors.darkGreen.withOpacity(0.25)
+                                ? AppColors.darkGreen.withValues(alpha: 0.25)
                                 : Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade700 : Colors.grey.shade200,
                           ),
                         ),

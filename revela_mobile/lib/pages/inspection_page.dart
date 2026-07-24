@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'main_layout.dart';
 import '../component/inspection_modal.dart';
 import '../widgets/floating_mascot.dart';
 import '../service/inspection_service.dart';
@@ -22,8 +24,7 @@ class _InspectionPageState extends State<InspectionPage>
     with SingleTickerProviderStateMixin {
   static const Set<String> _activeStatuses = {'Assigned', 'Reassigned'};
 
-  final InspectionService _inspectionService = InspectionService();
-  late TabController _tabController;
+    late TabController _tabController;
   int _currentFilterIndex = 0;
 
   List<InspectionTask> _currentTasks = [];
@@ -383,19 +384,19 @@ class _InspectionPageState extends State<InspectionPage>
                 ],
               ),
             if (isHistory) ...[
-              if (hasBarangayFilter)
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDropdownColumn(
-                        label: 'Barangay',
-                        value: _selectedBarangay,
-                        items: barangays,
-                        onChanged: (val) => setState(() => _selectedBarangay = val!),
-                      ),
+              if (isHistory && hasBarangayFilter)
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDropdownColumn(
+                      label: 'Barangay',
+                      value: _selectedBarangay,
+                      items: barangays,
+                      onChanged: (val) => setState(() => _selectedBarangay = val!),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
               if (hasBarangayFilter && (hasStatusFilter || hasResultFilter))
                 const SizedBox(height: 12),
               Row(
@@ -465,12 +466,18 @@ class _InspectionPageState extends State<InspectionPage>
                 color: context.isDarkMode ? Colors.grey[800] : Colors.grey[100],
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: IconButton(
-                icon: Icon(Icons.picture_as_pdf_rounded, color: AppColors.darkGreen, size: 24),
-                tooltip: 'Generate Notice PDF',
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PdfGeneratorPage()),
+              child: Showcase(
+                key: MainLayout.tasksPdfTourKey,
+                title: 'Notice Generator',
+                description: 'Tap here to generate and print official PDF notices.',
+                targetPadding: const EdgeInsets.all(4),
+                child: IconButton(
+                  icon: Icon(Icons.picture_as_pdf_rounded, color: context.isDarkMode ? Colors.white : AppColors.darkGreen, size: 24),
+                  tooltip: 'Generate Notice PDF',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PdfGeneratorPage()),
+                  ),
                 ),
               ),
             ),
@@ -494,20 +501,26 @@ class _InspectionPageState extends State<InspectionPage>
                     Icon(Icons.search, color: Colors.grey),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (val) {
-                          setState(() {
-                            _searchQuery = val;
-                          });
-                        },
-                        style: TextStyle(color: context.adaptiveTextDark),
-                        decoration: InputDecoration(
-                          hintText: 'Search establishments or barangay...',
-                          hintStyle: TextStyle(color: Colors.grey),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Showcase(
+                        key: MainLayout.tasksSearchTourKey,
+                        title: 'Search Assignments',
+                        description: 'Find specific establishments or barangays quickly.',
+                        targetPadding: const EdgeInsets.all(4),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (val) {
+                            setState(() {
+                              _searchQuery = val;
+                            });
+                          },
+                          style: TextStyle(color: context.adaptiveTextDark),
+                          decoration: const InputDecoration(
+                            hintText: 'Search establishments or barangay...',
+                            hintStyle: TextStyle(color: Colors.grey),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(vertical: 14),
+                          ),
                         ),
                       ),
                     ),
@@ -522,22 +535,28 @@ class _InspectionPageState extends State<InspectionPage>
                         child: Icon(Icons.close, color: Colors.grey, size: 20),
                       ),
                     const SizedBox(width: 12),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _showFilters = !_showFilters;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: _showFilters ? context.adaptivePrimary.withOpacity(0.1) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.tune_rounded, 
-                          color: _showFilters ? context.adaptivePrimary : Colors.grey, 
-                          size: 20,
+                    Showcase(
+                      key: MainLayout.tasksFilterTourKey,
+                      title: 'Filters',
+                      description: 'Tap here to refine your tasks by status, result, or barangay.',
+                      targetPadding: const EdgeInsets.all(4),
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _showFilters = !_showFilters;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: _showFilters ? context.adaptivePrimary.withValues(alpha: 0.1) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.tune_rounded, 
+                            color: _showFilters ? context.adaptivePrimary : Colors.grey, 
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -545,12 +564,18 @@ class _InspectionPageState extends State<InspectionPage>
                 ),
               ),
             ),
-            ModernSegmentedFilter(
-              options: const ['Current', 'Missing', 'History'],
-              selectedIndex: _currentFilterIndex,
-              onSelected: (index) {
-                _tabController.animateTo(index);
-              },
+            Showcase(
+              key: MainLayout.tasksTabsTourKey,
+              title: 'Task Categories',
+              description: 'Switch between Current assignments, Missing tasks, and your inspection History.',
+              targetPadding: const EdgeInsets.all(4),
+              child: ModernSegmentedFilter(
+                options: const ['Current', 'Missing', 'History'],
+                selectedIndex: _currentFilterIndex,
+                onSelected: (index) {
+                  _tabController.animateTo(index);
+                },
+              ),
             ),
             if (_showFilters) _buildFilter(context),
             const SizedBox(height: 8),
@@ -649,8 +674,8 @@ class _InspectionPageState extends State<InspectionPage>
 class _EmptyState extends StatelessWidget {
   final String message;
   final String? imagePath;
-  final IconData? icon;
-  const _EmptyState({required this.message, this.imagePath, this.icon});
+  
+  const _EmptyState({required this.message, this.imagePath});
 
   @override
   Widget build(BuildContext context) {
@@ -659,9 +684,7 @@ class _EmptyState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (imagePath != null)
-            FloatingMascot(imagePath: imagePath!, height: 160)
-          else if (icon != null)
-            Icon(icon, size: 56, color: Colors.grey[300]),
+            FloatingMascot(imagePath: imagePath!, height: 160),
           const SizedBox(height: 16),
           Text(
             message,

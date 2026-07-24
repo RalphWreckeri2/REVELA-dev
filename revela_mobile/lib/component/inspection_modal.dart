@@ -22,7 +22,7 @@ class InspectionModal extends StatefulWidget {
 
 class _InspectionModalState extends State<InspectionModal> {
   final TextEditingController _remarksController = TextEditingController();
-  List<String> _evidenceLocalPaths = [];
+  final List<String> _evidenceLocalPaths = [];
   List<String> _uploadedPhotoUrls = [];
   bool _uploadingEvidence = false;
   bool _submitting = false;
@@ -52,10 +52,25 @@ class _InspectionModalState extends State<InspectionModal> {
       double? vLat;
       double? vLng;
       try {
-        final p = await Geolocator.getCurrentPosition();
+        final p = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            timeLimit: Duration(seconds: 5),
+          ),
+        );
         vLat = p.latitude;
         vLng = p.longitude;
-      } catch (_) {}
+      } catch (e) {
+        if (mounted) {
+          setState(() => _submitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to get location. Please ensure GPS is enabled.'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+        return;
+      }
 
       String remarks = _remarksController.text.trim();
       if (_noticeLevel == 1) {
@@ -550,7 +565,7 @@ class _InspectionModalState extends State<InspectionModal> {
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: _evidenceLocalPaths.length,
-                          separatorBuilder: (_, __) => SizedBox(width: 8),
+                          separatorBuilder: (_, _) => SizedBox(width: 8),
                           itemBuilder: (ctx, i) {
                             return Stack(
                               children: [
@@ -622,7 +637,7 @@ class _InspectionModalState extends State<InspectionModal> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.add_photo_alternate_outlined, size: 48, color: context.adaptivePrimary.withOpacity(0.6)),
+                              Icon(Icons.add_photo_alternate_outlined, size: 48, color: context.adaptivePrimary.withValues(alpha: 0.6)),
                               SizedBox(height: 12),
                               Text('Tap to take or choose photos', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
                             ],
@@ -719,7 +734,7 @@ class _InspectionModalState extends State<InspectionModal> {
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         backgroundColor: AppColors.darkGreen,
-                        disabledBackgroundColor: AppColors.darkGreen.withOpacity(0.5),
+                        disabledBackgroundColor: AppColors.darkGreen.withValues(alpha: 0.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       child: _submitting

@@ -386,7 +386,7 @@ class HistoryDetailPage extends StatelessWidget {
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: resolvedTask.photoPaths.length,
-                        separatorBuilder: (_, __) => SizedBox(width: 8),
+                        separatorBuilder: (_, _) => SizedBox(width: 8),
                         itemBuilder: (ctx, i) {
                           final absoluteUrl = InspectionService.mediaAbsoluteUrl(resolvedTask.photoPaths[i]);
                           if (absoluteUrl == null) return const SizedBox();

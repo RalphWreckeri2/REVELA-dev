@@ -62,7 +62,7 @@ def get_all_users():
     cur = mysql.connection.cursor()
     cur.execute("""
         SELECT userID, fullName, email, phone, userRole, 
-               createdAt, lastLoginAt, mustChangePassword, resetRequested
+               createdAt, lastLoginAt, mustChangePassword, resetRequested, isActive
         FROM USERS
         ORDER BY createdAt DESC
     """)

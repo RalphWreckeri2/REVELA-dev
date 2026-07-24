@@ -9,6 +9,12 @@ import {
   API_ORIGIN,
 } from "../services/api";
 import "../styles/UserManagement.css";
+import SwalOriginal from "sweetalert2";
+
+const Swal = SwalOriginal.mixin({
+  showClass: { popup: 'swal2-noanimation', backdrop: 'swal2-noanimation' },
+  hideClass: { popup: '', backdrop: '' }
+});
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const Icons = {
@@ -93,12 +99,11 @@ function CopyButton({ text }) {
 }
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
-function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
+function CreateUserModal({ onClose, onSuccess, token }) {
   const [formData, setFormData] = useState({ fullName: "", email: "", role: "Admin", phone: "" });
   const [password, setPassword] = useState("");
   const [loading,  setLoading]  = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [error,    setError]    = useState("");
 
   const generatePassword = async () => {
     setGenerating(true);
@@ -120,14 +125,21 @@ function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
     try {
       const result = await createUserRequest({ ...formData, password }, token);
       onSuccess();
-      onSuccessMsg(`User "${formData.fullName}" created successfully. Temporary password: ${result.tempPassword || password}`);
+      Swal.fire({
+        icon: 'success',
+        title: 'User Created',
+        text: `User "${formData.fullName}" created successfully. Temporary password: ${result.tempPassword || password}`
+      });
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to create user.");
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || "Failed to create user."
+      });
     } finally {
       setLoading(false);
     }
@@ -144,8 +156,6 @@ function CreateUserModal({ onClose, onSuccess, onSuccessMsg, token }) {
             <p className="um-modal-subtitle">Add a new team member to the system</p>
           </div>
         </div>
-
-        {error && <div className="um-alert um-alert--error">{error}</div>}
 
         <form onSubmit={handleSubmit} className="um-form">
           {[
@@ -218,18 +228,25 @@ function EditUserModal({ user, onClose, onSuccess, token }) {
     phone:    user.phone ?? "",
   });
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
     try {
       await updateUserRequest(user.userID, formData, token);
       onSuccess();
+      Swal.fire({
+        icon: 'success',
+        title: 'User Updated',
+        text: 'User details updated successfully.'
+      });
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to update user.");
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || "Failed to update user."
+      });
     } finally {
       setLoading(false);
     }
@@ -246,8 +263,6 @@ function EditUserModal({ user, onClose, onSuccess, token }) {
             <p className="um-modal-subtitle">Update details for {user.fullName}</p>
           </div>
         </div>
-
-        {error && <div className="um-alert um-alert--error">{error}</div>}
 
         <form onSubmit={handleSubmit} className="um-form">
           {[
@@ -276,6 +291,7 @@ function EditUserModal({ user, onClose, onSuccess, token }) {
                 className="um-input"
               >
                 <option value="Admin">Admin</option>
+                <option value="Inspector">Inspector</option>
               </select>
             </div>
           ) : (
@@ -305,17 +321,24 @@ function EditUserModal({ user, onClose, onSuccess, token }) {
 // ── Delete Modal ──────────────────────────────────────────────────────────────
 function DeleteUserModal({ targetUser, onClose, onSuccess, token }) {
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
 
   const handleConfirm = async () => {
     setLoading(true);
-    setError("");
     try {
       await deleteUserRequest(targetUser.userID, token);
       onSuccess();
+      Swal.fire({
+        icon: 'success',
+        title: 'User Removed',
+        text: 'User has been removed successfully.'
+      });
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to remove user.");
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || "Failed to remove user."
+      });
     } finally {
       setLoading(false);
     }
@@ -332,8 +355,6 @@ function DeleteUserModal({ targetUser, onClose, onSuccess, token }) {
             <p className="um-modal-subtitle">This action cannot be undone</p>
           </div>
         </div>
-
-        {error && <div className="um-alert um-alert--error">{error}</div>}
 
         <p className="um-confirm-text">
           Are you sure you want to permanently remove <strong>{targetUser.fullName}</strong>?
@@ -354,12 +375,10 @@ function DeleteUserModal({ targetUser, onClose, onSuccess, token }) {
 // ── Reset Password Modal ──────────────────────────────────────────────────────
 function ResetPasswordModal({ targetUser, onClose, onSuccess, token }) {
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
   const [newPass, setNewPass] = useState("");
 
   const handleConfirm = async () => {
     setLoading(true);
-    setError("");
     try {
       const res = await fetch(`${API_ORIGIN}/api/users/${targetUser.userID}/reset-password`, {
         method: "POST",
@@ -381,8 +400,17 @@ function ResetPasswordModal({ targetUser, onClose, onSuccess, token }) {
       if (!res.ok) throw new Error(data?.error || "Failed to reset password.");
       setNewPass(data.tempPassword);
       if (onSuccess) onSuccess();
+      Swal.fire({
+        icon: 'success',
+        title: 'Password Reset',
+        text: 'Password has been successfully reset.'
+      });
     } catch (err) {
-      setError(err.message || "Failed to reset password.");
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || "Failed to reset password."
+      });
     } finally {
       setLoading(false);
     }
@@ -399,12 +427,8 @@ function ResetPasswordModal({ targetUser, onClose, onSuccess, token }) {
             <p className="um-modal-subtitle">{targetUser.fullName}</p>
           </div>
         </div>
-        {error && <div className="um-alert um-alert--error">{error}</div>}
         {newPass ? (
           <div>
-            <div className="um-alert um-alert--success">
-              Password has been successfully reset.
-            </div>
             <div className="um-password-result">
               <label className="um-label">New Temporary Password</label>
               <div className="um-password-display">
@@ -443,23 +467,24 @@ export default function UserManagementPage() {
   const { token, user } = useAuth();
   const [users,          setUsers]          = useState([]);
   const [loading,        setLoading]        = useState(true);
-  const [error,          setError]          = useState("");
   const [showCreate,     setShowCreate]     = useState(false);
   const [editingUser,    setEditingUser]    = useState(null);
   const [userToDelete,   setUserToDelete]   = useState(null);
   const [userToReset,    setUserToReset]    = useState(null);
-  const [successMsg,     setSuccessMsg]     = useState("");
   const [search,         setSearch]         = useState("");
   const [roleFilter,     setRoleFilter]     = useState("all");
 
   const fetchUsers = async () => {
     setLoading(true);
-    setError("");
     try {
       const data = await getUsersRequest(token);
-      setUsers(data);
+      setUsers(data.filter(u => u.isActive !== 0 && u.isActive !== false));
     } catch (err) {
-      setError(err.message || "Failed to load users.");
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: err.message || "Failed to load users."
+      });
     } finally {
       setLoading(false);
     }
@@ -526,13 +551,6 @@ export default function UserManagementPage() {
       </div>
 
       {/* Banners */}
-      {error && <div className="um-alert um-alert--error">{error}</div>}
-      {successMsg && (
-        <div className="um-alert um-alert--success">
-          {successMsg}
-          <button className="um-alert-dismiss" onClick={() => setSuccessMsg("")}>✕</button>
-        </div>
-      )}
 
       {stats.pendingResets > 0 && (
         <div className="um-alert um-alert--error" style={{ background: "var(--color-danger)", color: "#fff", border: "none", boxShadow: "0 10px 25px rgba(239, 68, 68, 0.4)", animation: "um-pulse 2s infinite" }}>
@@ -606,7 +624,7 @@ export default function UserManagementPage() {
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="um-table-empty">
-                    <div style={{ fontSize: 36, marginBottom: 8 }}>👤</div>
+                    <img src="/searching.png" alt="No users found" style={{ height: 100, objectFit: "contain", opacity: 0.9, marginBottom: 12 }} />
                     <span>{search || roleFilter !== "all" ? "No users match your filters." : 'No users found. Click "Create User" to add one.'}</span>
                   </td>
                 </tr>
@@ -685,10 +703,6 @@ export default function UserManagementPage() {
           token={token}
           onClose={() => setShowCreate(false)}
           onSuccess={fetchUsers}
-          onSuccessMsg={(msg) => {
-            setSuccessMsg(msg);
-            setTimeout(() => setSuccessMsg(""), 6000);
-          }}
         />
       )}
 
@@ -708,8 +722,6 @@ export default function UserManagementPage() {
           onClose={() => setUserToDelete(null)}
           onSuccess={() => {
             fetchUsers();
-            setSuccessMsg(`User "${userToDelete.fullName}" was removed.`);
-            setTimeout(() => setSuccessMsg(""), 6000);
           }}
         />
       )}

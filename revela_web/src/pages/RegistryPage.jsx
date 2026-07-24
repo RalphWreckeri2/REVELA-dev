@@ -252,8 +252,8 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
   };
 
   return (
-    <div style={styles.modalBackdrop} onClick={onClose}>
-      <div style={{ ...styles.modalCard, width: 560 }} onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" style={styles.modalBackdrop} onClick={onClose}>
+      <div className="modal-panel" style={{ ...styles.modalCard, width: 560 }} onClick={e => e.stopPropagation()}>
         <div style={styles.modalHeader}>
           <h3 style={styles.modalTitle}>Business Details</h3>
           <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
@@ -835,7 +835,7 @@ const styles = {
   pageSizeLabel: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--color-muted)", cursor: "default" },
 
   // Modal styles
-  modalBackdrop: { position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 },
   modalCard: { background: "var(--color-modal-bg)", borderRadius: "var(--radius-xl)", padding: 32, boxShadow: "0 24px 60px rgba(15,23,42,0.18)", position: "relative", maxHeight: "90vh", overflowY: "auto" },
   modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
   modalTitle: { fontSize: 18, fontWeight: 700, color: "var(--color-ink)", margin: 0 },

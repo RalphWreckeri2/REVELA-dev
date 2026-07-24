@@ -201,13 +201,13 @@ function AssignModal({ report, token, onClose, onSuccess }) {
   };
 
   return createPortal(
-    <div style={s.backdrop} onClick={!loading ? onClose : undefined}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" style={s.backdrop} onClick={!loading ? onClose : undefined}>
+      <div className="modal-panel" style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>
             {isRedo ? "Send Back for Redo" : "Assign Inspector"}
           </h3>
-          {!loading && <button style={s.closeBtn} onClick={onClose}><Icon.X /></button>}
+          {!loading && <button className="modal-close-btn" onClick={onClose}><Icon.X /></button>}
         </div>
 
         <div style={s.flagPreview}>
@@ -300,11 +300,11 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
   };
 
   return (
-    <div style={s.backdrop} onClick={!loading ? onClose : undefined}>
-      <div style={s.modal} onClick={e => e.stopPropagation()}>
+    <div className="modal-backdrop" style={s.backdrop} onClick={!loading ? onClose : undefined}>
+      <div className="modal-panel" style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>Verify Inspection</h3>
-          {!loading && <button style={s.closeBtn} onClick={onClose}><Icon.X /></button>}
+          {!loading && <button className="modal-close-btn" onClick={onClose}><Icon.X /></button>}
         </div>
 
         <div style={s.flagPreview}>
@@ -553,60 +553,136 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
     return true;
   });
 
-  return (
-    <div style={{...s.backdrop, zIndex: 50}} onClick={onClose}>
-      <div style={{...s.modal, width: "90vw", maxWidth: 1200, height: "85vh", display: "flex", flexDirection: "column", padding: "24px 32px"}} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 16, borderBottom: "1px solid var(--color-border-soft)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 12, height: 12, borderRadius: "50%", background: statusMeta.text, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }} />
-            <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--color-ink)", letterSpacing: "-0.02em" }}>{status} Backlog <span style={{ color: "var(--color-muted)", fontSize: 18, fontWeight: 600 }}>({reports.length})</span></h2>
+  return createPortal(
+    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="modal-panel modal-content saas-card" onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: "95vw", height: "85vh", display: "flex", flexDirection: "column", padding: 32, borderRadius: 24, background: "var(--color-modal-bg)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}>
+        
+        {/* Header */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 12, height: 12, borderRadius: "50%", background: statusMeta.text, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }} />
+              {status} Backlog <span style={{ color: "var(--color-muted)", fontSize: 16, fontWeight: 600 }}>({reports.length})</span>
+            </h2>
+            
+            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <div style={{ position: "relative" }}>
+                <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--color-muted)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input 
+                  type="text" 
+                  placeholder="Search name or ID..." 
+                  className="saas-input" 
+                  style={{ padding: "8px 14px 8px 36px", width: 260, borderRadius: 8, background: "transparent" }}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              
+              <button className="modal-close-btn" onClick={onClose}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
           </div>
           
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <select
-              style={{ ...s.filterSelect, width: 160 }}
-              value={filterFlag}
-              onChange={e => setFilterFlag(e.target.value)}
-            >
-              <option value="">All Flags</option>
-              {Object.keys(FLAG_COLOR).map(f => (
-                <option key={f} value={f}>{getFriendlyFlagLabel(f)}</option>
-              ))}
-            </select>
-            
-            <div className="search-bar" style={{ width: 240, margin: 0 }}>
-              <Icon.Search />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-
-            <button style={{ ...s.closeBtn, background: "var(--color-hover)", padding: 8, borderRadius: "50%", marginLeft: 8 }} onClick={onClose}><Icon.X /></button>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {["all", ...Object.keys(FLAG_COLOR)].map(c => {
+              const isActive = filterFlag === c || (filterFlag === "" && c === "all");
+              const pillBg = isActive ? (c === "all" ? "var(--color-ink)" : (FLAG_COLOR[c]?.text ?? "var(--color-ink)")) : "var(--color-hover)";
+              const pillText = isActive ? (c === "all" ? "var(--color-surface)" : "#fff") : "var(--color-muted)";
+              const pillBorder = isActive ? "transparent" : "var(--color-border-soft)";
+              
+              return (
+                <button
+                  key={c}
+                  onClick={() => setFilterFlag(c === "all" ? "" : c)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    border: "1px solid",
+                    background: pillBg,
+                    color: pillText,
+                    borderColor: pillBorder,
+                  }}
+                >
+                  {c === "all" ? "All" : (getFriendlyFlagLabel(c) ?? c)}
+                </button>
+              );
+            })}
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 24, overflowY: "auto", padding: "8px 4px 32px" }}>
-          {filteredReports.map(r => (
-            <InspectionCard
-              key={r.reportID ?? `log-${r.logID}`}
-              report={r}
-              isAdmin={isAdmin}
-              onAssign={onAssign}
-              onVerify={onVerify}
-              onViewDetail={onViewDetail}
-            />
-          ))}
+
+        <div style={{ flex: 1, overflowY: "auto", paddingRight: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {filteredReports.map(f => {
+              const fc = FLAG_COLOR[f.flagColor] || FLAG_COLOR.Green;
+              return (
+                <div 
+                  key={f.reportID ?? `log-${f.logID}`}
+                  onClick={() => onViewDetail(f)}
+                  style={{ 
+                    background: "var(--color-surface)", 
+                    border: "1px solid var(--color-border-soft)", 
+                    borderRadius: 16, 
+                    padding: 20, 
+                    display: "flex", 
+                    flexDirection: "column", 
+                    justifyContent: "space-between",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+                    transition: "transform 0.15s, box-shadow 0.15s",
+                    minHeight: 120
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.06)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)'; }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: fc.bg || "var(--color-hover)", color: fc.text || "var(--color-ink)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                        {getFriendlyFlagLabel(f.flagColor) || f.flagColor || "Unknown"}
+                      </span>
+                      {f.verificationStatus && (
+                        <>
+                          <span style={{ color: "var(--color-muted)", fontSize: 12 }}>&gt;</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: STATUS_COLOR[f.verificationStatus]?.bg || "var(--color-hover)", color: STATUS_COLOR[f.verificationStatus]?.text || "var(--color-ink)" }}>
+                            {f.verificationStatus}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-muted)" }}>#{f.reportID || f.logID}</span>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                    <div style={{ flex: 1, paddingRight: 16 }}>
+                      <h4 style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 800, color: "var(--color-ink)", lineHeight: 1.3 }}>{f.detectedName || "Unknown Establishment"}</h4>
+                      <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        {f.barangayName ? f.barangayName.replace(/Barangay\s+/i, "Brgy. ") : "—"}
+                      </p>
+                    </div>
+                    
+                    <button style={{ width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--color-border-soft)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-ink)", flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           {filteredReports.length === 0 && (
-            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "60px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+            <div style={{ textAlign: "center", padding: "60px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
               <img src="/searching.png" alt="No reports" style={{ height: 120, objectFit: "contain", opacity: 0.9 }} />
               <p style={{ color: "var(--color-muted)", fontSize: 14, margin: 0 }}>No reports match your filters.</p>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1086,14 +1162,14 @@ const s = {
   },
   errorBanner: {
     display: "flex", alignItems: "center", gap: 8,
-    background: "#fff5f5", border: "1px solid #fed7d7",
+    background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)",
     borderRadius: "var(--radius-sm)", padding: "10px 14px",
     fontSize: 13, color: "var(--color-danger)", marginBottom: 16,
   },
 
   // Modal
   backdrop: {
-    position: "fixed", inset: 0, background: "rgba(26,32,44,0.45)",
+    position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)",
     backdropFilter: "blur(4px)", display: "flex",
     alignItems: "center", justifyContent: "center", zIndex: 100,
   },

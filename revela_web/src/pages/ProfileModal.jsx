@@ -18,9 +18,11 @@ export default function ProfileModal({ onClose }) {
     : "?";
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div className="saas-card frosted-glass" style={{ width: "min(100%, 500px)", display: "flex", flexDirection: "column", gap: 24, position: "relative", padding: 32, background: "var(--color-surface)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "transparent", border: "none", cursor: "pointer", color: "var(--color-muted)", fontSize: 20 }}>✕</button>
+    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
+      <div className="modal-panel saas-card frosted-glass" style={{ width: "min(100%, 500px)", display: "flex", flexDirection: "column", gap: 24, position: "relative", padding: 32, background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
+        <button className="modal-close-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
         
         <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
           <div style={{ width: 80, height: 80, borderRadius: "50%", background: "var(--color-primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 28, fontWeight: 700, boxShadow: "0 8px 16px rgba(86, 171, 47, 0.2)", flexShrink: 0 }}>

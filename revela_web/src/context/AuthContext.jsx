@@ -20,8 +20,11 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (token && !user) {
-      getMeRequest(token)
-        .then(me => {
+      Promise.all([
+        getMeRequest(token),
+        new Promise(resolve => setTimeout(resolve, 1000)) // Force at least 1 second delay
+      ])
+        .then(([me]) => {
           if (!["Admin", "SUPER_ADMIN", "System Administrator"].includes(me?.role)) {
             setToken(null);
           } else {

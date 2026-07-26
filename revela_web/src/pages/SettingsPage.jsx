@@ -9,6 +9,7 @@ import { getWlcConfigRequest, updateWlcConfigRequest, updateMePreferencesRequest
 import { useLoadScript, GoogleMap, Marker } from "@react-google-maps/api";
 import TermsPage from "../components/TermsPage";
 import PrivacyPage from "../components/PrivacyPage";
+import AnimatePresence from "../components/AnimatePresence";
 
 const LIBRARIES = ["places"];
 
@@ -28,7 +29,7 @@ const EyeOffIcon = () => (
 );
 
 // ── Legal Document Modal ──────────────────────────────────────────────────────
-function LegalDocModal({ title, children, onClose }) {
+function LegalDocModal({ title, children, onClose, isClosing }) {
   return (
     <div
       style={{
@@ -36,11 +37,11 @@ function LegalDocModal({ title, children, onClose }) {
         background: "rgba(15, 23, 42, 0.55)", backdropFilter: "blur(4px)",
         display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
       }}
-      className="modal-backdrop"
+      className={"modal-backdrop" + (isClosing ? " closing" : "")}
       onClick={onClose}
     >
       <div
-        className="modal-panel"
+        className={"modal-panel" + (isClosing ? " closing" : "")}
         style={{
           background: "var(--color-modal-bg)", borderRadius: 16,
           width: "min(100%, 800px)", height: "min(90vh, 800px)",
@@ -62,7 +63,7 @@ function LegalDocModal({ title, children, onClose }) {
 }
 
 // ── Change Password Modal ─────────────────────────────────────────────────────
-function ChangePasswordModal({ onClose, token }) {
+function ChangePasswordModal({ onClose, token, isClosing }) {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showOldPassword, setShowOldPassword] = useState(false);
@@ -72,6 +73,7 @@ function ChangePasswordModal({ onClose, token }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!oldPassword || !newPassword) return;
     setLoading(true);
     setError("");
     try {
@@ -79,8 +81,8 @@ function ChangePasswordModal({ onClose, token }) {
 
       Swal.fire({
         icon: 'success',
-        title: 'Success',
-        text: 'Password changed successfully!',
+        title: 'Password Updated',
+        text: 'Your password was successfully changed.',
         confirmButtonColor: '#56ab2f'
       });
       onClose();
@@ -92,8 +94,8 @@ function ChangePasswordModal({ onClose, token }) {
   };
 
   return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div className="modal-panel saas-card frosted-glass" style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
+      <div className={"modal-panel saas-card frosted-glass" + (isClosing ? " closing" : "")} style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button className="modal-close-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -131,7 +133,7 @@ function ChangePasswordModal({ onClose, token }) {
 }
 
 // ── Setup 2FA Modal ───────────────────────────────────────────────────────────
-function Setup2FAModal({ onClose, token, onSuccess }) {
+function Setup2FAModal({ onClose, token, onSuccess, isClosing }) {
   const [secret, setSecret] = useState("");
   const [otpUri, setOtpUri] = useState("");
   const [code, setCode] = useState("");
@@ -142,26 +144,26 @@ function Setup2FAModal({ onClose, token, onSuccess }) {
   useEffect(() => {
     let cancelled = false;
 
-    const initSetup = async () => {
+    async function fetchSetup() {
       try {
-        // Fetch the Base32 secret and URI from your backend
-        const data = await setup2faRequest(token);
-        if (cancelled) return;
-        setSecret(data.secret);
-        setOtpUri(data.otpUri);
+        const res = await setup2faRequest(token);
+        if (!cancelled) {
+          setSecret(res.secret);
+          setOtpUri(res.otpUri);
+        }
       } catch (err) {
-        if (cancelled) return;
-        setError(err.message || "Failed to initialize 2FA setup.");
+        if (!cancelled) setError("Failed to initialize 2FA setup.");
       } finally {
         if (!cancelled) setLoading(false);
       }
-    };
-    initSetup();
+    }
+    fetchSetup();
     return () => { cancelled = true; };
   }, [token]);
 
   const handleVerify = async (e) => {
     e.preventDefault();
+    if (!code || code.length !== 6) return;
     setVerifying(true);
     setError("");
     try {
@@ -177,8 +179,8 @@ function Setup2FAModal({ onClose, token, onSuccess }) {
   };
 
   return (
-    <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
-      <div className="modal-panel saas-card frosted-glass" style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
+      <div className={"modal-panel saas-card frosted-glass" + (isClosing ? " closing" : "")} style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button className="modal-close-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -212,7 +214,10 @@ function Setup2FAModal({ onClose, token, onSuccess }) {
 export default function SettingsPage() {
   const { token, user, refreshUser } = useContext(AuthContext);
   const [emailAlerts, setEmailAlerts] = useState(true);
-  const { theme, isDark, setTheme } = useTheme();
+  const { theme, previewTheme, isDark, setTheme, setPreviewTheme } = useTheme();
+  
+  const activeTheme = previewTheme || theme;
+
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
 
@@ -249,11 +254,19 @@ export default function SettingsPage() {
         }
       }
     }).catch(console.error);
-  }, [token, user]);
+
+    return () => {
+      // Clear preview theme on unmount so it reverts if unsaved
+      setPreviewTheme(null);
+    };
+  }, [token, user, setPreviewTheme]);
 
   const handleSavePreferences = async () => {
     setSavingPreferences(true);
     localStorage.setItem("revela_emailAlerts", emailAlerts);
+    if (previewTheme) {
+      setTheme(previewTheme);
+    }
     try {
       await updateMePreferencesRequest({ emailInspectionAlerts: emailAlerts }, token);
       if (refreshUser) await refreshUser();
@@ -398,20 +411,42 @@ export default function SettingsPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
         {/* Local UI Preferences */}
         <section className="saas-card frosted-glass">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>Local UI Preferences</h3>
-              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Control dashboard alerts and appearance. Email inspection alerts are saved to your account and used when inspectors submit field evidence.</p>
-            </div>
-            <button className="primary-btn" type="button" onClick={handleSavePreferences} disabled={savingPreferences}>
-              {savingPreferences ? "Saving..." : "Save Preferences"}
-            </button>
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>Local UI Preferences</h3>
+            <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Control dashboard alerts and appearance. Email inspection alerts are saved to your account and used when inspectors submit field evidence.</p>
           </div>
           <div style={{ display: "grid", gap: 16 }}>
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
-              <span>Email notifications (inspection evidence submitted)</span>
-              <input type="checkbox" checked={emailAlerts} onChange={() => setEmailAlerts((prev) => !prev)} />
-            </label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20 }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-ink)" }}>Email notifications (inspection evidence submitted)</span>
+              <div style={{
+                display: "inline-flex",
+                background: "var(--color-hover)",
+                borderRadius: 12,
+                padding: 4,
+                border: "1px solid var(--color-border-soft)",
+              }}>
+                {[{ label: "On", value: true }, { label: "Off", value: false }].map(opt => {
+                  const isActive = emailAlerts === opt.value;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setEmailAlerts(opt.value)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13,
+                        fontWeight: isActive ? 600 : 500, fontFamily: "inherit",
+                        background: isActive ? "var(--color-primary)" : "transparent",
+                        color: isActive ? "#fff" : "var(--color-muted)",
+                        transition: "all 0.2s ease",
+                        boxShadow: isActive ? "0 2px 8px rgba(86, 171, 47, 0.3)" : "none",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Theme Selector */}
             <div>
@@ -452,12 +487,12 @@ export default function SettingsPage() {
                     )
                   },
                 ].map(opt => {
-                  const isActive = theme === opt.value;
+                  const isActive = activeTheme === opt.value;
                   return (
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => setTheme(opt.value)}
+                      onClick={() => setPreviewTheme(opt.value)}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -482,42 +517,49 @@ export default function SettingsPage() {
                 })}
               </div>
             </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <button className="primary-btn" type="button" onClick={handleSavePreferences} disabled={savingPreferences}>
+                {savingPreferences ? "Saving..." : "Save Preferences"}
+              </button>
+            </div>
           </div>
         </section>
 
         {/* System Policy (OPS WLC) */}
         <section className="saas-card frosted-glass">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>System Policy (OPS WLC)</h3>
-              <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Set up priority score scenarios, linked weights, and dynamic sector rules.</p>
-            </div>
-            <button className="primary-btn" type="button" onClick={handleSavePolicy} disabled={savingPolicy}>
-              {savingPolicy ? "Saving..." : "Save Policy"}
-            </button>
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: "0 0 8px", color: "var(--color-ink)", fontSize: 18 }}>System Policy (OPS WLC)</h3>
+            <p style={{ margin: 0, color: "var(--color-muted)", fontSize: 13 }}>Set up priority score scenarios, linked weights, and dynamic sector rules.</p>
           </div>
           <div style={{ display: "grid", gap: 16 }}>
             {/* Scenario Presets */}
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
-              <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, background: "rgba(245,158,11,0.1)", color: "#b45309", borderColor: "rgba(245,158,11,0.4)" }} onClick={() => applyPreset("health")}>
-                🚑 Health Crisis Mode (Focus: Sector)
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-ink)" }}>Apply Preset:</span>
+              <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => applyPreset("health")}>
+                🚑 Health Crisis Mode
               </button>
-              <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, background: "rgba(239,68,68,0.1)", color: "#b91c1c", borderColor: "rgba(239,68,68,0.4)" }} onClick={() => applyPreset("renewal")}>
-                📈 Business Renewal Peak (Focus: Risk)
+              <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => applyPreset("renewal")}>
+                📈 Business Renewal Peak
               </button>
             </div>
 
             {/* Linked Sliders */}
-            <div style={{ background: "var(--color-hover)", padding: "16px", borderRadius: 8, border: "1px solid var(--color-border)", display: "flex", flexDirection: "column", gap: 16 }}>
-              <label style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>Linked Priority Weights</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "16px 0", borderTop: "1px solid var(--color-border-soft)", borderBottom: "1px solid var(--color-border-soft)", margin: "8px 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>Linked Priority Weights</label>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-primary)" }}>
+                  Total: {wlcConfig.w1_risk + wlcConfig.w2_sector + wlcConfig.w3_distance}%
+                </span>
+              </div>
               {[
-                { key: "w1_risk", label: "Risk Volume (W1)", color: "var(--color-danger)" },
-                { key: "w2_sector", label: "Sector Impact (W2)", color: "var(--color-gold)" },
-                { key: "w3_distance", label: "Travel Distance (W3)", color: "var(--color-primary)" }
+                { key: "w1_risk", label: "Risk Volume (W1)" },
+                { key: "w2_sector", label: "Sector Impact (W2)" },
+                { key: "w3_distance", label: "Travel Distance (W3)" }
               ].map(w => (
                 <div key={w.key} style={{ display: "flex", alignItems: "center", gap: 16 }}>
                   <span style={{ width: 140, fontSize: 12, fontWeight: 600, color: "var(--color-muted)" }}>{w.label}</span>
-                  <input type="range" min="0" max="100" value={wlcConfig[w.key]} onChange={e => handleWeightChange(w.key, e.target.value)} style={{ flex: 1, accentColor: w.color }} />
+                  <input type="range" min="0" max="100" value={wlcConfig[w.key]} onChange={e => handleWeightChange(w.key, e.target.value)} style={{ flex: 1, accentColor: "var(--color-primary)" }} />
                   <div style={{ width: 30, textAlign: "right", fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>{wlcConfig[w.key]}%</div>
                 </div>
               ))}
@@ -538,7 +580,7 @@ export default function SettingsPage() {
                       {SECTOR_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-muted)" }}>Severity:</span>
-                    <input type="range" min="0" max="100" value={sec.score} onChange={e => updateSector(i, "score", e.target.value)} style={{ flex: 1 }} />
+                    <input type="range" min="0" max="100" value={sec.score} onChange={e => updateSector(i, "score", e.target.value)} style={{ flex: 1, accentColor: "var(--color-primary)" }} />
                     <span style={{ width: 36, fontSize: 12, fontWeight: 700, color: "var(--color-ink)", textAlign: "right" }}>{(sec.score / 100).toFixed(1)}</span>
                     <button type="button" onClick={() => removeSector(i)} style={{ background: "none", border: "none", color: "var(--color-danger)", cursor: "pointer", padding: 4, fontSize: 14, marginLeft: 8 }} title="Remove Sector">✕</button>
                   </div>
@@ -548,14 +590,14 @@ export default function SettingsPage() {
 
             {/* BPLO Location */}
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, marginTop: 8 }}>
-                <label style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>BPLO Base Station Coordinates</label>
+              <div style={{ marginBottom: 12, marginTop: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)", display: "block", marginBottom: 8 }}>BPLO Base Station Coordinates</label>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }} onClick={handleUseCurrentLocation}>
+                  <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, display: "flex", alignItems: "center", gap: 6, background: "var(--color-hover)", border: "1px solid var(--color-border)" }} onClick={handleUseCurrentLocation}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="10" r="3" /><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /></svg>
                     Use My Location
                   </button>
-                  <button type="button" className="primary-btn" style={{ padding: "6px 12px", fontSize: 12, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setShowMapModal(true)}>
+                  <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12, display: "flex", alignItems: "center", gap: 6, background: "var(--color-hover)", border: "1px solid var(--color-border)" }} onClick={() => setShowMapModal(true)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
                     Pick on Map
                   </button>
@@ -571,6 +613,12 @@ export default function SettingsPage() {
                   <div style={{ fontSize: 14, fontWeight: 600, color: "var(--color-ink)", fontFamily: "monospace" }}>{wlcConfig.bplo_lng || "—"}</div>
                 </div>
               </div>
+            </div>
+            
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <button className="primary-btn" type="button" onClick={handleSavePolicy} disabled={savingPolicy}>
+                {savingPolicy ? "Saving..." : "Save Policy"}
+              </button>
             </div>
           </div>
         </section>
@@ -595,9 +643,9 @@ export default function SettingsPage() {
                 <div style={{ color: "var(--color-muted)", fontSize: 12 }}>Protect your account with one-time codes.</div>
               </div>
               <button
-                className="ghost-btn"
+                className={user?.is_2fa_enabled ? "ghost-btn" : "primary-btn"}
                 type="button"
-                style={{ padding: "8px 12px", color: user?.is_2fa_enabled ? "var(--color-danger)" : "inherit" }}
+                style={{ padding: "8px 16px", color: user?.is_2fa_enabled ? "var(--color-danger)" : undefined }}
                 onClick={handleToggle2FA}
               >
                 {user?.is_2fa_enabled ? "Disable" : "Enable"}
@@ -618,45 +666,55 @@ export default function SettingsPage() {
                 <div style={{ fontWeight: 700, color: "var(--color-ink)" }}>Terms & Conditions</div>
                 <div style={{ color: "var(--color-muted)", fontSize: 12 }}>Read the terms of service for using the REVELA platform.</div>
               </div>
-              <button type="button" className="ghost-btn" style={{ padding: "8px 12px" }} onClick={() => setShowTermsDoc(true)}>View</button>
+              <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", fontWeight: 600, cursor: "pointer", fontSize: 13, padding: "8px 12px" }} onClick={() => setShowTermsDoc(true)}>View</button>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "var(--color-ink)" }}>Privacy Policy</div>
                 <div style={{ color: "var(--color-muted)", fontSize: 12 }}>Understand how your data is collected, used, and protected.</div>
               </div>
-              <button type="button" className="ghost-btn" style={{ padding: "8px 12px" }} onClick={() => setShowPrivacyDoc(true)}>View</button>
+              <button type="button" style={{ background: "none", border: "none", color: "var(--color-primary)", fontWeight: 600, cursor: "pointer", fontSize: 13, padding: "8px 12px" }} onClick={() => setShowPrivacyDoc(true)}>View</button>
             </div>
           </div>
         </section>
       </div>
 
-      {showPasswordModal && <ChangePasswordModal token={token} onClose={() => setShowPasswordModal(false)} />}
-      {show2FAModal && <Setup2FAModal token={token} onClose={() => setShow2FAModal(false)} onSuccess={refreshUser} />}
-      {showTermsDoc && (
+      <AnimatePresence isVisible={showPasswordModal}>
+        <ChangePasswordModal token={token} onClose={() => setShowPasswordModal(false)} />
+      </AnimatePresence>
+      <AnimatePresence isVisible={show2FAModal}>
+        <Setup2FAModal token={token} onClose={() => setShow2FAModal(false)} onSuccess={refreshUser} />
+      </AnimatePresence>
+      <AnimatePresence isVisible={showTermsDoc}>
         <LegalDocModal title="Terms & Conditions" onClose={() => setShowTermsDoc(false)}>
           <TermsPage />
         </LegalDocModal>
-      )}
-      {showPrivacyDoc && (
+      </AnimatePresence>
+      <AnimatePresence isVisible={showPrivacyDoc}>
         <LegalDocModal title="Privacy Policy" onClose={() => setShowPrivacyDoc(false)}>
           <PrivacyPage />
         </LegalDocModal>
-      )}
+      </AnimatePresence>
 
       {/* Map Picker Modal */}
-      {showMapModal && isLoaded && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-          background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)",
-          display: "flex", justifyContent: "center", alignItems: "center",
-          zIndex: 99999
-        }}>
-          <div style={{
-            background: "var(--color-modal-bg)", borderRadius: 16, padding: 24,
-            width: "90%", maxWidth: 600,
-            boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)"
-          }}>
+      <AnimatePresence isVisible={showMapModal && isLoaded}>
+        <div
+          className={"modal-backdrop" + ((showMapModal === false) ? " closing" : "")}
+          style={{
+            position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+            background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)",
+            display: "flex", justifyContent: "center", alignItems: "center",
+            zIndex: 99999
+          }}
+        >
+          <div
+            className={"modal-panel" + ((showMapModal === false) ? " closing" : "")}
+            style={{
+              background: "var(--color-modal-bg)", borderRadius: 16, padding: 24,
+              width: "90%", maxWidth: 600,
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)"
+            }}
+          >
             <h3 style={{ margin: "0 0 16px", color: "var(--color-ink)", fontSize: 18, fontWeight: 700 }}>Select Base Station Location</h3>
             <p style={{ margin: "0 0 16px", color: "var(--color-muted)", fontSize: 13 }}>Click anywhere on the map to set the BPLO office coordinates.</p>
 
@@ -693,7 +751,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-      )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

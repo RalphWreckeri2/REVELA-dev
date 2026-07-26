@@ -141,12 +141,36 @@ def _get_all_analytics_inner(F=None):
         WHERE 1=1 {reg_all}
         GROUP BY lineOfBusiness
         ORDER BY count DESC
-        LIMIT 10
     """, reg_all_p)
     sectoral_distribution = [
         {"sector": row["sector"], "count": row["count"]}
         for row in cur.fetchall()
     ]
+
+    # Nature per barangay
+    cur.execute(f"""
+        SELECT COALESCE(b.barangayName, 'Unknown') AS barangayName, COALESCE(o.lineOfBusiness, 'Unclassified') AS nature, COUNT(*) AS count
+        FROM official_registry o
+        LEFT JOIN barangays b ON o.barangayID = b.barangayID
+        WHERE 1=1 {reg_all}
+        GROUP BY b.barangayName, nature
+        ORDER BY b.barangayName ASC, count DESC
+    """, reg_all_p)
+    
+    nature_per_barangay_raw = cur.fetchall()
+    
+    # Process into a format suitable for stacked bar chart: [{barangayName: 'Brgy 1', 'Retail': 10, 'Food': 5}, ...]
+    nature_per_barangay_dict = {}
+    for row in nature_per_barangay_raw:
+        brgy = row["barangayName"]
+        nature = row["nature"]
+        count = row["count"]
+        if brgy not in nature_per_barangay_dict:
+            nature_per_barangay_dict[brgy] = {"barangayName": brgy}
+        nature_per_barangay_dict[brgy][nature] = count
+    
+    nature_per_barangay = list(nature_per_barangay_dict.values())
+
 
     # Business size
     cur.execute(f"""
@@ -562,6 +586,7 @@ def _get_all_analytics_inner(F=None):
                 "high_risk_barangays": high_risk_barangays,
             },
             "enforcement_progress":  enforcement_progress,
+            "nature_per_barangay":   nature_per_barangay,
             "sectoral_distribution": sectoral_distribution,
             "business_size_dist":    business_size_dist,
             "compliance_timeline":   compliance_timeline,

@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useContext } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import StatusBadge from "../components/StatusBadge";
 import { UploadModal } from "../components/UploadModal";
+import AnimatePresence from "../components/AnimatePresence";
 import { AuthContext } from "../context/AuthContext";
 import Papa from "papaparse";
 import Swal from "sweetalert2";
@@ -164,7 +165,7 @@ function EmptyState({ hasFilters, onUpload }) {
 
 
 // ── Business Detail Modal ─────────────────────────────────────────────────────
-function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess }) {
+function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess, isClosing }) {
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -178,15 +179,17 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
         const data = await getBusinessByIdRequest(businessId, token);
         setBusiness(data);
         setFormData({
-          businessName: data.businessName || "",
+          businessName: data.businessName,
+          ownerName: data.ownerName,
+          address: data.address,
+          status: data.status,
+          contactEmail: data.contactEmail || "",
+          contactPhone: data.contactPhone || "",
           businessType: data.businessType || "",
-          lineOfBusiness: data.lineOfBusiness || "",
-          businessSize: data.businessSize || "",
-          businessAddress: data.businessAddress || "",
-          applicationStatus: data.applicationStatus || "Pending",
+          dateRegistered: data.dateRegistered,
         });
       } catch (err) {
-        setError(err.message);
+        setError(err.message || "Failed to load details.");
       } finally {
         setLoading(false);
       }
@@ -195,23 +198,21 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
   }, [businessId, token]);
 
   const handleSave = async () => {
-    if (!formData.businessName) {
-      setError("Business Name is required.");
-      return;
-    }
     setSaving(true);
-    setError("");
     try {
-      await updateBusinessRequest(businessId, formData, token);
-      Swal.fire({ icon: 'success', title: 'Saved', text: 'Business details updated.', timer: 1500, showConfirmButton: false });
+      await updateBusinessRequest(business.businessID, formData, token);
+      Swal.fire({
+        icon: 'success',
+        title: 'Updated',
+        text: 'Business details saved successfully.',
+        confirmButtonColor: '#56ab2f'
+      });
       setIsEditing(false);
+      const data = await getBusinessByIdRequest(businessId, token);
+      setBusiness(data);
       if (onSuccess) onSuccess();
-
-      // Re-fetch to update local modal view
-      const updated = await getBusinessByIdRequest(businessId, token);
-      setBusiness(updated);
     } catch (err) {
-      setError(err.message || "Failed to update business.");
+      Swal.fire({ icon: 'error', title: 'Error', text: err.message || 'Failed to update.' });
     } finally {
       setSaving(false);
     }
@@ -252,8 +253,8 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess })
   };
 
   return (
-    <div className="modal-backdrop" style={styles.modalBackdrop} onClick={onClose}>
-      <div className="modal-panel" style={{ ...styles.modalCard, width: 560 }} onClick={e => e.stopPropagation()}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={styles.modalBackdrop} onClick={onClose}>
+      <div className={"modal-panel" + (isClosing ? " closing" : "")} style={{ ...styles.modalCard, width: 560 }} onClick={e => e.stopPropagation()}>
         <div style={styles.modalHeader}>
           <h3 style={styles.modalTitle}>Business Details</h3>
           <button style={styles.closeBtn} onClick={onClose}><Icon.X /></button>
@@ -767,25 +768,26 @@ export default function RegistryPage() {
       </footer>
 
       {/* Upload Modal */}
-      {showUpload && (
+      {/* Upload Modal */}
+      <AnimatePresence isVisible={showUpload}>
         <UploadModal
           token={token}
           onClose={() => setShowUpload(false)}
           onSuccess={() => { fetchBusinesses(); setShowUpload(false); }}
         />
-      )}
+      </AnimatePresence>
 
-      {showImport && (
+      <AnimatePresence isVisible={showImport}>
         <UploadModal
           variant="sync"
           token={token}
           onClose={() => setShowImport(false)}
           onSuccess={() => { fetchBusinesses(); setShowImport(false); }}
         />
-      )}
+      </AnimatePresence>
 
       {/* Business Detail Modal */}
-      {detailId && (
+      <AnimatePresence isVisible={!!detailId}>
         <BusinessDetailModal
           businessId={detailId}
           token={token}
@@ -793,7 +795,7 @@ export default function RegistryPage() {
           onSuccess={fetchBusinesses}
           onClose={() => setDetailId(null)}
         />
-      )}
+      </AnimatePresence>
 
     </DashboardLayout>
   );

@@ -22,51 +22,43 @@ export default function ProtectedRoute({ children }) {
     return (
       <div style={{
         position: 'fixed', inset: 0,
-        backgroundColor: '#f0f4f0',
+        backgroundColor: 'var(--color-bg)',
         display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'flex-end',
-        overflow: 'hidden',
-        zIndex: 9999
+        alignItems: 'center', justifyContent: 'center',
+        zIndex: 9999,
+        transition: 'background-color 0.3s ease'
       }}>
-        <div style={{
-           position: 'absolute',
-           top: '35%',
-           left: '50%',
-           display: 'flex',
-           flexDirection: 'column',
-           alignItems: 'center',
-           gap: '20px',
-           transform: 'translate(-50%, -50%)'
-        }}>
-          <div style={{
-            width: '48px', height: '48px',
-            border: '5px solid rgba(86, 171, 47, 0.2)',
-            borderTopColor: '#56ab2f',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-          }}></div>
-          <h2 style={{ color: '#1a3a1a', fontWeight: '700', letterSpacing: '-0.5px', fontSize: '24px', margin: 0 }}>
-            Verifying Access...
-          </h2>
-          <style>{`
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
-          `}</style>
-        </div>
-
+        
         <img 
           src="/searching.png" 
           alt="Revela Mascot Peaking" 
           style={{
-            height: '50vh',
+            height: '240px',
             width: 'auto',
             objectFit: 'contain',
-            objectPosition: 'bottom',
-            transform: 'translateY(15%)',
-            filter: 'drop-shadow(0 -10px 20px rgba(26,58,26,0.15))'
+            WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%)',
+            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%)',
+            marginBottom: '24px'
           }} 
         />
+        
+        <div style={{
+           display: 'flex',
+           flexDirection: 'column',
+           alignItems: 'center',
+           gap: '16px',
+        }}>
+          <div style={{
+            width: '36px', height: '36px',
+            border: '4px solid var(--color-border)',
+            borderTopColor: 'var(--color-primary)',
+            borderRadius: '50%',
+            animation: 'spin 1s ease-in-out infinite'
+          }}></div>
+          <h2 style={{ color: 'var(--color-ink)', fontWeight: '700', letterSpacing: '-0.3px', fontSize: '18px', margin: 0 }}>
+            Verifying Access...
+          </h2>
+        </div>
       </div>
     );
   }

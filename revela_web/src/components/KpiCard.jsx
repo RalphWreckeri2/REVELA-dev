@@ -19,13 +19,13 @@ const VARIANT_CLASSES = {
   green: "kpi-icon--green",
 };
 
-export default function KpiCard({ icon, iconVariant = "green", value, label, delta, trend }) {
+export default function KpiCard({ icon, iconVariant = "green", value, label, delta, trend, style }) {
   // Determine delta color and arrow depending on the trend direction
   const trendColor = trend === 'up' ? '#16a34a' : trend === 'down' ? '#dc2626' : '#64748b';
   const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '−';
 
   return (
-    <div className="kpi-card frosted-glass saas-card">
+    <div className="kpi-card frosted-glass saas-card" style={style}>
       <div className={`kpi-icon ${VARIANT_CLASSES[iconVariant]}`}>
         {icon}
       </div>

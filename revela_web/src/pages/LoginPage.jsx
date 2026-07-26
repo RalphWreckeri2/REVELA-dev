@@ -8,6 +8,7 @@ import Swal from "sweetalert2";
 import sealImg from "../assets/seal.png";
 import TermsPage from "../components/TermsPage";
 import PrivacyPage from "../components/PrivacyPage";
+import AnimatePresence from "../components/AnimatePresence";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 const Icon = {
@@ -48,22 +49,23 @@ function Alert({ type, message }) {
 }
 
 // ── Forgot Password Modal ─────────────────────────────────────────────────────
-function ForgotPasswordModal({ onClose, onSuccess }) {
+function ForgotPasswordModal({ onClose, onSuccess, isClosing }) {
   return (
-    <div className="forgot-modal">
-      <div className="forgot-modal-content">
-        <h3>Forgot Password</h3>
-        <p>This feature is under development.</p>
-        <button onClick={onClose}>Close</button>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} onClick={onClose}>
+      <div className={"modal-panel" + (isClosing ? " closing" : "")} onClick={e => e.stopPropagation()} style={{ background: "var(--color-modal-bg)", padding: 24, borderRadius: 16 }}>
+        <h3 style={{ color: "var(--color-ink)" }}>Forgot Password</h3>
+        <p style={{ color: "var(--color-muted)" }}>This feature is under development.</p>
+        <button onClick={onClose} style={{ marginTop: 12 }} className="secondary-btn">Close</button>
       </div>
     </div>
   );
 }
 
 // ── Legal Document Modal ──────────────────────────────────────────────────────
-function LegalDocModal({ title, children, onClose }) {
+function LegalDocModal({ title, children, onClose, isClosing }) {
   return (
     <div
+      className={"modal-backdrop" + (isClosing ? " closing" : "")}
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(6px)",
@@ -72,6 +74,7 @@ function LegalDocModal({ title, children, onClose }) {
       onClick={onClose}
     >
       <div
+        className={"modal-panel" + (isClosing ? " closing" : "")}
         style={{
           background: "#fff", borderRadius: 16,
           width: "min(100%, 800px)", height: "min(90vh, 800px)",
@@ -82,7 +85,7 @@ function LegalDocModal({ title, children, onClose }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
           <h3 style={{ margin: 0, fontSize: 16, color: "#1a202c" }}>{title}</h3>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "#64748b", fontSize: 20 }}>✕</button>
+          <button className="modal-close-btn" onClick={onClose} style={{ position: 'relative', background: "transparent", border: "none", cursor: "pointer", color: "#64748b", fontSize: 20 }}>✕</button>
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
       </div>
@@ -455,7 +458,7 @@ const handleVerify2FA = async () => {
 
                 {/* Step indicator + close */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#56ab2f", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <span className="text-accent" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     {stepLabel[forgotStep]}
                   </span>
                   <button onClick={handleForgotClose} type="button" style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(26,58,26,0.4)", fontSize: "18px", lineHeight: 1 }}>
@@ -502,8 +505,8 @@ const handleVerify2FA = async () => {
                         Verify
                       </button>
                     </div>
-                    <button type="button" onClick={() => setForgotStep(1)}
-                      style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", color: "#56ab2f", cursor: "pointer" }}>
+                    <button type="button" className="text-accent" onClick={() => setForgotStep(1)}
+                      style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", cursor: "pointer" }}>
                       ← Back / Resend OTP
                     </button>
                   </>
@@ -566,7 +569,7 @@ const handleVerify2FA = async () => {
         {loginStep === "2fa" && (
           <div className="otp-box" style={{ marginTop: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: "#56ab2f", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              <span className="text-accent" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                 Authenticator Code
               </span>
             </div>
@@ -582,8 +585,8 @@ const handleVerify2FA = async () => {
                 onKeyDown={(e) => e.key === "Enter" && handleVerify2FA()}
               />
             </div>
-            <button type="button" onClick={() => setLoginStep("credentials")}
-              style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", color: "#56ab2f", cursor: "pointer" }}>
+            <button type="button" className="text-accent" onClick={() => setLoginStep("credentials")}
+              style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", cursor: "pointer" }}>
               ← Back to Login
             </button>
           </div>
@@ -615,16 +618,18 @@ const handleVerify2FA = async () => {
             By signing in, you agree to our{" "}
             <button
               type="button"
+              className="text-accent"
               onClick={() => setShowTermsDoc(true)}
-              style={{ background: "none", border: "none", padding: 0, font: "inherit", fontSize: "inherit", color: "#56ab2f", fontWeight: 600, cursor: "pointer" }}
+              style={{ background: "none", border: "none", padding: 0, font: "inherit", fontSize: "inherit", fontWeight: 600, cursor: "pointer" }}
             >
               Terms &amp; Conditions
             </button>{" "}
             and{" "}
             <button
               type="button"
+              className="text-accent"
               onClick={() => setShowPrivacyDoc(true)}
-              style={{ background: "none", border: "none", padding: 0, font: "inherit", fontSize: "inherit", color: "#56ab2f", fontWeight: 600, cursor: "pointer" }}
+              style={{ background: "none", border: "none", padding: 0, font: "inherit", fontSize: "inherit", fontWeight: 600, cursor: "pointer" }}
             >
               Privacy Policy
             </button>.
@@ -632,16 +637,18 @@ const handleVerify2FA = async () => {
         </div>
       </div>
 
-      {showTermsDoc && (
+      {/* Modals */}
+      <AnimatePresence isVisible={showTermsDoc}>
         <LegalDocModal title="Terms & Conditions" onClose={() => setShowTermsDoc(false)}>
           <TermsPage />
         </LegalDocModal>
-      )}
-      {showPrivacyDoc && (
+      </AnimatePresence>
+
+      <AnimatePresence isVisible={showPrivacyDoc}>
         <LegalDocModal title="Privacy Policy" onClose={() => setShowPrivacyDoc(false)}>
           <PrivacyPage />
         </LegalDocModal>
-      )}
+      </AnimatePresence>
     </div>
   );
 }

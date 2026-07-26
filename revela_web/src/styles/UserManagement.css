@@ -18,7 +18,7 @@
   gap: 16px;
   padding: 20px 24px;
   border-radius: var(--radius-lg);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform var(--duration-normal) var(--ease-in-out), box-shadow var(--duration-normal) var(--ease-in-out);
 }
 .um-stat-card:hover {
   transform: translateY(-2px);
@@ -157,7 +157,7 @@
   font-weight: 600;
   color: var(--color-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   font-family: var(--font-base);
 }
 .um-filter-btn:hover {
@@ -204,7 +204,7 @@
 
 .um-row {
   border-bottom: 1px solid var(--color-border-soft);
-  transition: background 0.15s;
+  transition: background var(--duration-fast);
 }
 .um-row:last-child {
   border-bottom: none;
@@ -267,7 +267,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 .um-action-btn svg {
   width: 15px;
@@ -332,13 +332,13 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: um-fade-in 0.2s ease-out;
+  animation: revela-fade-in var(--duration-normal) var(--ease-out);
+}
+.um-backdrop.closing {
+  animation: revela-fade-out var(--duration-normal) var(--ease-out) forwards;
 }
 
-@keyframes um-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
+/* um-fade-in keyframe — now unified as revela-fade-in in global.css */
 
 .um-modal {
   background: var(--color-modal-bg);
@@ -347,13 +347,13 @@
   width: min(100%, 460px);
   position: relative;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
-  animation: um-slide-up 0.25s ease-out;
+  animation: revela-slide-up var(--duration-slow) var(--ease-out);
+}
+.um-modal.closing {
+  animation: revela-slide-down-out var(--duration-slow) var(--ease-out) forwards;
 }
 
-@keyframes um-slide-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+/* um-slide-up keyframe — now unified as revela-slide-up in global.css */
 
 .um-modal-close {
   position: absolute;
@@ -370,7 +370,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
 }
 .um-modal-close:hover {
   background: var(--color-hover);
@@ -449,7 +449,7 @@
   font-family: var(--font-base);
   box-sizing: border-box;
   color: var(--color-ink);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
 }
 .um-input:focus {
   outline: none;
@@ -495,7 +495,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  animation: um-fade-in 0.2s ease-out;
+  animation: revela-fade-in var(--duration-normal) var(--ease-out);
 }
 .um-alert--error {
   background: #fff5f5;
@@ -514,7 +514,7 @@
   color: inherit;
   font-size: 14px;
   opacity: 0.6;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-fast);
 }
 .um-alert-dismiss:hover {
   opacity: 1;
@@ -574,7 +574,7 @@
   font-weight: 600;
   color: var(--color-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--duration-fast);
   font-family: var(--font-base);
 }
 .um-copy-btn:hover {

@@ -18,6 +18,7 @@ import {
   inspectionEvidenceUrls,
 } from "../services/api";
 import Swal from "sweetalert2";
+import AnimatePresence from "../components/AnimatePresence";
 
 const formatResult = (val) => {
   if (!val) return val;
@@ -105,12 +106,12 @@ const Icon = {
 const STATUS_COLS = ["Assigned", "Reassigned", "Submitted", "Verified"];
 
 const FLAG_COLOR = {
-  Red:    { bg: "var(--color-danger-light)",  text: "var(--color-danger)" },
-  Yellow: { bg: "var(--color-gold-light)",    text: "var(--color-gold-dark)" },
-  Green:  { bg: "var(--color-primary-light)", text: "var(--color-primary)" },
-  Black:  { bg: "#1e1e1e22",                  text: "#1a1a1a" },
-  Orange: { bg: "rgba(249, 115, 22, 0.1)",    text: "#ea580c" },
-  "Given First Notice": { bg: "#ffedd5",       text: "#c2410c" },
+  Red:    { bg: "var(--flag-red-bg)",    text: "var(--flag-red-text)" },
+  Yellow: { bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)" },
+  Green:  { bg: "var(--flag-green-bg)",  text: "var(--flag-green-text)" },
+  Black:  { bg: "var(--flag-black-bg)",  text: "var(--flag-black-text)" },
+  Orange: { bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)" },
+  "Given First Notice": { bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)" },
 };
 
 const getFriendlyFlagLabel = (color) => {
@@ -118,7 +119,7 @@ const getFriendlyFlagLabel = (color) => {
     Green:  "Registered",
     Yellow: "Suspected",
     Red:    "Unregistered",
-    Orange: "1st/2nd Warning / 3rd Notice Closure",
+    Orange: "Warning / Notice",
     Black:  "Closed / Nonconforming",
   }[color] || color;
 };
@@ -131,7 +132,7 @@ const STATUS_COLOR = {
 };
 
 // ── Assign Modal ───────────────────────────────────────────────────────────────
-function AssignModal({ report, token, onClose, onSuccess }) {
+function AssignModal({ report, token, onClose, onSuccess, isClosing }) {
   const isRedo = report.verificationStatus === "Submitted";
   const [inspectors, setInspectors] = useState([]);
   const [selectedUID, setSelectedUID] = useState(
@@ -201,8 +202,8 @@ function AssignModal({ report, token, onClose, onSuccess }) {
   };
 
   return createPortal(
-    <div className="modal-backdrop" style={s.backdrop} onClick={!loading ? onClose : undefined}>
-      <div className="modal-panel" style={s.modal} onClick={e => e.stopPropagation()}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={s.backdrop} onClick={!loading ? onClose : undefined}>
+      <div className={"modal-panel" + (isClosing ? " closing" : "")} style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>
             {isRedo ? "Send Back for Redo" : "Assign Inspector"}
@@ -221,7 +222,7 @@ function AssignModal({ report, token, onClose, onSuccess }) {
               {report.detectedName}
             </p>
             <p style={{ fontSize: 12, color: "var(--color-muted)" }}>
-              {report.barangayName} · Report #{report.reportID}
+              {report.barangayName}
             </p>
           </div>
         </div>
@@ -281,7 +282,7 @@ function AssignModal({ report, token, onClose, onSuccess }) {
 }
 
 // ── Verify Modal ───────────────────────────────────────────────────────────────
-function VerifyModal({ report, token, onClose, onSuccess }) {
+function VerifyModal({ report, token, onClose, onSuccess, isClosing }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
@@ -300,8 +301,8 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
   };
 
   return (
-    <div className="modal-backdrop" style={s.backdrop} onClick={!loading ? onClose : undefined}>
-      <div className="modal-panel" style={s.modal} onClick={e => e.stopPropagation()}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={s.backdrop} onClick={!loading ? onClose : undefined}>
+      <div className={"modal-panel" + (isClosing ? " closing" : "")} style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>Verify Inspection</h3>
           {!loading && <button className="modal-close-btn" onClick={onClose}><Icon.X /></button>}
@@ -318,7 +319,7 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
               {report.detectedName}
             </p>
             <p style={{ fontSize: 12, color: "var(--color-muted)" }}>
-              Inspector: {report.inspectorName} · Report #{report.reportID}
+              Inspector: {report.inspectorName}
             </p>
           </div>
         </div>
@@ -390,13 +391,15 @@ function VerifyModal({ report, token, onClose, onSuccess }) {
 }
 
 // ── Detail Modal ───────────────────────────────────────────────────────────────
-function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose }) {
+function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose, isClosing }) {
+  const [enlargedImage, setEnlargedImage] = useState(null);
+  
   const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
   const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
 
   return createPortal(
-    <div style={s.backdrop} onClick={onClose}>
-      <div style={{ ...s.modal, width: 520 }} onClick={e => e.stopPropagation()}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={s.backdrop} onClick={onClose}>
+      <div className={"modal-panel" + (isClosing ? " closing" : "")} style={{ ...s.modal, width: 520 }} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>Inspection Details</h3>
           <button style={s.closeBtn} onClick={onClose}><Icon.X /></button>
@@ -405,58 +408,79 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose })
         <div style={{ marginBottom: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>{report.detectedName}</h2>
-            <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>#{report.reportID ?? report.logID}</span>
           </div>
           <p style={{ fontSize: 13, color: "var(--color-muted)", display: "flex", alignItems: "center", gap: 5, margin: 0 }}>
             <Icon.MapPin /> {report.barangayName ?? "Unknown barangay"}
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
-          <span style={{ ...s.flagPill, background: flagMeta.bg, color: flagMeta.text, fontSize: 12, padding: "4px 10px" }}>
-            <Icon.Flag /> Flag: {report.flagColor}
-          </span>
-          <span style={{ ...s.statusPill, background: statusMeta.bg, color: statusMeta.text, fontSize: 12, padding: "4px 10px" }}>
-            Status: {report.verificationStatus}
-          </span>
-          {report.inspectionResult && (
-            <span style={{ ...s.statusPill, background: "var(--color-ink)", color: "var(--color-modal-bg)", fontSize: 12, padding: "4px 10px" }}>
-              Result: {formatResult(report.inspectionResult)}
-            </span>
-          )}
-          {report.noticeLevel > 0 && (
-            <span style={{ ...s.statusPill, background: report.noticeLevel === 4 ? "var(--color-ink)" : "#ea580c", color: report.noticeLevel === 4 ? "var(--color-modal-bg)" : "#fff", fontSize: 12, padding: "4px 10px" }}>
-              {report.noticeLevel === 1 ? "1st Notice Issued" : report.noticeLevel === 2 ? "2nd Notice Issued" : report.noticeLevel === 3 ? "3rd Notice Issued" : "Escalated to Black"}
-            </span>
+        <div style={{ border: "1px solid var(--color-border)", borderRadius: 12, marginBottom: 24, overflow: "hidden" }}>
+          <div style={{ display: "flex" }}>
+            <div style={{ flex: 1, padding: "12px 16px", borderRight: "1px solid var(--color-border)", borderBottom: report.inspectionResult || report.noticeLevel > 0 ? "1px solid var(--color-border)" : "none" }}>
+              <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Flag Color</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, color: flagMeta.text }}>
+                <Icon.Flag size={14} /> {report.flagColor}
+              </span>
+            </div>
+            <div style={{ flex: 1, padding: "12px 16px", borderBottom: report.inspectionResult || report.noticeLevel > 0 ? "1px solid var(--color-border)" : "none" }}>
+              <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Status</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, color: statusMeta.text }}>
+                {report.verificationStatus}
+              </span>
+            </div>
+          </div>
+          {(report.inspectionResult || report.noticeLevel > 0) && (
+            <div style={{ display: "flex" }}>
+              {report.inspectionResult && (
+                <div style={{ flex: 1, padding: "12px 16px", borderRight: report.noticeLevel > 0 ? "1px solid var(--color-border)" : "none" }}>
+                  <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Result</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, color: "var(--color-ink)" }}>
+                    {formatResult(report.inspectionResult)}
+                  </span>
+                </div>
+              )}
+              {report.noticeLevel > 0 && (
+                <div style={{ flex: 1, padding: "12px 16px" }}>
+                  <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Notice Level</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 800, color: "#ea580c" }}>
+                    {report.noticeLevel === 1 ? "1st Notice" : report.noticeLevel === 2 ? "2nd Notice" : report.noticeLevel === 3 ? "3rd Notice" : "Escalated"}
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        <div style={{ background: "var(--color-hover)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", padding: "16px", marginBottom: 20 }}>
-          <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12, marginTop: 0 }}>Assignment Info</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-            <div>
-              <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Inspector</span>
-              <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600 }}>{report.inspectorName ?? "Unassigned"}</span>
+        <div style={{ marginBottom: 24 }}>
+          <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--color-ink)", marginBottom: 12, marginTop: 0 }}>Assignment Info</h4>
+          <div style={{ border: "1px solid var(--color-border)", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ padding: "12px 16px", borderBottom: (report.resolutionTime != null || report.deadline) ? "1px solid var(--color-border)" : "none" }}>
+              <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Inspector</span>
+              <span style={{ fontSize: 14, color: "var(--color-ink)", fontWeight: 600 }}>{report.inspectorName ?? "Unassigned"}</span>
             </div>
-            {report.resolutionTime != null && (
-              <div>
-                <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Resolution Time</span>
-                <span style={{ fontSize: 13, color: "var(--color-ink)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock /> {report.resolutionTime} min</span>
-              </div>
-            )}
-            {report.deadline && (
-              <div>
-                <span style={{ display: "block", fontSize: 11, color: "var(--color-muted)", marginBottom: 4 }}>Deadline</span>
-                <span style={{ fontSize: 13, color: "var(--color-danger)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock /> {new Date(report.deadline).toLocaleString()}</span>
+            {(report.resolutionTime != null || report.deadline) && (
+              <div style={{ display: "flex" }}>
+                {report.resolutionTime != null && (
+                  <div style={{ flex: 1, padding: "12px 16px", borderRight: report.deadline ? "1px solid var(--color-border)" : "none" }}>
+                    <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Resolution Time</span>
+                    <span style={{ fontSize: 14, color: "var(--color-ink)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock size={14} /> {report.resolutionTime} min</span>
+                  </div>
+                )}
+                {report.deadline && (
+                  <div style={{ flex: 1, padding: "12px 16px" }}>
+                    <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Deadline</span>
+                    <span style={{ fontSize: 14, color: "var(--color-danger)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}><Icon.Clock size={14} /> {new Date(report.deadline).toLocaleString()}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
 
         {report.remarks && (
-          <div style={{ marginBottom: 20 }}>
-            <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, marginTop: 0 }}>Inspector Remarks</h4>
-            <p style={{ fontSize: 14, color: "var(--color-ink)", lineHeight: 1.6, background: "var(--color-input-bg)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--color-border-soft)", margin: 0 }}>
+          <div style={{ marginBottom: 24 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 800, color: "var(--color-ink)", marginBottom: 12, marginTop: 0 }}>Inspector Remarks</h4>
+            <p style={{ fontSize: 14, color: "var(--color-ink)", lineHeight: 1.6, padding: "12px 16px", borderRadius: 12, border: "1px solid var(--color-border)", margin: 0 }}>
               {report.remarks}
             </p>
           </div>
@@ -473,12 +497,14 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose })
                   key={i}
                   src={url}
                   alt={`Evidence ${i + 1}`}
+                  onClick={() => setEnlargedImage(url)}
                   style={{
                     width: "100%",
                     height: 120,
                     objectFit: "cover",
                     borderRadius: 8,
                     border: "1px solid var(--color-border)",
+                    cursor: "zoom-in"
                   }}
                 />
               ))}
@@ -487,10 +513,10 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose })
         )}
 
         {isAdmin && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
             {(report.verificationStatus === "Assigned" ||
               report.verificationStatus === "Reassigned") && (
-              <button className="ghost-btn" style={{ fontSize: 13, padding: "10px 16px", flex: 1, border: "1px solid var(--color-border)" }}
+              <button className="ghost-btn" style={{ fontSize: 14, fontWeight: 600, padding: "12px 16px", flex: 1, border: "1px solid var(--color-border-soft)", background: "transparent", color: "var(--color-ink)" }}
                 onClick={(e) => { e.stopPropagation(); onAssign(report); }}>
                 Reassign
               </button>
@@ -499,35 +525,48 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose })
               <>
                 <button
                   className="ghost-btn"
-                  style={{ fontSize: 13, padding: "10px 16px", flex: 1, border: "1px solid var(--color-border)" }}
+                  style={{ fontSize: 14, fontWeight: 600, padding: "12px 16px", flex: 1, border: "1px solid var(--color-border-soft)", background: "transparent", color: "var(--color-ink)" }}
                   onClick={(e) => { e.stopPropagation(); onAssign(report); }}
                 >
                   Send back
                 </button>
                 <button
                   className="primary-btn"
-                  style={{ fontSize: 13, padding: "10px 16px", flex: 1 }}
+                  style={{ fontSize: 14, fontWeight: 600, padding: "12px 16px", flex: 1 }}
                   onClick={(e) => { e.stopPropagation(); onVerify(report); }}
                 >
-                  <Icon.Check /> Verify
+                  <Icon.Check size={18} /> Verify
                 </button>
               </>
             )}
             {report.verificationStatus === "Verified" && report.noticeLevel > 0 && report.noticeLevel < 4 && (
               <button
                 className="primary-btn"
-                style={{ fontSize: 13, padding: "10px 16px", flex: 1, background: "#e65100", borderColor: "#e65100" }}
+                style={{ fontSize: 14, fontWeight: 600, padding: "12px 16px", flex: 1, background: "#e65100", borderColor: "#e65100" }}
                 onClick={(e) => { e.stopPropagation(); onAssign(report); }}
               >
-                <Icon.Send /> Follow-up
+                <Icon.Send size={18} /> Follow-up
               </button>
             )}
           </div>
         )}
 
-        <div style={{ ...s.modalFooter, marginTop: 10, paddingTop: 10 }}>
-          <button className="ghost-btn" style={{ width: "100%" }} onClick={onClose}>Close</button>
-        </div>
+        {enlargedImage && (
+          <div 
+            style={{ position: "fixed", inset: 0, zIndex: 100000, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}
+            onClick={(e) => { e.stopPropagation(); setEnlargedImage(null); }}
+          >
+            <img src={enlargedImage} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 12, boxShadow: "0 25px 50px rgba(0,0,0,0.5)" }} onClick={e => e.stopPropagation()} />
+            <button 
+              style={{ position: "absolute", top: 24, right: 24, background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", width: 48, height: 48, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+              onMouseOver={e => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
+              onMouseOut={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              onClick={(e) => { e.stopPropagation(); setEnlargedImage(null); }}
+            >
+              <Icon.X size={24} />
+            </button>
+          </div>
+        )}
       </div>
     </div>,
     document.body
@@ -535,7 +574,7 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose })
 }
 
 // ── Column Focus Modal (Grid View) ─────────────────────────────────────────────
-function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onViewDetail, onClose }) {
+function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onViewDetail, onClose, isClosing }) {
   const [search, setSearch] = useState("");
   const [filterFlag, setFilterFlag] = useState("");
 
@@ -586,6 +625,9 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
           
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {["all", ...Object.keys(FLAG_COLOR)].map(c => {
+              const count = c === "all" ? reports.length : reports.filter(r => r.flagColor === c).length;
+              if (count === 0 && c !== "all") return null;
+              
               const isActive = filterFlag === c || (filterFlag === "" && c === "all");
               const pillBg = isActive ? (c === "all" ? "var(--color-ink)" : (FLAG_COLOR[c]?.text ?? "var(--color-ink)")) : "var(--color-hover)";
               const pillText = isActive ? (c === "all" ? "var(--color-surface)" : "#fff") : "var(--color-muted)";
@@ -607,7 +649,7 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
                     borderColor: pillBorder,
                   }}
                 >
-                  {c === "all" ? "All" : (getFriendlyFlagLabel(c) ?? c)}
+                  {c === "all" ? "All" : (getFriendlyFlagLabel(c) ?? c)} ({count})
                 </button>
               );
             })}
@@ -621,6 +663,7 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
               return (
                 <div 
                   key={f.reportID ?? `log-${f.logID}`}
+                  className="hover-lift"
                   onClick={() => onViewDetail(f)}
                   style={{ 
                     background: "var(--color-surface)", 
@@ -632,11 +675,8 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
                     justifyContent: "space-between",
                     cursor: "pointer",
                     boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
-                    transition: "transform 0.15s, box-shadow 0.15s",
                     minHeight: 120
                   }}
-                  onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.06)'; }}
-                  onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)'; }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -653,7 +693,6 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
                         </>
                       )}
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-muted)" }}>#{f.reportID || f.logID}</span>
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -664,10 +703,6 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
                         {f.barangayName ? f.barangayName.replace(/Barangay\s+/i, "Brgy. ") : "—"}
                       </p>
                     </div>
-                    
-                    <button style={{ width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--color-border-soft)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-ink)", flexShrink: 0 }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-                    </button>
                   </div>
                 </div>
               );
@@ -715,9 +750,6 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail, isC
             </>
           )}
         </div>
-        <span style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>
-          #{report.reportID ?? report.logID}
-        </span>
       </div>
 
       {/* Business name, Address & View Button Row */}
@@ -903,12 +935,7 @@ export default function InspectionPage() {
     : reports;
 
   const byStatus = (status) => {
-    let list = filteredReports.filter((r) => r.verificationStatus === status);
-    if (status === "Verified") {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      list = list.filter(r => new Date(r.irTimestamp) >= sevenDaysAgo);
-    }
-    return list;
+    return filteredReports.filter((r) => r.verificationStatus === status);
   };
 
   // Admin sees all 4 columns; inspectors only see Assigned + Reassigned
@@ -1006,27 +1033,27 @@ export default function InspectionPage() {
       </footer>
 
       {/* Assign Modal */}
-      {assignTarget && (
+      <AnimatePresence isVisible={!!assignTarget}>
         <AssignModal
           report={assignTarget}
           token={token}
           onClose={() => setAssignTarget(null)}
           onSuccess={fetchReports}
         />
-      )}
+      </AnimatePresence>
 
       {/* Verify Modal */}
-      {verifyTarget && (
+      <AnimatePresence isVisible={!!verifyTarget}>
         <VerifyModal
           report={verifyTarget}
           token={token}
           onClose={() => setVerifyTarget(null)}
           onSuccess={fetchReports}
         />
-      )}
+      </AnimatePresence>
 
       {/* Detail Modal */}
-      {detailTarget && (
+      <AnimatePresence isVisible={!!detailTarget}>
         <InspectionDetailModal
           report={detailTarget}
           isAdmin={isAdmin}
@@ -1034,10 +1061,10 @@ export default function InspectionPage() {
           onVerify={(r) => { setDetailTarget(null); setVerifyTarget(r); }}
           onClose={() => setDetailTarget(null)}
         />
-      )}
+      </AnimatePresence>
 
       {/* Grid View Modal */}
-      {focusColumn && (
+      <AnimatePresence isVisible={!!focusColumn}>
         <ColumnFocusModal
           status={focusColumn}
           reports={byStatus(focusColumn)}
@@ -1047,7 +1074,7 @@ export default function InspectionPage() {
           onViewDetail={r => setDetailTarget(r)}
           onClose={() => setFocusColumn(null)}
         />
-      )}
+      </AnimatePresence>
 
     </DashboardLayout>
   );
@@ -1171,7 +1198,7 @@ const s = {
   backdrop: {
     position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)",
     backdropFilter: "blur(4px)", display: "flex",
-    alignItems: "center", justifyContent: "center", zIndex: 100,
+    alignItems: "center", justifyContent: "center", zIndex: 10000,
   },
   modal: {
     background: "var(--color-modal-bg)", borderRadius: "var(--radius-xl)",

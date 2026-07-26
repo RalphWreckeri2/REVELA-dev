@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid,
-  PolarAngleAxis, PolarRadiusAxis,
+  PolarAngleAxis, PolarRadiusAxis, LabelList, AreaChart, Area
 } from "recharts";
 import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
@@ -15,25 +15,26 @@ import {
   getBarangaysRequest,
 } from "../services/api";
 
-// ── Palette — matches REVELA's green/red/amber brand ─────────────────────────
+// ── Palette — matches REVELA's premium styling ────────────────────────────────
 const COLOR = {
-  green:  "#56ab2f",
-  red:    "#ef4444",
-  yellow: "#f59e0b",
-  black:  "var(--color-ink)",
+  green:  "#10b981", // elegant emerald
+  red:    "#f43f5e", // elegant rose
+  yellow: "#fbbf24", // elegant amber
+  black:  "#64748b", // slate gray for "closed/nonconforming" instead of blinding white
   blue:   "#3b82f6",
   muted:  "var(--color-muted)",
-  orange: "#ea580c",
-  greenLight: "rgba(86,171,47,0.15)",
-  redLight:   "rgba(239,68,68,0.15)",
-  yellowLight:"rgba(245,158,11,0.15)",
+  orange: "#f97316",
+  slate:  "#64748b",
+  greenLight: "rgba(16, 185, 129, 0.15)",
+  redLight:   "rgba(244, 63, 94, 0.15)",
+  yellowLight:"rgba(251, 191, 36, 0.15)",
 };
 
 const FLAG_COLORS = {
   Green:  COLOR.green,
   Red:    COLOR.red,
   Yellow: COLOR.yellow,
-  Black:  COLOR.black,
+  Black:  COLOR.slate,
   Orange: COLOR.orange,
 };
 
@@ -266,21 +267,178 @@ function countActiveBackendFilters(applied) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+const maxHeightForCategory = (len) => Math.max(300, len * 40);
+
+// --- Insight Generator Logic (Auto-Analyze) ---
+const InsightGenerator = {
+  flagsByColor: (data) => {
+    if (!data || data.length === 0) return "No flag data is currently available for the selected filters.";
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    if (total === 0) return "There are zero recorded entities matching this criteria.";
+    
+    const cleared = data.find(d => d.name.includes("Cleared"))?.value || 0;
+    const unregistered = data.find(d => d.name.includes("Unregistered"))?.value || 0;
+    
+    const clearedPct = Math.round((cleared / total) * 100);
+    const unregPct = Math.round((unregistered / total) * 100);
+    
+    if (unregPct > 30) {
+      return `It looks like a significant chunk (${unregPct}%) of entities here are suspected to be unregistered. This is a major red flag—you should prioritize dispatching inspection teams to verify these businesses immediately.`;
+    } else if (clearedPct > 80) {
+      return `Great news! A massive ${clearedPct}% of the businesses here are fully cleared and active. Compliance in this segment is very healthy.`;
+    } else {
+      return `Currently, ${clearedPct}% of businesses are cleared, while ${unregPct}% are suspected unregistered. The rest are in intermediate warning states. Keep a close eye on the warning flags before they turn into full violations.`;
+    }
+  },
+  
+  timeline: (data) => {
+    if (!data || data.length < 2) return "Not enough historical data to spot a trend yet.";
+    const first = data[0];
+    const last = data[data.length - 1];
+    
+    const activeDiff = last.active - first.active;
+    if (activeDiff > 0) {
+      return `Over this period, active business renewals have trended upwards, gaining ${activeDiff} new compliant entities. This means our enforcement and outreach are working!`;
+    } else if (activeDiff < 0) {
+      return `Warning: We've seen a drop of ${Math.abs(activeDiff)} active businesses over this timeframe. We might be looking at businesses shutting down or failing to renew. Consider a targeted renewal campaign.`;
+    } else {
+      return `Active business counts have remained completely flat over this period.`;
+    }
+  },
+  
+  leaderboard: (data) => {
+    if (!data || data.length === 0) return "No barangay data available.";
+    const worst = [...data].sort((a, b) => {
+      if (a.rate !== b.rate) return a.rate - b.rate;
+      return b.totalFlags - a.totalFlags;
+    })[0];
+    const best = [...data].sort((a, b) => {
+      if (a.rate !== b.rate) return b.rate - a.rate;
+      return a.totalFlags - b.totalFlags;
+    })[0];
+    
+    if (worst.rate < 70) {
+      return `Right now, ${worst.barangayName} is struggling the most, sitting at a low ${worst.rate}% compliance rate with ${worst.totalFlags} active flags. I highly recommend focusing your next enforcement sweep there.`;
+    }
+    return `${best.barangayName} is leading the pack with an impressive ${best.rate}% compliance rate, while ${worst.barangayName} is trailing at ${worst.rate}%. Overall, the distribution looks relatively stable.`;
+  },
+  
+  funnel: (data) => {
+    if (!data || data.length < 2) return "Not enough funnel data.";
+    const total = data.find(d => d.step === "Total Detected")?.value || 0;
+    const cleared = data.find(d => d.step === "Cleared")?.value || 0;
+    const conversion = total > 0 ? Math.round((cleared / total) * 100) : 0;
+    
+    if (conversion < 10) {
+      return `We're seeing a very low end-to-end clearance rate of just ${conversion}%. This means the vast majority of detected entities are getting stuck somewhere in the audit or registration process. We need to streamline the inspection pipeline.`;
+    }
+    return `About ${conversion}% of all detected entities successfully make it through to full clearance.`;
+  },
+  
+  sectoral: (data) => {
+    if (!data || data.length === 0) return "No sector data available.";
+    const top = data[0];
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    const pct = Math.round((top.value / total) * 100);
+    
+    if (pct > 40) {
+      return `The "${top.name}" sector is absolutely dominating this segment, making up ${pct}% of all records. Any policy changes here will have a massive ripple effect on the entire ecosystem.`;
+    }
+    return `The largest sector here is "${top.name}", but the distribution is fairly spread out across multiple industries, meaning risk isn't concentrated in just one area.`;
+  },
+  
+  businessSize: (data) => {
+    if (!data || data.length === 0) return "No size data available.";
+    const micro = data.find(d => d.name === "Micro")?.value || 0;
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    const microPct = Math.round((micro / total) * 100);
+    
+    if (microPct > 75) {
+      return `As expected, Micro-sized businesses make up the overwhelming majority (${microPct}%). When designing compliance programs for this group, ensure the fees and paperwork aren't too burdensome for tiny operations.`;
+    }
+    return `While Micro businesses are present, there is a healthy mix of Small and Medium enterprises here, which generally indicates a maturing local economy.`;
+  }
+};
+
+const ChartInsightPanel = ({ chartId, insightText, expandedInsights, toggleInsight }) => {
+  const isExpanded = !!expandedInsights[chartId];
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <button 
+        onClick={() => toggleInsight(chartId)}
+        type="button"
+        style={{ 
+          display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, 
+          color: isExpanded ? "var(--color-primary-dark)" : "var(--color-muted)", 
+          background: isExpanded ? "color-mix(in srgb, var(--color-primary) 15%, transparent)" : "transparent",
+          padding: "6px 12px", borderRadius: 20, border: "1px solid", 
+          borderColor: isExpanded ? "var(--color-primary)" : "var(--color-border)",
+          cursor: "pointer", transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => { if(!isExpanded) e.currentTarget.style.borderColor = "var(--color-primary)"; }}
+        onMouseLeave={(e) => { if(!isExpanded) e.currentTarget.style.borderColor = "var(--color-border)"; }}
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+        {isExpanded ? "Hide Insight" : "✨ Auto-Analyze"}
+      </button>
+      {isExpanded && (
+        <div style={{ 
+          marginTop: 12, padding: "14px 18px", borderRadius: 10, 
+          background: "color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))", 
+          border: "1px solid color-mix(in srgb, var(--color-primary) 25%, transparent)",
+          color: "var(--color-ink)", fontSize: 14, lineHeight: 1.6, fontWeight: 500,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.03)"
+        }}>
+          {insightText}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 export default function AnalyticsPage() {
   const { token } = useAuth();
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
-  const [activeTab, setActiveTab] = useState("all"); // all | descriptive | diagnostic | prescriptive
+  const [activeTab, setActiveTab] = useState("overview"); // overview, descriptive, diagnostic, prescriptive
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  const tabMarkerRef = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsScrolled(!entry.isIntersecting && entry.boundingClientRect.top <= 100);
+      },
+      { threshold: 0, rootMargin: "-100px 0px 0px 0px" }
+    );
+    if (tabMarkerRef.current) {
+      observer.observe(tabMarkerRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
   const [wlcConfig, setWlcConfig] = useState({ w1_risk: 40, w2_sector: 25, w3_distance: 15 });
   const [showWlcConfig, setShowWlcConfig] = useState(false);
   const [savingWlc, setSavingWlc] = useState(false);
   const [draftFilters, setDraftFilters] = useState(createEmptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(createEmptyFilters);
   const [showFilters, setShowFilters] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [openSections, setOpenSections] = useState({ location: false, business: false, flags: false, inspection: false });
+  const [brgySearchTerm, setBrgySearchTerm] = useState("");
+  const [brgyDropdownOpen, setBrgyDropdownOpen] = useState(false);
+  const brgyDropdownRef = useRef(null);
+  const [showDetailCharts, setShowDetailCharts] = useState(false);
   const [filterMeta, setFilterMeta] = useState(null);
   const [barangaysList, setBarangaysList] = useState([]);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [expandedInsights, setExpandedInsights] = useState({});
+  
+  const toggleInsight = (chartId) => {
+    setExpandedInsights(prev => ({ ...prev, [chartId]: !prev[chartId] }));
+  };
 
   const fetchAnalytics = useCallback(async () => {
     if (!token) return;
@@ -381,19 +539,47 @@ export default function AnalyticsPage() {
     { name: "Closed / Nonconforming", value: totalBlack,  fill: FLAG_COLORS.Black  || COLOR.slate },
   ].filter(item => item.value > 0 || item.name === "1st/2nd Warning / Closure");
 
+  // ── Nature per barangay ───────────────────────────────────────────────────
+  const naturePerBarangayData = desc?.nature_per_barangay || [];
+  const natureKeys = useMemo(() => {
+    const keys = new Set();
+    naturePerBarangayData.forEach(row => {
+      Object.keys(row).forEach(k => {
+        if (k !== 'barangayName') keys.add(k);
+      });
+    });
+    return Array.from(keys);
+  }, [naturePerBarangayData]);
+
+  // ── Palette for Nature Chart ─────────────────────────────────────────────
+  const NATURE_COLORS = [
+    "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+    "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#06b6d4",
+    "#84cc16", "#a855f7", "#fb923c", "#34d399", "#818cf8"
+  ];
+
+  const maxNatureCount = useMemo(() => {
+    let max = 0;
+    naturePerBarangayData.forEach(row => {
+      natureKeys.forEach(k => {
+        if (row[k] > max) max = row[k];
+      });
+    });
+    return max;
+  }, [naturePerBarangayData, natureKeys]);
+
   // ── Sectoral distribution pie ─────────────────────────────────────────────
   const SECTOR_COLORS = [
-    COLOR.green, COLOR.blue, COLOR.yellow, "#8b5cf6", "#06b6d4",
-    "#f97316", "#ec4899", "#10b981", "#6366f1", "#84cc16",
+    "#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1",
+    "#e2e8f0", "#1e293b", "#0f172a", "#f1f5f9", "#94a3b8",
   ];
   const sectoralData = (desc?.sectoral_distribution || []).map((r, i) => ({
     name:  r.sector,
     value: r.count,
-    fill:  SECTOR_COLORS[i % SECTOR_COLORS.length],
   }));
 
   // ── Business size pie ─────────────────────────────────────────────────────
-  const SIZE_COLORS = [COLOR.green, "#3b82f6", COLOR.yellow, "#8b5cf6", COLOR.muted];
+  const SIZE_COLORS = ["#334155", "#64748b", "#94a3b8", "#cbd5e1", "var(--color-muted)"];
   const sizeData = (desc?.business_size_dist || []).map((r, i) => ({
     name:  r.size_label,
     value: r.count,
@@ -424,13 +610,16 @@ export default function AnalyticsPage() {
       Black:  r.black_count  || 0,
       Orange: r.orange_count || 0,
       total:  r.flagged_count || 0,
-    }));
+    }))
+    .slice(0, 10);
 
   // ── Diagnostic: category non-compliance horizontal bar ───────────────────
-  const categoryData = (diag?.category_noncompliance || []).map(r => ({
-    name:  r.category.length > 28 ? r.category.slice(0, 28) + "…" : r.category,
-    count: r.flagged_count,
-  }));
+  const categoryData = (diag?.category_noncompliance || [])
+    .filter(r => !r.category.toLowerCase().includes("unclassified"))
+    .map(r => ({
+      name:  r.category,
+      count: r.flagged_count,
+    }));
 
   // ── Diagnostic: weekly flag trend line ───────────────────────────────────
   const trendData = (diag?.flag_trend || []).map(r => ({
@@ -452,8 +641,8 @@ export default function AnalyticsPage() {
   const kpiActive       = kpis?.active_count || 0;
 
   const auditBreakdown = desc?.audit_summary?.result_breakdown || [];
-  const inspectedCount = auditBreakdown.reduce((sum, r) => sum + r.count, 0) || Math.floor(kpiActive * 0.4); 
-  const clearedCount   = auditBreakdown.find(r => r.inspectionResult === 'Green' || r.inspectionResult === 'Compliant')?.count || Math.floor(inspectedCount * 0.8);
+  const inspectedCount = auditBreakdown.reduce((sum, r) => sum + r.count, 0); 
+  const clearedCount   = auditBreakdown.find(r => r.inspectionResult === 'Green' || r.inspectionResult === 'Compliant')?.count || 0;
 
   const funnelData = [
     { step: "Total Detected", value: kpiTotalBiz + kpiTotalFlagged, color: "var(--color-ink)" },
@@ -484,6 +673,7 @@ export default function AnalyticsPage() {
         activeCount: g,
         totalFlags: total,
         rate,
+        g, y, o, r, b
       };
     });
   }, [desc?.enforcement_progress]);
@@ -516,6 +706,51 @@ export default function AnalyticsPage() {
     setAppliedFilters(empty);
   };
 
+  // ── Accordion toggle helper ─────────────────────────────────────────────
+  const toggleSection = (key) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // ── Outside-click handler for barangay dropdown ─────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      if (brgyDropdownRef.current && !brgyDropdownRef.current.contains(e.target)) {
+        setBrgyDropdownOpen(false);
+      }
+    };
+    if (brgyDropdownOpen) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [brgyDropdownOpen]);
+
+  // ── Active filter chips from applied state ──────────────────────────────
+  const activeChips = useMemo(() => {
+    const chips = [];
+    const af = appliedFilters;
+    if (af.barangay_ids?.length) {
+      af.barangay_ids.forEach((id) => {
+        const b = barangaysList.find((x) => x.barangayID === id);
+        if (b) chips.push({ key: `brgy-${id}`, label: b.barangayName, clear: () => setAppliedFilters((p) => ({ ...p, barangay_ids: p.barangay_ids.filter((x) => x !== id) })) });
+      });
+    }
+    const labelMap = {
+      application_status: "Registry",
+      flag_color: "Flag",
+      line_of_business: "Sector",
+      business_type: "Type",
+      business_size: "Size",
+      renewal_from: "Renewal ≥",
+      renewal_to: "Renewal ≤",
+      detected_from: "Detected ≥",
+      detected_to: "Detected ≤",
+      inspection_result: "Result",
+      verification_status: "Verification",
+      inspection_from: "Inspected ≥",
+      inspection_to: "Inspected ≤",
+    };
+    Object.entries(labelMap).forEach(([k, lbl]) => {
+      if (af[k]) chips.push({ key: k, label: `${lbl}: ${af[k]}`, clear: () => setAppliedFilters((p) => ({ ...p, [k]: "" })) });
+    });
+    return chips;
+  }, [appliedFilters, barangaysList]);
+
   const formatResultName = (val) => {
     switch (val) {
       case 'Green': return 'Registered';
@@ -541,12 +776,35 @@ export default function AnalyticsPage() {
   return (
     <DashboardLayout>
       <style>{`
-        @keyframes shimmer {
-          0%   { background-position: -200% 0; }
-          100% { background-position:  200% 0; }
-        }
+        /* shimmer keyframe now defined globally in global.css */
         .saas-card { position: relative; }
         .saas-card:focus-within, .saas-card:hover { z-index: 50; }
+        
+        /* New Tier System */
+        .tier-1-card {
+          border: 2px solid var(--color-danger);
+          background: var(--color-danger-light);
+          box-shadow: 0 4px 20px rgba(244, 63, 94, 0.15);
+        }
+        .tier-2-card {
+          /* Standard current style */
+        }
+        .tier-3-card {
+          background: rgba(0, 0, 0, 0.02);
+          border-color: transparent;
+          box-shadow: none;
+        }
+
+        .sticky-tabs {
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          background: var(--color-surface);
+          padding: 16px 0;
+          margin-bottom: 24px;
+          border-bottom: 1px solid var(--color-border);
+        }
+
         .analytics-tab-btn {
           padding: 8px 18px;
           border-radius: 8px;
@@ -556,7 +814,7 @@ export default function AnalyticsPage() {
           font-size: 13px;
           font-weight: 600;
           cursor: pointer;
-          transition: all 0.18s;
+          transition: all var(--duration-fast);
         }
         .analytics-tab-btn.active {
           background: var(--color-ink);
@@ -578,9 +836,270 @@ export default function AnalyticsPage() {
         .ops-score-fill {
           height: 100%;
           border-radius: 3px;
-          transition: width 0.6s ease;
+          transition: width 0.6s var(--ease-in-out);
+        }
+
+        /* ── Filter Panel Redesign ──────────────────────────── */
+        .filter-accordion-header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 16px;
+          border: 1px solid var(--color-border);
+          border-radius: 10px;
+          background: transparent;
+          cursor: pointer;
+          transition: all var(--duration-fast);
+          width: 100%;
+          text-align: left;
+          color: var(--color-ink);
+          font-family: var(--font-base);
+        }
+        .filter-accordion-header:hover {
+          background: var(--color-hover);
+          border-color: var(--color-border-soft);
+        }
+        .filter-accordion-header.open {
+          border-bottom-left-radius: 0;
+          border-bottom-right-radius: 0;
+          border-bottom-color: transparent;
+          background: var(--color-hover);
+        }
+        .filter-accordion-body {
+          border: 1px solid var(--color-border);
+          border-top: none;
+          border-radius: 0 0 10px 10px;
+          padding: 16px;
+          background: transparent;
+        }
+        .filter-accordion-chevron {
+          margin-left: auto;
+          transition: transform var(--duration-normal) var(--ease-out);
+          color: var(--color-muted);
+          flex-shrink: 0;
+        }
+        .filter-accordion-chevron.open {
+          transform: rotate(180deg);
+        }
+        .filter-accordion-icon {
+          width: 16px;
+          height: 16px;
+          flex-shrink: 0;
+          color: var(--color-muted);
+        }
+        .filter-accordion-title {
+          font-size: 12px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-ink);
+        }
+        .filter-accordion-count {
+          font-size: 10px;
+          font-weight: 700;
+          padding: 1px 7px;
+          border-radius: 10px;
+          background: rgba(59, 130, 246, 0.15);
+          color: #3b82f6;
+        }
+
+        /* ── Custom Multi-Select Dropdown ───────────────────── */
+        .brgy-multiselect {
+          position: relative;
+          width: 100%;
+        }
+        .brgy-multiselect-trigger {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 5px;
+          min-height: 40px;
+          padding: 6px 10px;
+          border-radius: var(--radius-sm, 8px);
+          border: 1px solid var(--color-border);
+          background: var(--color-input-bg);
+          cursor: pointer;
+          transition: border-color var(--duration-fast);
+        }
+        .brgy-multiselect-trigger:hover,
+        .brgy-multiselect-trigger.open {
+          border-color: #3b82f6;
+        }
+        .brgy-multiselect-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: 6px;
+          background: rgba(59, 130, 246, 0.15);
+          color: #3b82f6;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+        .brgy-multiselect-chip button {
+          background: none;
+          border: none;
+          color: #3b82f6;
+          cursor: pointer;
+          padding: 0;
+          font-size: 13px;
+          line-height: 1;
+          opacity: 0.7;
+          transition: opacity var(--duration-fast);
+        }
+        .brgy-multiselect-chip button:hover {
+          opacity: 1;
+        }
+        .brgy-multiselect-placeholder {
+          color: var(--color-muted);
+          font-size: 13px;
+        }
+        .brgy-multiselect-panel {
+          position: absolute;
+          top: calc(100% + 4px);
+          left: 0;
+          right: 0;
+          z-index: 200;
+          background: var(--color-modal-bg);
+          border: 1px solid var(--color-border);
+          border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+          overflow: hidden;
+        }
+        .brgy-multiselect-search {
+          width: 100%;
+          padding: 10px 12px;
+          border: none;
+          border-bottom: 1px solid var(--color-border);
+          background: transparent;
+          color: var(--color-ink);
+          font-size: 13px;
+          font-family: var(--font-base);
+          outline: none;
+        }
+        .brgy-multiselect-search::placeholder {
+          color: var(--color-subtle);
+        }
+        .brgy-multiselect-list {
+          max-height: 200px;
+          overflow-y: auto;
+          padding: 4px 0;
+        }
+        .brgy-multiselect-list::-webkit-scrollbar {
+          width: 5px;
+        }
+        .brgy-multiselect-list::-webkit-scrollbar-thumb {
+          background: var(--color-border);
+          border-radius: 3px;
+        }
+        .brgy-multiselect-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 12px;
+          cursor: pointer;
+          transition: background var(--duration-fast);
+          font-size: 13px;
+          color: var(--color-ink);
+        }
+        .brgy-multiselect-item:hover {
+          background: var(--color-hover);
+        }
+        .brgy-multiselect-item input[type="checkbox"] {
+          accent-color: #3b82f6;
+          width: 15px;
+          height: 15px;
+          cursor: pointer;
+        }
+
+        /* ── Filter Chips Row ──────────────────────────────── */
+        .filter-chips-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding: 0;
+          margin: 0;
+        }
+        .filter-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 600;
+          background: rgba(16, 185, 129, 0.12);
+          color: #10b981;
+          border: 1px solid rgba(16, 185, 129, 0.25);
+          transition: all var(--duration-fast);
+        }
+        .filter-chip button {
+          background: none;
+          border: none;
+          color: #10b981;
+          cursor: pointer;
+          padding: 0;
+          font-size: 14px;
+          line-height: 1;
+          opacity: 0.7;
+          transition: opacity var(--duration-fast);
+        }
+        .filter-chip button:hover {
+          opacity: 1;
+        }
+
+        /* ── Date Range Pair ───────────────────────────────── */
+        .date-range-pair {
+          display: flex;
+          align-items: center;
+          gap: 0;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm, 8px);
+          overflow: hidden;
+          background: var(--color-input-bg);
+        }
+        .date-range-pair input {
+          flex: 1;
+          padding: 9px 10px;
+          border: none;
+          background: transparent;
+          color: var(--color-ink);
+          font-size: 13px;
+          font-family: var(--font-base);
+          outline: none;
+          min-width: 0;
+        }
+        .date-range-pair input:focus {
+          background: var(--color-hover);
+        }
+        .date-range-sep {
+          color: var(--color-muted);
+          font-size: 12px;
+          padding: 0 4px;
+          flex-shrink: 0;
+          user-select: none;
+        }
+
+        /* ── Sticky Footer Bar ─────────────────────────────── */
+        .filter-sticky-footer {
+          position: sticky;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+          padding: 12px 16px;
+          margin: 16px -22px -20px -22px;
+          border-top: 1px solid var(--color-border);
+          background: var(--color-modal-bg);
+          border-radius: 0 0 var(--radius-lg, 16px) var(--radius-lg, 16px);
+          z-index: 10;
         }
       `}</style>
+
+      {/* PAGE WRAPPER WITH ADDED LEFT PADDING */}
+      <div style={{ paddingLeft: 24 }}>
 
       {/* PAGE HEADER */}
       <div style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
@@ -597,11 +1116,12 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* ANALYTICS FILTERS — query params mirror backend GET /analytics/all */}
-      <div className="saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px 22px" }}>
+      {/* ANALYTICS FILTERS — redesigned: chips + accordion + sticky footer */}
+      <div className="saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px 22px", maxHeight: showFilters ? "85vh" : "auto", overflowY: showFilters ? "auto" : "visible" }}>
+        {/* ── Header row: title + collapse toggle ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14, marginBottom: showFilters ? 16 : 0 }}>
-          <div 
-            style={{ cursor: "pointer", display: "flex", flexDirection: "column", flex: 1 }} 
+          <div
+            style={{ cursor: "pointer", display: "flex", flexDirection: "column", flex: 1 }}
             onClick={() => setShowFilters(!showFilters)}
           >
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 8 }}>
@@ -611,7 +1131,7 @@ export default function AnalyticsPage() {
                 {showFilters ? "▲" : "▼"}
               </span>
               {!showFilters && activeFilterCount > 0 && (
-                <span style={{ fontSize: 11, background: COLOR.greenLight, color: COLOR.green, padding: "2px 8px", borderRadius: 12, marginLeft: 8 }}>
+                <span style={{ fontSize: 11, background: "rgba(16, 185, 129, 0.12)", color: "#10b981", padding: "2px 8px", borderRadius: 12, marginLeft: 8 }}>
                   {activeFilterCount} active
                 </span>
               )}
@@ -627,39 +1147,33 @@ export default function AnalyticsPage() {
               </p>
             )}
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            {showFilters && activeFilterCount > 0 && (
-              <span style={{ fontSize: 12, fontWeight: 700, color: COLOR.green, marginRight: 4 }}>
-                {activeFilterCount} active
-              </span>
-            )}
-            {showFilters && (
-              <>
-                <button className="primary-btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleApplyFilters}>
-                  Apply filters
-                </button>
-                <button className="ghost-btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleClearFilters}>
-                  Clear all
-                </button>
-              </>
-            )}
-          </div>
         </div>
+
+        {/* ── Active filter chips (always visible when filters are set) ── */}
+        {activeChips.length > 0 && (
+          <div className="filter-chips-row" style={{ marginTop: showFilters ? 0 : 10, marginBottom: showFilters ? 12 : 0 }}>
+            {activeChips.map((chip) => (
+              <span key={chip.key} className="filter-chip">
+                {chip.label}
+                <button onClick={(e) => { e.stopPropagation(); chip.clear(); }} title="Remove filter">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {showFilters && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            
-            {/* Basic Streamlined Filters Grid */}
-            <div className="frosted-glass saas-card" style={{ 
-              display: "grid", 
-              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", 
-              gap: 16, 
-              padding: 16, 
-              background: "rgba(255, 255, 255, 0.4)",
-              border: "1px solid rgba(226, 232, 240, 0.8)",
-              borderRadius: 12
+
+            {/* ── Primary Filters Row ────────────────────────────── */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+              gap: 16,
+              padding: 16,
+              border: "1px solid var(--color-border)",
+              borderRadius: 12,
             }}>
-              {/* Barangay Filter */}
+              {/* Barangay — single quick select */}
               <div>
                 <label style={filterLabelStyle}>Barangay</label>
                 <select
@@ -677,7 +1191,7 @@ export default function AnalyticsPage() {
                 </select>
               </div>
 
-              {/* Business Registry Status */}
+              {/* Registry Status */}
               <div>
                 <label style={filterLabelStyle}>Registry Status</label>
                 <select
@@ -711,73 +1225,131 @@ export default function AnalyticsPage() {
                 </select>
               </div>
 
-              {/* Sector Filter */}
+              {/* Sector */}
               <div>
                 <label style={filterLabelStyle}>Sector</label>
                 {sel(draftFilters.line_of_business, (e) => setDraftFilters((d) => ({ ...d, line_of_business: e.target.value })), fm.lines_of_business, "All sectors")}
               </div>
             </div>
 
-            {/* Advanced Filters Expand Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              style={{
-                alignSelf: "flex-start",
-                background: "none",
-                border: "none",
-                color: "#2563eb",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "2px 0",
-                transition: "color 0.15s",
-                textTransform: "uppercase",
-                letterSpacing: "0.04em"
-              }}
-            >
-              {showAdvanced ? "▲ Hide Advanced Options" : "▼ Show Advanced Options (Dates, Sizes, Inspections, Multi-Select)"}
-            </button>
+            {/* ── Advanced Filters Label ──────────────────────────── */}
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Advanced Filters
+            </p>
 
-            {/* Advanced Filters Section */}
-            {showAdvanced && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
-                  
-                  {/* Advanced Location Multi-Select */}
-                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                      Location (Multi-Select)
-                    </h4>
-                    <div>
-                      <label style={filterLabelStyle}>Hold Ctrl for multiple selection</label>
-                      <select
-                        multiple
-                        size={4}
-                        value={draftFilters.barangay_ids.map(String)}
-                        onChange={(e) => {
-                          const next = [...e.target.selectedOptions].map((o) => parseInt(o.value, 10));
-                          setDraftFilters((d) => ({ ...d, barangay_ids: next }));
-                        }}
-                        style={{ ...filterInputStyle, minHeight: 90 }}
+            {/* ── Advanced Section Accordions ────────────────────── */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 400px), 1fr))", gap: 12 }}>
+
+              {/* ─── LOCATION (Multi-Select) ──────────────────────── */}
+              <div>
+                <button
+                  type="button"
+                  className={`filter-accordion-header${openSections.location ? " open" : ""}`}
+                  onClick={() => toggleSection("location")}
+                >
+                  <svg className="filter-accordion-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle>
+                  </svg>
+                  <span className="filter-accordion-title">Location</span>
+                  {draftFilters.barangay_ids.length > 0 && (
+                    <span className="filter-accordion-count">{draftFilters.barangay_ids.length} selected</span>
+                  )}
+                  <svg className={`filter-accordion-chevron${openSections.location ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                {openSections.location && (
+                  <div className="filter-accordion-body">
+                    <label style={{ ...filterLabelStyle, marginBottom: 8 }}>Select barangays</label>
+                    {/* Custom multi-select dropdown */}
+                    <div className="brgy-multiselect" ref={brgyDropdownRef}>
+                      <div
+                        className={`brgy-multiselect-trigger${brgyDropdownOpen ? " open" : ""}`}
+                        onClick={() => setBrgyDropdownOpen(!brgyDropdownOpen)}
                       >
-                        {barangaysList.map((b) => (
-                          <option key={b.barangayID} value={b.barangayID}>{b.barangayName}</option>
-                        ))}
-                      </select>
+                        {draftFilters.barangay_ids.length === 0 ? (
+                          <span className="brgy-multiselect-placeholder">Click to select barangays…</span>
+                        ) : (
+                          draftFilters.barangay_ids.map((id) => {
+                            const b = barangaysList.find((x) => x.barangayID === id);
+                            return b ? (
+                              <span key={id} className="brgy-multiselect-chip">
+                                {shortBarangay(b.barangayName)}
+                                <button onClick={(e) => { e.stopPropagation(); setDraftFilters((d) => ({ ...d, barangay_ids: d.barangay_ids.filter((x) => x !== id) })); }}>✕</button>
+                              </span>
+                            ) : null;
+                          })
+                        )}
+                      </div>
+                      {brgyDropdownOpen && (
+                        <div className="brgy-multiselect-panel">
+                          <input
+                            className="brgy-multiselect-search"
+                            type="text"
+                            placeholder="Search barangays…"
+                            value={brgySearchTerm}
+                            onChange={(e) => setBrgySearchTerm(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                          />
+                          <div className="brgy-multiselect-list">
+                            {barangaysList
+                              .filter((b) => b.barangayName.toLowerCase().includes(brgySearchTerm.toLowerCase()))
+                              .map((b) => {
+                                const checked = draftFilters.barangay_ids.includes(b.barangayID);
+                                return (
+                                  <label
+                                    key={b.barangayID}
+                                    className="brgy-multiselect-item"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        setDraftFilters((d) => ({
+                                          ...d,
+                                          barangay_ids: checked
+                                            ? d.barangay_ids.filter((x) => x !== b.barangayID)
+                                            : [...d.barangay_ids, b.barangayID],
+                                        }));
+                                      }}
+                                    />
+                                    {b.barangayName}
+                                  </label>
+                                );
+                              })}
+                            {barangaysList.filter((b) => b.barangayName.toLowerCase().includes(brgySearchTerm.toLowerCase())).length === 0 && (
+                              <div style={{ padding: "12px", textAlign: "center", color: "var(--color-muted)", fontSize: 13 }}>No matches</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
+                )}
+              </div>
 
-                  {/* Advanced Business Profile */}
-                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                      Business Profile
-                    </h4>
+              {/* ─── BUSINESS PROFILE ─────────────────────────────── */}
+              <div>
+                <button
+                  type="button"
+                  className={`filter-accordion-header${openSections.business ? " open" : ""}`}
+                  onClick={() => toggleSection("business")}
+                >
+                  <svg className="filter-accordion-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"></path><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"></path>
+                  </svg>
+                  <span className="filter-accordion-title">Business Profile</span>
+                  {(draftFilters.business_type || draftFilters.business_size || draftFilters.renewal_from || draftFilters.renewal_to) && (
+                    <span className="filter-accordion-count">filtered</span>
+                  )}
+                  <svg className={`filter-accordion-chevron${openSections.business ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                {openSections.business && (
+                  <div className="filter-accordion-body">
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <div>
                         <label style={filterLabelStyle}>Type</label>
@@ -787,44 +1359,70 @@ export default function AnalyticsPage() {
                         <label style={filterLabelStyle}>Size</label>
                         {sel(draftFilters.business_size, (e) => setDraftFilters((d) => ({ ...d, business_size: e.target.value })), fm.business_sizes, "All sizes")}
                       </div>
-                      <div>
-                        <label style={filterLabelStyle}>Renewal From</label>
-                        <input type="date" value={draftFilters.renewal_from} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_from: e.target.value }))} style={filterInputStyle} />
-                      </div>
-                      <div>
-                        <label style={filterLabelStyle}>Renewal To</label>
-                        <input type="date" value={draftFilters.renewal_to} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_to: e.target.value }))} style={filterInputStyle} />
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <label style={filterLabelStyle}>Renewal Date Range</label>
+                      <div className="date-range-pair">
+                        <input type="date" value={draftFilters.renewal_from} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_from: e.target.value }))} placeholder="From" />
+                        <span className="date-range-sep">→</span>
+                        <input type="date" value={draftFilters.renewal_to} onChange={(e) => setDraftFilters((d) => ({ ...d, renewal_to: e.target.value }))} placeholder="To" />
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
+              </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 20 }}>
-                  {/* Advanced Geospatial Dates */}
-                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
-                      Flag Timelines
-                    </h4>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div>
-                        <label style={filterLabelStyle}>Detected From</label>
-                        <input type="date" value={draftFilters.detected_from} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_from: e.target.value }))} style={filterInputStyle} />
-                      </div>
-                      <div>
-                        <label style={filterLabelStyle}>Detected To</label>
-                        <input type="date" value={draftFilters.detected_to} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_to: e.target.value }))} style={filterInputStyle} />
-                      </div>
+              {/* ─── FLAG TIMELINES ───────────────────────────────── */}
+              <div>
+                <button
+                  type="button"
+                  className={`filter-accordion-header${openSections.flags ? " open" : ""}`}
+                  onClick={() => toggleSection("flags")}
+                >
+                  <svg className="filter-accordion-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line>
+                  </svg>
+                  <span className="filter-accordion-title">Flag Timelines</span>
+                  {(draftFilters.detected_from || draftFilters.detected_to) && (
+                    <span className="filter-accordion-count">filtered</span>
+                  )}
+                  <svg className={`filter-accordion-chevron${openSections.flags ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                {openSections.flags && (
+                  <div className="filter-accordion-body">
+                    <label style={filterLabelStyle}>Detection Date Range</label>
+                    <div className="date-range-pair">
+                      <input type="date" value={draftFilters.detected_from} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_from: e.target.value }))} placeholder="From" />
+                      <span className="date-range-sep">→</span>
+                      <input type="date" value={draftFilters.detected_to} onChange={(e) => setDraftFilters((d) => ({ ...d, detected_to: e.target.value }))} placeholder="To" />
                     </div>
                   </div>
+                )}
+              </div>
 
-                  {/* Advanced Inspection Audits */}
-                  <div style={{ background: "rgba(255, 255, 255, 0.4)", border: "1px solid rgba(226, 232, 240, 0.8)", borderRadius: 12, padding: 16 }}>
-                    <h4 style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 800, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: 8 }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                      Inspection Details
-                    </h4>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {/* ─── INSPECTION DETAILS ───────────────────────────── */}
+              <div>
+                <button
+                  type="button"
+                  className={`filter-accordion-header${openSections.inspection ? " open" : ""}`}
+                  onClick={() => toggleSection("inspection")}
+                >
+                  <svg className="filter-accordion-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>
+                  </svg>
+                  <span className="filter-accordion-title">Inspection Details</span>
+                  {(draftFilters.inspection_result || draftFilters.verification_status || draftFilters.inspection_from || draftFilters.inspection_to) && (
+                    <span className="filter-accordion-count">filtered</span>
+                  )}
+                  <svg className={`filter-accordion-chevron${openSections.inspection ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                {openSections.inspection && (
+                  <div className="filter-accordion-body">
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                       <div>
                         <label style={filterLabelStyle}>Result</label>
                         {sel(draftFilters.inspection_result, (e) => setDraftFilters((d) => ({ ...d, inspection_result: e.target.value })), fm.inspection_results, "All results", true)}
@@ -833,34 +1431,98 @@ export default function AnalyticsPage() {
                         <label style={filterLabelStyle}>Verification</label>
                         {sel(draftFilters.verification_status, (e) => setDraftFilters((d) => ({ ...d, verification_status: e.target.value })), fm.verification_statuses, "All verification")}
                       </div>
-                      <div>
-                        <label style={filterLabelStyle}>Inspected From</label>
-                        <input type="datetime-local" value={draftFilters.inspection_from} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_from: e.target.value }))} style={filterInputStyle} />
-                      </div>
-                      <div>
-                        <label style={filterLabelStyle}>Inspected To</label>
-                        <input type="datetime-local" value={draftFilters.inspection_to} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_to: e.target.value }))} style={filterInputStyle} />
-                      </div>
+                    </div>
+                    <label style={filterLabelStyle}>Inspection Date Range</label>
+                    <div className="date-range-pair">
+                      <input type="datetime-local" value={draftFilters.inspection_from} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_from: e.target.value }))} />
+                      <span className="date-range-sep">→</span>
+                      <input type="datetime-local" value={draftFilters.inspection_to} onChange={(e) => setDraftFilters((d) => ({ ...d, inspection_to: e.target.value }))} />
                     </div>
                   </div>
-                </div>
+                )}
               </div>
-            )}
+
+            </div>
+
+            {/* ── Sticky Apply / Clear Footer ─────────────────────── */}
+            <div className="filter-sticky-footer">
+              {activeFilterCount > 0 && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#10b981", marginRight: "auto" }}>
+                  {activeFilterCount} filter{activeFilterCount !== 1 ? "s" : ""} active
+                </span>
+              )}
+              <button className="ghost-btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleClearFilters}>
+                Clear all
+              </button>
+              <button className="primary-btn" type="button" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleApplyFilters}>
+                Apply filters
+              </button>
+            </div>
+
           </div>
         )}
       </div>
 
+      {/* Scroll Marker */}
+      <div ref={tabMarkerRef} style={{ width: "100%", height: 1, marginBottom: -1 }} />
+      {isScrolled && <div style={{ height: 110, width: "100%" }} />}
+      
       {/* TAB FILTER */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 32, flexWrap: "wrap" }}>
-        {["all", "descriptive", "diagnostic", "prescriptive"].map(tab => (
-          <button
-            key={tab}
-            className={`analytics-tab-btn ${activeTab === tab ? "active" : ""}`}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab === "all" ? "All Insights" : tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
+      <div className="sticky-tabs tier-1-card saas-card frosted-glass" style={{ 
+        display: "flex", 
+        gap: 12, 
+        flexWrap: isScrolled ? "nowrap" : "wrap", 
+        flexDirection: "row",
+        position: isScrolled ? "fixed" : "relative", 
+        top: isScrolled ? "auto" : 0,
+        bottom: isScrolled ? 32 : "auto",
+        left: isScrolled ? "50%" : "auto",
+        transform: isScrolled ? "translateX(-50%)" : "none",
+        width: isScrolled ? "max-content" : "auto",
+        background: isScrolled ? "color-mix(in srgb, var(--color-primary) 15%, var(--glass-bg))" : "var(--glass-bg)", 
+        backdropFilter: isScrolled ? "blur(16px)" : "var(--glass-blur)",
+        WebkitBackdropFilter: isScrolled ? "blur(16px)" : "var(--glass-blur)",
+        boxShadow: isScrolled ? "0 20px 40px rgba(0, 0, 0, 0.08)" : "none",
+        zIndex: 999, 
+        padding: isScrolled ? "8px" : "24px",
+        margin: isScrolled ? 0 : "0 0 32px 0",
+        borderRadius: isScrolled ? 100 : 12,
+        border: isScrolled ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid var(--color-border)",
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
+      }}>
+        {[
+          { id: "overview", label: "Overview", sub: "Executive summary", dot: "var(--color-ink)" },
+          { id: "descriptive", label: "Descriptive", sub: "What is happening?", dot: "var(--color-green)" },
+          { id: "diagnostic", label: "Diagnostic", sub: "Why is it happening?", dot: "var(--color-yellow)" },
+          { id: "prescriptive", label: "Prescriptive", sub: "What should we do?", dot: "var(--color-red)" }
+        ].map(tab => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              className={`analytics-tab-btn ${isActive ? "active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+              style={{ 
+                display: "flex", 
+                flexDirection: isScrolled ? "row" : "column", 
+                alignItems: isScrolled ? "center" : "flex-start", 
+                padding: isScrolled ? "12px 24px" : "12px 20px", 
+                borderRadius: isScrolled ? 100 : 8, 
+                border: isScrolled ? "1px solid transparent" : "1px solid var(--color-border)", 
+                background: isActive ? "var(--color-surface)" : "transparent", 
+                cursor: "pointer", 
+                minWidth: isScrolled ? "auto" : 160,
+                transition: "all 0.2s ease"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, color: isActive ? "var(--color-primary-dark)" : "var(--color-muted)" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: !isActive && isScrolled ? "var(--color-muted)" : tab.dot, opacity: (!isActive && isScrolled) ? 0.5 : 1 }} />
+                {tab.label}
+              </div>
+              {!isScrolled && <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4, marginLeft: 16 }}>{tab.sub}</div>}
+            </button>
+          );
+        })}
       </div>
 
       {error && (
@@ -873,17 +1535,15 @@ export default function AnalyticsPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          TIER 1 — DESCRIPTIVE ANALYTICS
+          OVERVIEW SUMMARY
       ══════════════════════════════════════════════════════════════════════ */}
-      {(activeTab === "all" || activeTab === "descriptive") && (
+      {activeTab === "overview" && (
         <section style={{ marginBottom: 52 }}>
           <SectionHeader
             tier="descriptive"
-            title="Descriptive Overview"
-            subtitle="Real-time compliance status, data profiling, and enforcement progress across all barangays"
+            title="Executive Summary"
+            subtitle="Top-level KPIs and critical dispatch recommendations"
           />
-
-          {/* KPI CARDS */}
           <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 20, marginBottom: 24 }}>
             {loading ? (
               Array(3).fill(0).map((_, i) => <Skeleton key={i} h={90} />)
@@ -902,459 +1562,307 @@ export default function AnalyticsPage() {
                   value={kpis?.total_flagged ?? "—"}
                   label="Total Flagged Entities"
                   delta={kpis?.total_flagged_delta ? `${kpis.total_flagged_delta > 0 ? '+' : ''}${kpis.total_flagged_delta} vs last month` : undefined}
-                  trend={kpis?.total_flagged_delta > 0 ? "down" : "up"} // More flags = bad (down trend visually)
+                  trend={kpis?.total_flagged_delta > 0 ? "down" : "up"}
                   icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>}
+                  style={{ background: "var(--color-danger-light)", borderColor: "rgba(244,63,94,0.3)" }}
                 />
                 <KpiCard
                   iconVariant="red"
                   value={kpis?.high_risk_barangays ?? "—"}
                   label="High-Risk Barangays"
                   delta={kpis?.high_risk_barangays_delta ? `${kpis.high_risk_barangays_delta > 0 ? '+' : ''}${kpis.high_risk_barangays_delta} vs last month` : undefined}
-                  trend={kpis?.high_risk_barangays_delta > 0 ? "down" : "up"} 
                   icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26"><polygon points="10.29 3.86 1.82 18 22.18 18 13.71 3.86 10.29 3.86"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
                 />
-              </>
-            )}
-          </div>
-
-          {/* COMPLIANCE FUNNEL */}
-          <div className="saas-card frosted-glass" style={{ marginBottom: 32 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>
-              Enforcement Pipeline
-            </h3>
-            {loading ? <Skeleton h={110} /> : (
-              <>
-                <div style={{ display: "flex", gap: 24, alignItems: "stretch", overflowX: "auto", paddingBottom: 8 }}>
-                  {funnelData.map((item, i) => {
-                    const rate = item.value > 0 ? Math.round((funnelData[i+1]?.value / item.value) * 100) : 0;
-                    return (
-                      <div key={item.step} style={{ 
-                        flex: 1, 
-                        minWidth: 140,
-                        background: "var(--color-hover)",
-                        border: `1px solid ${item.color.startsWith('var') ? 'var(--color-border)' : item.color + '40'}`,
-                        borderRadius: 12, 
-                        padding: "16px 20px",
-                        position: "relative",
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
-                      }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 12 }}>{item.step}</span>
-                        <span style={{ fontSize: 28, fontWeight: 800, color: item.color }}>{item.value.toLocaleString()}</span>
-                        
-                        {i < funnelData.length - 1 && (
-                          <div style={{ 
-                            position: "absolute", 
-                            right: "-12px", 
-                            top: "50%", 
-                            transform: "translate(50%, -50%)", 
-                            zIndex: 2,
-                            background: "var(--color-modal-bg)",
-                            color: "var(--color-ink)",
-                            border: "1px solid var(--color-border)",
-                            borderRadius: 20,
-                            padding: "4px 8px",
-                            fontSize: 11,
-                            fontWeight: 700,
-                            boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4
-                          }}>
-                            {rate}%
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <ChartInterpretation
-                  type="info"
-                  title="Pipeline Conversion Insights"
-                  findings={[
-                    `The funnel tracks registration conversion stages from initial detection (${kpiTotalBiz + kpiTotalFlagged}) to final cleared audits (${clearedCount}).`,
-                    `The pipeline converts approximately ${funnelData[0].value > 0 ? Math.round((clearedCount / funnelData[0].value) * 100) : 0}% of all detected entities into cleared compliant businesses.`
-                  ]}
-                  actions={[
-                    "Deploy active dispatch inspectors to high-density unregistered clusters to push entities from 'Active' to 'Inspected' stages.",
-                    "Ensure cleared businesses are officially moved out of inspection backlogs to speed up pipeline clearance rates."
-                  ]}
+                <KpiCard
+                  iconVariant="gold"
+                  value={inspectedCount ?? "—"}
+                  label="Inspections This Period"
+                  trend="up"
+                  icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>}
                 />
               </>
             )}
           </div>
-
-          {/* FLAGS BY COLOR OVERVIEW + SECTORAL DISTRIBUTION */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
-            {/* Donut — Flags by Color Breakdown */}
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 48%", minWidth: 320 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
-                Flags by Color Breakdown
-                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
-                  — Total active pin distribution
-                </span>
+          {presc?.dispatch_recommendations && presc.dispatch_recommendations.length > 0 && (
+            <div className="tier-1-card saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px", borderRadius: 12 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: COLOR.red }}>
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+                Urgent Dispatch Actions
               </h3>
-              {loading ? <Skeleton h={300} /> : flagsByColorData.length === 0 ? (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>
-                  No flags detected in the system
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {presc.dispatch_recommendations.slice(0, 3).map((rec, idx) => (
+                  <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 14, background: "rgba(244,63,94,0.08)", padding: "14px 18px", borderRadius: 8, border: "1px solid rgba(244,63,94,0.3)" }}>
+                    <span style={{ background: "var(--color-danger, #f43f5e)", color: "#fff", fontWeight: 800, fontSize: 13, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0, marginTop: 0, boxShadow: "0 2px 8px rgba(244,63,94,0.4)" }}>
+                      {rec.rank}
+                    </span>
+                    <p style={{ margin: 0, fontSize: 15, color: "var(--color-ink)", lineHeight: 1.6, fontWeight: 500 }}>
+                      {rec.recommendation}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Side-by-side Summary: Compliance Donut & Risk Intelligence */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
+            {/* Compliance Snapshot (Descriptive) */}
+            <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Compliance Snapshot</h3>
+                  <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Flags by Color Breakdown</p>
                 </div>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(16, 185, 129, 0.1)", color: "var(--color-green)", borderRadius: 12 }}>Descriptive</span>
+              </div>
+              <ChartInsightPanel chartId="flagsByColor" insightText={InsightGenerator.flagsByColor(flagsByColorData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+              {loading ? <Skeleton h={200} /> : flagsByColorData.length === 0 ? (
+                <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No flags detected</div>
               ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={200}>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <ResponsiveContainer width="55%" height={200}>
                     <PieChart>
-                      <Pie 
-                        data={flagsByColorData} 
-                        dataKey="value" 
-                        nameKey="name" 
-                        cx="50%" 
-                        cy="50%" 
-                        innerRadius={55}
-                        outerRadius={80} 
-                        label={false}
-                      >
+                      <Pie data={flagsByColorData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={65} outerRadius={90} label={false}>
                         {flagsByColorData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                       </Pie>
                       <Tooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-                    {flagsByColorData.map((s, i) => {
-                      const totalSum = totalGreen + totalYellow + totalRed + totalBlack + totalOrange;
-                      const pct = totalSum > 0 ? Math.round((s.value / totalSum) * 100) : 0;
-                      return (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                          <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
-                          <span style={{ color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
-                          <span style={{ fontSize: 11, color: "var(--color-muted)", marginRight: 8 }}>{pct}%</span>
-                          <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
-                        </div>
-                      );
-                    })}
+                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 12, flex: 1, paddingLeft: 10, paddingRight: 20 }}>
+                    {flagsByColorData.slice(0,4).map((s, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
+                        <span style={{ width: 12, height: 12, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
+                        <span style={{ color: "var(--color-muted)", flex: 1, textAlign: "left" }}>{s.name}</span>
+                        <strong style={{ color: "var(--color-ink)", fontSize: 15 }}>{s.value}</strong>
+                      </div>
+                    ))}
                   </div>
-                  <ChartInterpretation
-                    type={totalRed > (totalGreen * 0.3) ? "danger" : "info"}
-                    title="Business Status Breakdown Insights"
-                    findings={[
-                      `Active Businesses (Green) make up ${totalGreen} locations.`,
-                      `1st/2nd Warning / Closures (Orange: ${totalOrange}) represent businesses requiring immediate compliance follow-ups.`,
-                      `Detected Unregistered (Red: ${totalRed}) and Suspected Unregistered (Yellow: ${totalYellow}) indicate potential tax and zoning compliance leaks.`
-                    ]}
-                    actions={[
-                      totalRed > 0 ? "Initiate standard notice sequences for Detected Unregistered establishments." : "Unregistered counts are low. Focus on maintaining registration renewals.",
-                      "Perform formal business registry database updates for Closed Businesses to archive their licenses."
-                    ]}
-                  />
-                </>
+                </div>
               )}
             </div>
 
-            {/* Pie — Sectoral Distribution */}
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 48%", minWidth: 320 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
-                Sectoral Distribution
-              </h3>
-              {loading ? <Skeleton h={300} /> : sectoralData.length === 0 ? (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: COLOR.muted, gap: 12 }}>
-                  <img src="/searching.png" alt="No sector data" style={{ height: 100, objectFit: "contain", opacity: 0.9 }} />
-                  No sector data available
+            {/* Risk Intelligence (Diagnostic) */}
+            <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Risk Intelligence</h3>
+                  <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Automated pattern analysis</p>
                 </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={200}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(234, 179, 8, 0.1)", color: "var(--color-yellow)", borderRadius: 12 }}>Diagnostic</span>
+              </div>
+              
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ color: COLOR.red, marginTop: 2 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <div>
+                  <strong style={{ display: "block", fontSize: 13, color: "var(--color-ink)", marginBottom: 4 }}>Hotspot Detection (DBSCAN)</strong>
+                  <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0, lineHeight: 1.5 }}>
+                    {loading ? "Analyzing..." : (diag?.dbscan_insight || "No immediate hotspots detected.")}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                <div style={{ color: "#8b5cf6", marginTop: 2 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                </div>
+                <div>
+                  <strong style={{ display: "block", fontSize: 13, color: "var(--color-ink)", marginBottom: 4 }}>Regional Risk Patterns (Moran's I Proxy)</strong>
+                  <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0, lineHeight: 1.5 }}>
+                    {loading ? "Evaluating..." : (diag?.morans_insight || "No significant regional clustering detected.")}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          TIER 1 — DESCRIPTIVE ANALYTICS
+      ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "descriptive" && (
+        <section style={{ marginBottom: 52 }}>
+          <SectionHeader
+            tier="descriptive"
+            title="Descriptive Overview"
+            subtitle="Current-state snapshot of compliance and enforcement across barangays"
+          />
+
+          {/* SECTION A: BUSINESS CENSUS */}
+          <div style={{ marginBottom: 40 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>A. Business Census</h3>
+            
+            {/* Census KPIs */}
+            <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 16, marginBottom: 24 }}>
+              <KpiCard iconVariant="gold" value={kpis?.total_businesses ?? "—"} label="Total Registered" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>} style={{ padding: "16px" }} />
+              <KpiCard iconVariant="green" value={kpis?.active_count ?? "—"} label="Active" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>} style={{ padding: "16px" }} />
+              <KpiCard iconVariant="red" value={kpis?.expired_count ?? "—"} label="Expired" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>} style={{ padding: "16px" }} />
+              <KpiCard iconVariant="gold" value={kpis?.pending_count ?? "—"} label="Pending" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>} style={{ padding: "16px" }} />
+              <KpiCard iconVariant="red" value={kpis?.closed_count ?? "—"} label="Closed" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>} style={{ padding: "16px" }} />
+            </div>
+
+            {/* Sector & Size */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Sectoral Distribution</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Most businesses operate in the {sectoralData?.[0]?.name || "top"} sector.</p>
+                <ChartInsightPanel chartId="sectoral" insightText={InsightGenerator.sectoral(sectoralData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                <div style={{ height: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={sectoralData?.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(226,232,240,0.2)" />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--color-ink)" }} axisLine={false} tickLine={false} width={180} tickFormatter={(val) => typeof val === 'string' && val.length > 25 ? val.substring(0, 25) + '…' : val} />
+                      <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", color: "var(--color-ink)" }} />
+                      <Bar dataKey="value" name="Businesses" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+                        <LabelList dataKey="value" position="right" fill="var(--color-ink)" fontSize={11} fontWeight={600} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Business Size Distribution</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Breakdown by reported enterprise size.</p>
+                <ChartInsightPanel chartId="size" insightText={InsightGenerator.businessSize(sizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                <div style={{ display: "flex", alignItems: "center", height: 260 }}>
+                  <ResponsiveContainer width="55%" height="100%">
                     <PieChart>
-                      <Pie data={sectoralData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={false}>
-                        {sectoralData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                      <Pie data={sizeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={65} outerRadius={90} label={false}>
+                        {sizeData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                       </Pie>
                       <Tooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-                    {sectoralData.slice(0, 5).map((s, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 2, background: s.fill, flexShrink: 0 }} />
-                        <span style={{ color: "var(--color-muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-                        <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
+                  <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 12, flex: 1, paddingLeft: 10, paddingRight: 20 }}>
+                    {sizeData.map((s, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
+                        <span style={{ width: 12, height: 12, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
+                        <span style={{ color: "var(--color-muted)", flex: 1, textAlign: "left" }}>{s.name}</span>
+                        <strong style={{ color: "var(--color-ink)", fontSize: 15 }}>{s.value}</strong>
                       </div>
                     ))}
                   </div>
-                  {(() => {
-                    const topSec = sectoralData[0];
-                    const topSecName = topSec ? topSec.name : "Retail/Commercial";
-                    const topSecVal = topSec ? topSec.value : 0;
-                    return (
-                      <ChartInterpretation
-                        type="info"
-                        title="Sectoral Distribution Insights"
-                        findings={[
-                          `The "${topSecName}" sector is the dominant commercial activity in Mataasnakahoy, accounting for ${topSecVal} registered businesses.`,
-                          "Highly concentrated sectors represent critical drivers of municipal permit revenue."
-                        ]}
-                        actions={[
-                          `Draft streamlined permit guidelines tailored to "${topSecName}" activities to encourage compliance.`,
-                          "Coordinate with commercial sector associations to simplify licensing processes."
-                        ]}
-                      />
-                    );
-                  })()}
-                </>
-              )}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* BARANGAY COMPLIANCE LEADERBOARD */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 100%", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 6px 0" }}>
-                Barangay Compliance Leaderboard
-                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
-                  — Ranked compliance rates based on registered vs flagged entities
-                </span>
-              </h3>
-              <p style={{ fontSize: 13, color: "var(--color-muted)", margin: "0 0 20px 0" }}>
-                Compliance rate measures official active registrations (Green) as a percentage of all local business activities.
-              </p>
-
-              {loading ? <Skeleton h={220} /> : leaderboardData.length === 0 ? (
-                <div style={{ padding: "40px 0", textAlign: "center", color: COLOR.muted, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                  <img src="/searching.png" alt="No compliance data" style={{ height: 100, objectFit: "contain", opacity: 0.9 }} />
-                  No compliance data available.
-                </div>
-              ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 380px), 1fr))", gap: 24 }}>
-                  {/* Top 5 Compliant */}
-                  <div style={{ background: "var(--color-input-bg)", borderRadius: 12, padding: 18, border: "1px solid rgba(34,197,94,0.12)" }}>
-                    <h4 style={{ margin: "0 0 14px 0", fontSize: 13, fontWeight: 800, color: "#15803d", display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                      Top Performing Zones (Highest Compliance)
-                    </h4>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {topCompliant.map((b, idx) => (
-                        <div key={b.barangayName}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>
-                              {idx + 1}. {b.barangayName}
-                            </span>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: "#166534" }}>
-                              {b.rate}% compliance
-                            </span>
-                          </div>
-                          <div style={{ height: 6, background: "var(--color-hover)", borderRadius: 3, overflow: "hidden" }}>
-                            <div style={{ width: `${b.rate}%`, height: "100%", background: "var(--flag-green-text)", borderRadius: 3 }} />
-                          </div>
-                          <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
-                            <span>Active Registered: <strong>{b.activeCount}</strong></span>
-                            <span>Total Flags: {b.totalFlags}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Bottom 3 Non-Compliant */}
-                  <div style={{ background: "var(--color-input-bg)", borderRadius: 12, padding: 18, border: "1px solid rgba(239,68,68,0.12)" }}>
-                    <h4 style={{ margin: "0 0 14px 0", fontSize: 13, fontWeight: 800, color: "var(--flag-red-text)", display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                      Urgent Action Areas (Lowest Compliance)
-                    </h4>
-                    {bottomCompliant.length === 0 ? (
-                      <p style={{ fontSize: 12, color: "var(--color-muted)", textAlign: "center", padding: "20px 0" }}>All active zones have high compliance levels!</p>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                        {bottomCompliant.map((b, idx) => (
-                          <div key={b.barangayName}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>
-                                {idx + 1}. {b.barangayName}
-                              </span>
-                              <span style={{ fontSize: 12, fontWeight: 800, color: "#991b1b" }}>
-                                {b.rate}% compliance
-                              </span>
-                            </div>
-                            <div style={{ height: 6, background: "var(--color-hover)", borderRadius: 3, overflow: "hidden" }}>
-                              <div style={{ width: `${b.rate}%`, height: "100%", background: "var(--flag-red-text)", borderRadius: 3 }} />
-                            </div>
-                            <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 2, display: "flex", justifyContent: "space-between" }}>
-                              <span>Active Registered: <strong>{b.activeCount}</strong></span>
-                              <span>Total Flags: {b.totalFlags}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Dynamic Leaderboard Interpretation */}
-              {!loading && leaderboardData.length > 0 && (() => {
-                const worstBrgy = bottomCompliant[0];
-                const bestBrgy = topCompliant[0];
-                const worstBrgyName = worstBrgy ? worstBrgy.barangayName : "N/A";
-                const bestBrgyName = bestBrgy ? bestBrgy.barangayName : "N/A";
-                
-                return (
-                  <ChartInterpretation
-                    type={worstBrgy && worstBrgy.rate < 60 ? "warning" : "success"}
-                    title="Compliance Leaderboard Insights"
-                    findings={[
-                      `Highest compliance registered in ${bestBrgyName} (${bestBrgy ? bestBrgy.rate : 0}%).`,
-                      worstBrgy ? `Urgent attention required in ${worstBrgyName} with a low compliance rate of ${worstBrgy.rate}% and ${worstBrgy.totalFlags} flagged locations.` : "All active zones show standard compliance rates above 70%."
-                    ]}
-                    actions={[
-                      worstBrgy ? `Dispatch inspectors to ${worstBrgyName} to resolve unregistered/expired establishments.` : "Continue monitoring low-risk zones to maintain compliance rates.",
-                      "Acknowledge and document successful compliance processes in high-performing zones for regional replication."
-                    ]}
-                  />
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* FULL-WIDTH ENFORCEMENT PROGRESS TRACKER */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
-            {/* Stacked Bar — Enforcement Progress */}
-            <div className="saas-card frosted-glass" style={{ display: "flex", flexDirection: "column", flex: "1 1 100%", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
-                Enforcement Progress Tracker
-                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
-                  — Flag distribution across all 16 barangays
-                </span>
-              </h3>
-              {loading ? <Skeleton h={300} /> : (
-                <>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={enforcementData} margin={{ top: 0, right: 10, left: -20, bottom: 60 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--color-muted)" }} angle={-45} textAnchor="end" interval={0} />
-                      <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+          {/* SECTION B: COMPLIANCE MONITORING */}
+          <div style={{ marginBottom: 40 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>B. Compliance Monitoring</h3>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Compliance Timeline (12 Months)</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>The gap between active vs non-active renewals over time.</p>
+                <ChartInsightPanel chartId="timeline" insightText={InsightGenerator.timeline(timelineData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                <div style={{ height: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorNonActive" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="Green"  name="Active Business"  stackId="a" fill={COLOR.green}  radius={[0,0,0,0]} />
-                      <Bar dataKey="Yellow" name="Suspected Unregistered" stackId="a" fill={COLOR.yellow} />
-                      <Bar dataKey="Orange" name="1st/2nd Warning / Closure" stackId="a" fill={COLOR.orange} />
-                      <Bar dataKey="Red"    name="Unregistered"    stackId="a" fill={COLOR.red} />
-                      <Bar dataKey="Black"  name="Closed / Nonconforming"  stackId="a" fill={COLOR.black}  radius={[4,4,0,0]} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+                      <Area type="monotone" dataKey="Active" stroke="#10b981" fillOpacity={1} fill="url(#colorActive)" />
+                      <Area type="monotone" dataKey="Non-Active" stroke="#f43f5e" fillOpacity={1} fill="url(#colorNonActive)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Barangay Compliance Leaderboard</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Ranked compliance rates based on registered vs flagged entities.</p>
+                <ChartInsightPanel chartId="leaderboard" insightText={InsightGenerator.leaderboard(leaderboardData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                    <thead style={{ position: "sticky", top: 0, background: "var(--color-surface)", zIndex: 10 }}>
+                      <tr style={{ borderBottom: "2px solid rgba(226,232,240,0.6)", color: "var(--color-muted)", fontSize: 11, textTransform: "uppercase" }}>
+                        <th style={{ padding: "8px", fontWeight: 700 }}>Barangay</th>
+                        <th style={{ padding: "8px", fontWeight: 700 }}>Compliance Rate</th>
+                        <th style={{ padding: "8px", fontWeight: 700 }}>Flags</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboardData.sort((a,b) => b.rate - a.rate).map((row) => (
+                        <tr key={row.barangayName} style={{ borderBottom: "1px solid rgba(226,232,240,0.35)" }}>
+                          <td style={{ padding: "8px", fontWeight: 600, color: "var(--color-ink)", fontSize: 12 }}>{row.barangayName}</td>
+                          <td style={{ padding: "8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <strong style={{ fontSize: 12, color: row.rate >= 80 ? COLOR.green : row.rate >= 60 ? COLOR.yellow : COLOR.red, minWidth: 32 }}>{row.rate}%</strong>
+                              <div className="ops-score-bar" style={{ width: 60 }}>
+                                <div className="ops-score-fill" style={{ width: `${row.rate}%`, background: row.rate >= 80 ? COLOR.green : row.rate >= 60 ? COLOR.yellow : COLOR.red }} />
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: "8px", color: "var(--color-ink)", fontSize: 12, fontWeight: 700 }}>{row.totalFlags}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION C: AUDIT SUMMARY */}
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>C. Audit & Enforcement Summary</h3>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Inspection Result Breakdown</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Distribution of audit outcomes for verified businesses.</p>
+                <div style={{ height: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={auditData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                      <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)" }} />
+                      <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
+                        {auditData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                  {/* Dynamic Stacked Tracker Interpretation */}
-                  {!loading && enforcementData.length > 0 && (() => {
-                    const sortedByViolations = [...(desc?.enforcement_progress || [])]
-                      .map(row => ({
-                        name: row.barangayName,
-                        violations: (row.red_count || 0) + (row.yellow_count || 0) + (row.black_count || 0)
-                      }))
-                      .sort((a, b) => b.violations - a.violations);
-                    const worstBrgy = sortedByViolations[0];
-                    const worstBrgyName = worstBrgy ? worstBrgy.name : "N/A";
-                    const worstBrgyVal = worstBrgy ? worstBrgy.violations : 0;
-
-                    return (
-                      <ChartInterpretation
-                        type={worstBrgyVal > 5 ? "danger" : "info"}
-                        title="Enforcement Progress Insights"
-                        findings={[
-                          `Visual comparative inspection shows flag variance across all 16 municipal zones.`,
-                          worstBrgyVal > 0 ? `Establishments in ${worstBrgyName} present the highest volume of total compliance flags (${worstBrgyVal} issues).` : "No urgent compliance spikes detected across municipal barangays."
-                        ]}
-                        actions={[
-                          worstBrgyVal > 0 ? `Target ${worstBrgyName} with a concentrated enforcement sweep.` : "Continue routine inspections on a standard rotating schedule.",
-                          "Verify that newly resolved/active businesses have updated status codes reflected in registry records."
-                        ]}
-                      />
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-          </div>
-          {/* COMPLIANCE CONVERSION TIMELINE + BUSINESS SIZE + AUDIT SUMMARY */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 0 }}>
-            {/* Line — Compliance Conversion Timeline */}
-            <div className="saas-card frosted-glass" style={{ flex: "2 1 400px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 20px 0" }}>
-                Compliance Conversion Timeline
-                <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 500, marginLeft: 8 }}>
-                  — Last 12 months
-                </span>
-              </h3>
-              {loading ? <Skeleton h={220} /> : timelineData.length === 0 ? (
-                <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
-                  No timeline data — renewal dates may not be populated yet.
                 </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={timelineData} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Line type="monotone" dataKey="Active"      stroke={COLOR.green}  strokeWidth={2.5} dot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="Non-Active"  stroke={COLOR.red}    strokeWidth={2.5} dot={{ r: 4 }} strokeDasharray="5 3" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                  <ChartInterpretation
-                    type="info"
-                    title="Conversion Timeline Insights"
-                    findings={[
-                      "Monitors registration transitions (Active vs Non-Active) over the preceding 12-month period.",
-                      "An ascending Green line confirms positive enforcement response and successful business onboarding."
-                    ]}
-                    actions={[
-                      "Review seasonal peaks to determine BPLO application intake capacity needs.",
-                      "Cross-reference compliance timeline drops with historical registration deadlines."
-                    ]}
-                  />
-                </>
-              )}
-            </div>
-
-            {/* Right column: Business Size + Audit Summary */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 20, flex: "1 1 300px", minWidth: 0 }}>
-              {/* Business Size */}
-              <div className="saas-card frosted-glass" style={{ flex: 1 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 14px 0" }}>Business Size Profile</h3>
-                {loading ? <Skeleton h={100} /> : sizeData.length === 0 ? (
-                  <p style={{ fontSize: 12, color: COLOR.muted }}>No data</p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {sizeData.map((s, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 2, background: s.fill, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
-                        <strong style={{ fontSize: 13, color: "var(--color-ink)" }}>{s.value}</strong>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-
-              {/* Audit Summary */}
-              <div className="saas-card frosted-glass" style={{ flex: 1 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 14px 0" }}>Audit Summary</h3>
-                {loading ? <Skeleton h={100} /> : auditData.length === 0 ? (
-                  <p style={{ fontSize: 12, color: COLOR.muted }}>No inspection results yet</p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {auditData.map((a, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{
-                          width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-                          background: `${a.fill}22`, display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 11, fontWeight: 700, color: a.fill,
-                        }}>{a.name?.[0]}</span>
-                        <span style={{ fontSize: 12, color: "var(--color-muted)", flex: 1 }}>{a.name}</span>
-                        <strong style={{ fontSize: 14, color: "var(--color-ink)" }}>{a.value}</strong>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Enforcement Funnel</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Actual conversion of detected entities through the audit process.</p>
+                <ChartInsightPanel chartId="funnel" insightText={InsightGenerator.funnel(funnelData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
+                  {funnelData.map((f, i) => {
+                    const maxVal = Math.max(...funnelData.map(d => d.value)) || 1;
+                    const pct = (f.value / maxVal) * 100;
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                        <div style={{ width: 110, fontSize: 13, fontWeight: 600, color: "var(--color-muted)", textAlign: "right" }}>{f.step}</div>
+                        <div style={{ flex: 1, height: 24, background: "rgba(226,232,240,0.3)", borderRadius: 12, position: "relative", overflow: "hidden" }}>
+                          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: f.color, borderRadius: 12, transition: "width 0.5s ease" }} />
+                        </div>
+                        <div style={{ width: 40, fontSize: 14, fontWeight: 800, color: "var(--color-ink)" }}>{f.value}</div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -1364,165 +1872,105 @@ export default function AnalyticsPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           TIER 2 — DIAGNOSTIC ANALYTICS
       ══════════════════════════════════════════════════════════════════════ */}
-      {(activeTab === "all" || activeTab === "diagnostic") && (
+      {activeTab === "diagnostic" && (
         <section style={{ marginBottom: 52 }}>
           <SectionHeader
             tier="diagnostic"
-            title="Diagnostic Analytics"
-            subtitle="Barangay priority map via flag severity stacking, sector-level non-compliance patterns, and weekly emergence trend"
+            title="Diagnostic Analysis"
+            subtitle="Automated risk intelligence, historical trends, and sector-level risk drivers"
           />
 
-          {/* ADVANCED GEOSPATIAL INSIGHTS */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: 24, marginBottom: 24 }}>
+          {/* D1. NARRATIVES */}
+          <div style={{ marginBottom: 40 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>D1. Risk Intelligence Narratives</h3>
             
-            {/* DBSCAN NARRATIVE */}
-            <div className="saas-card frosted-glass" style={{ margin: 0, borderLeft: `4px solid ${COLOR.red}`, background: "var(--color-hover)" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ marginTop: 2, color: COLOR.red }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="8" x2="12" y2="12"/>
-                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 13, fontWeight: 800, color: "#991b1b", margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    High-Risk Area Detection
-                  </h3>
-                  <p style={{ fontSize: 14, color: "var(--color-ink)", margin: 0, lineHeight: 1.5 }}>
-                    {loading ? <span style={{ color: "var(--color-muted)" }}>Analyzing local map patterns...</span> : (diag?.dbscan_insight || "Hotspot detection temporarily unavailable.")}
-                  </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: "24px", borderRadius: 12 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+                  <div style={{ color: COLOR.red }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="8" x2="12" y2="12"/>
+                      <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 8px 0" }}>High-Risk Hotspot Detection (DBSCAN)</h3>
+                    <p style={{ fontSize: 14, color: "var(--color-muted)", margin: 0, lineHeight: 1.5 }}>
+                      {loading ? "Analyzing local map patterns..." : (diag?.dbscan_insight || "Hotspot detection temporarily unavailable.")}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* MORAN'S I NARRATIVE */}
-            <div className="saas-card frosted-glass" style={{ margin: 0, borderLeft: `4px solid #7c3aed`, background: "var(--color-hover)" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                <div style={{ marginTop: 2, color: "#7c3aed" }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="18" cy="5" r="3"/>
-                    <circle cx="6" cy="12" r="3"/>
-                    <circle cx="18" cy="19" r="3"/>
-                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 13, fontWeight: 800, color: "#5b21b6", margin: "0 0 6px 0", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Regional Risk Patterns
-                  </h3>
-                  <p style={{ fontSize: 14, color: "var(--color-ink)", margin: 0, lineHeight: 1.5 }}>
-                    {loading ? <span style={{ color: "var(--color-muted)" }}>Evaluating broader geographic patterns...</span> : (diag?.morans_insight || "Regional analysis temporarily unavailable.")}
-                  </p>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: "24px", borderRadius: 12 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+                  <div style={{ color: "#7c3aed" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18" cy="5" r="3"/>
+                      <circle cx="6" cy="12" r="3"/>
+                      <circle cx="18" cy="19" r="3"/>
+                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 8px 0" }}>Regional Risk Patterns (Moran's I)</h3>
+                    <p style={{ fontSize: 14, color: "var(--color-muted)", margin: 0, lineHeight: 1.5 }}>
+                      {loading ? "Evaluating broader geographic patterns..." : (diag?.morans_insight || "Regional analysis temporarily unavailable.")}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Risk Heatmap bar + Category non-compliance */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginBottom: 24 }}>
-            {/* Stacked bar — Barangay Risk Heatmap */}
-            <div className="saas-card frosted-glass" style={{ flex: "1.4 1 400px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>
-                Barangay Priority Map
-              </h3>
-              <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>
-                Stacked flag severity per barangay — sorted by total flagged count
-              </p>
-              {loading ? <Skeleton h={300} /> : riskBarData.length === 0 ? (
-                <div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
-                  No flagged entities detected yet. Run detection first.
-                </div>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={riskBarData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.4)" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={90} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
+            {/* D2. TREND ANALYSIS */}
+            <div>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>D2. Trend Analysis</h3>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, height: "calc(100% - 46px)" }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>Weekly Red Flag Emergence</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Are we catching more critical issues over time?</p>
+                {loading ? <Skeleton h={220} /> : trendData.length === 0 ? (
+                  <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No trend data yet.</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
+                      <XAxis dataKey="week" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="Yellow" name="Suspected" stackId="a" fill={COLOR.yellow} />
-                      <Bar dataKey="Orange" name="1st/2nd Warning / Closure" stackId="a" fill={COLOR.orange} />
-                      <Bar dataKey="Red"    name="Unregistered"    stackId="a" fill={COLOR.red}    />
-                      <Bar dataKey="Black"  name="Closed / Nonconforming"  stackId="a" fill={COLOR.black}  radius={[0,4,4,0]} />
+                      <Line type="monotone" dataKey="New Red Flags" stroke={COLOR.red} strokeWidth={3} dot={{ r: 4, fill: COLOR.red }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* D3. RISK BREAKDOWN */}
+            <div>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>D3. Risk Breakdown</h3>
+              <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, height: "calc(100% - 46px)" }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>Category Risk Drivers</h3>
+                <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Sector-specific patterns — top flagged lines of business</p>
+                {loading ? <Skeleton h={220} /> : categoryData.length === 0 ? (
+                  <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No sector data yet.</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={categoryData.slice(0, 7)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(226,232,240,0.4)" />
+                      <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--color-ink)", fontWeight: 500 }} width={120} axisLine={false} tickLine={false} tickFormatter={(val) => typeof val === 'string' && val.length > 18 ? val.substring(0, 18) + '…' : val} />
+                      <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)" }} />
+                      <Bar dataKey="count" fill={COLOR.orange} radius={[0,4,4,0]} name="Flagged">
+                        <LabelList dataKey="count" position="right" fill="var(--color-ink)" fontSize={11} fontWeight={600} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                  {/* Dynamic Priority Interpretation */}
-                  {!loading && riskBarData.length > 0 && (() => {
-                    const topRisk = riskBarData[0];
-                    const topRiskName = topRisk ? topRisk.name : "N/A";
-                    const topRiskVal = topRisk ? topRisk.total : 0;
-                    
-                    return (
-                      <ChartInterpretation
-                        type={topRiskVal > 8 ? "danger" : "warning"}
-                        title="Diagnostic Risk Index Insights"
-                        findings={[
-                          `Prioritization maps sort active zones based on cumulative flag counts weighted by severity.`,
-                          topRiskVal > 0 ? `${topRiskName} emerges as the primary municipal non-compliance zone with ${topRiskVal} unresolved flags.` : "Geospatial risk indicators are low across the municipality."
-                        ]}
-                        actions={[
-                          topRiskVal > 0 ? `Deploy BPLO enforcement assets to the highest-priority coordinate clusters in ${topRiskName}.` : "Continue micro-cluster scanning to identify hidden unregistered entities.",
-                          "Examine whether proximity to commercial corridors contributes to high flag density."
-                        ]}
-                      />
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-
-            {/* Horizontal bar — Category Non-Compliance */}
-            <div className="saas-card frosted-glass" style={{ flex: "1 1 300px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>
-                Category Non-Compliance
-              </h3>
-              <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>
-                Sector-specific patterns — top 10 flagged lines of business
-              </p>
-              {loading ? <Skeleton h={300} /> : categoryData.length === 0 ? (
-                <div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
-                  No matched sector data yet — requires registry ↔ flag cross-reference.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={categoryData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.4)" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--color-muted)" }} width={110} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="count" fill={COLOR.yellow} radius={[0,4,4,0]} name="Flagged" />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-
-          {/* Weekly Red Flag Trend */}
-          <div className="saas-card frosted-glass">
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>
-              Weekly Red Flag Emergence — Last 8 Weeks
-            </h3>
-            <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>
-              Tracks new unregistered business detections from Places API cross-referencing
-            </p>
-            {loading ? <Skeleton h={200} /> : trendData.length === 0 ? (
-              <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
-                No trend data yet — run detection to populate this chart.
+                )}
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={trendData} margin={{ top: 0, right: 20, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(226,232,240,0.5)" />
-                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="New Red Flags" stroke={COLOR.red} strokeWidth={2.5} dot={{ r: 5, fill: COLOR.red }} activeDot={{ r: 7 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
+            </div>
           </div>
         </section>
       )}
@@ -1530,133 +1978,90 @@ export default function AnalyticsPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           TIER 3 — PRESCRIPTIVE ANALYTICS (WLC / OPS)
       ══════════════════════════════════════════════════════════════════════ */}
-      {(activeTab === "all" || activeTab === "prescriptive") && (
+      {activeTab === "prescriptive" && (
         <section style={{ marginBottom: 32 }}>
           <SectionHeader
             tier="prescriptive"
-            title="Prescriptive Analytics — WLC Operational Priority Score"
+            title="Prescriptive Analytics — Action Plan"
             subtitle="Weighted Linear Combination model (OPS = W1·Risk + W2·Sector − W3·Distance) normalised 0–100 per barangay"
           />
 
-          <div style={{ marginBottom: 16 }}>
-            <button className="ghost-btn" onClick={() => showWlcConfig ? handleCancelWlc() : setShowWlcConfig(true)} style={{ fontSize: 13, padding: "6px 12px" }}>
-              {showWlcConfig ? "Close Quick Adjust" : "⚙ Quick Adjust WLC Weights"}
-            </button>
-          </div>
-          
-          {showWlcConfig && (
-            <div className="saas-card" style={{ background: "var(--color-hover)", marginBottom: 24, padding: "20px 24px" }}>
-              <h4 style={{ margin: "0 0 20px 0", fontSize: 15, color: "var(--color-ink)" }}>WLC & AHP Weight Configuration</h4>
-              
-              <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                {/* Sliders */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 24 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8 }}>
-                      Risk Severity (W1): <span style={{ color: COLOR.red }}>{wlcConfig.w1_risk}%</span>
-                    </label>
-                    <input type="range" min="0" max="100" value={wlcConfig.w1_risk} onChange={e => setWlcConfig({...wlcConfig, w1_risk: Number(e.target.value)})} style={{ width: "100%", accentColor: COLOR.red }} />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8 }}>
-                      Sector Impact (W2): <span style={{ color: COLOR.yellow }}>{wlcConfig.w2_sector}%</span>
-                    </label>
-                    <input type="range" min="0" max="100" value={wlcConfig.w2_sector} onChange={e => setWlcConfig({...wlcConfig, w2_sector: Number(e.target.value)})} style={{ width: "100%", accentColor: COLOR.yellow }} />
-                  </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--color-muted)", marginBottom: 8 }}>
-                      Travel Distance (W3): <span style={{ color: COLOR.blue }}>{wlcConfig.w3_distance}%</span>
-                    </label>
-                    <input type="range" min="0" max="100" value={wlcConfig.w3_distance} onChange={e => setWlcConfig({...wlcConfig, w3_distance: Number(e.target.value)})} style={{ width: "100%", accentColor: COLOR.blue }} />
-                  </div>
-                </div>
-
-                {/* AHP Matrix Panel */}
-                <div style={{ background: "var(--color-modal-bg)", border: "1px solid var(--color-border)", borderRadius: 8, padding: 16, overflowX: "auto" }}>
-                  <h5 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 10px 0", color: "var(--color-ink)" }}>AHP Pairwise Comparison Matrix</h5>
-                  <table style={{ width: "100%", fontSize: 11, textAlign: "center", borderCollapse: "collapse", marginBottom: 12 }}>
-                    <thead>
-                      <tr style={{ background: "rgba(226,232,240,0.4)" }}>
-                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>Criteria</th>
-                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>W1</th>
-                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>W2</th>
-                        <th style={{ padding: 6, border: "1px solid var(--color-border)" }}>W3</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)", fontWeight: 600 }}>Risk (W1)</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>1.00</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w1, ahp_w2)}</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w1, ahp_w3)}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)", fontWeight: 600 }}>Sector (W2)</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w2, ahp_w1)}</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>1.00</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w2, ahp_w3)}</td>
-                      </tr>
-                      <tr>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)", fontWeight: 600 }}>Distance (W3)</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w3, ahp_w1)}</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>{ahpVal(ahp_w3, ahp_w2)}</td>
-                        <td style={{ padding: 6, border: "1px solid var(--color-border)" }}>1.00</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div style={{ padding: "8px 12px", background: COLOR.greenLight, color: "#166534", borderRadius: 6, fontSize: 11, border: `1px solid ${COLOR.green}` }}>
-                    <strong style={{ display: "block", marginBottom: 4 }}>Analytic Hierarchy Process (AHP) Diagnostics</strong>
-                    Principal Eigenvalue (λmax): <strong>3.000</strong> <span style={{ color: "var(--color-muted)", margin: "0 8px" }}>|</span>
-                    Consistency Index (CI): <strong>0.000</strong> <br/>
-                    Consistency Ratio (CR): <strong style={{ color: "#065f46" }}>0.000 &lt; 0.10</strong> <span style={{ marginLeft: 8 }}>✓ Methodologically Valid</span>
-                    <p style={{ margin: "6px 0 0 0", color: "#166534", opacity: 0.8, fontSize: 10, lineHeight: 1.4 }}>
-                      Based on the evaluation model by Gunaratne (2025), REVELA utilizes AHP to calculate weighted criteria dynamically. 
-                      Because these subjective ratios are perfectly transitive across the matrix, they yield a zero Consistency Ratio, transforming them into a scientifically validated Operational Priority Score (OPS).
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end", gap: 12 }}>
-                <button className="ghost-btn" style={{ padding: "8px 16px", fontSize: 12 }} onClick={handleCancelWlc} disabled={savingWlc}>
-                  Cancel
-                </button>
-                <button className="primary-btn" style={{ padding: "8px 16px", fontSize: 12 }} onClick={handleSaveWlc} disabled={savingWlc}>
-                  {savingWlc ? "Applying..." : "Apply & Recalculate"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Dispatch Recommendations */}
+          {/* Focal Point: Actionable Dispatch Recommendations (Tier 1) */}
           {presc?.dispatch_recommendations && presc.dispatch_recommendations.length > 0 && (
-            <div className="saas-card frosted-glass" style={{ marginBottom: 24, borderLeft: `4px solid ${COLOR.blue}` }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: 8 }}>
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: COLOR.blue }}>
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                </svg>
-                Actionable Dispatch Recommendations
-              </h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {presc.dispatch_recommendations.map((rec, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "var(--color-input-bg)", padding: "12px 16px", borderRadius: 8, border: "1px solid rgba(226,232,240,0.8)" }}>
-                    <span style={{ background: COLOR.blue, color: "#fff", fontWeight: 800, fontSize: 12, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0, marginTop: 2 }}>
-                      {rec.rank}
-                    </span>
-                    <p style={{ margin: 0, fontSize: 14, color: "var(--color-ink)", lineHeight: 1.5 }}>
-                      {rec.recommendation}
-                    </p>
+            <div className="tier-1-card saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px 24px", borderRadius: 12 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+                <div style={{ marginTop: 2, color: COLOR.red }}>
+                  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                </div>
+                <div style={{ width: "100%" }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Actionable Dispatch Recommendations
+                  </h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {presc.dispatch_recommendations.map((rec, idx) => (
+                      <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 16, background: "rgba(244,63,94,0.08)", padding: "16px 20px", borderRadius: 10, border: "1px solid rgba(244,63,94,0.3)", boxShadow: "inset 0 0 0 1px rgba(244,63,94,0.1)" }}>
+                        <span style={{ background: "var(--color-danger, #f43f5e)", color: "#fff", fontWeight: 800, fontSize: 14, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0, marginTop: 0, boxShadow: "0 4px 12px rgba(244,63,94,0.4)" }}>
+                          {rec.rank}
+                        </span>
+                        <p style={{ margin: 0, fontSize: 16, color: "var(--color-ink)", lineHeight: 1.6, fontWeight: 500 }}>
+                          {rec.recommendation}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           )}
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
             {/* Radar chart — top 8 */}
-            <div className="saas-card frosted-glass" style={{ flex: "1 1 300px", minWidth: 0 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>
-                OPS Radar — Top 8 Barangays
-              </h3>
+            <div className="tier-3-card saas-card frosted-glass" style={{ borderRadius: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>
+                  OPS Radar — Top 8 Barangays
+                </h3>
+                <button className="ghost-btn" onClick={() => showWlcConfig ? handleCancelWlc() : setShowWlcConfig(true)} style={{ fontSize: 12, padding: "4px 10px", margin: 0 }}>
+                  {showWlcConfig ? "Close Quick Adjust" : "⚙ Quick Adjust WLC Weights"}
+                </button>
+              </div>
+              
+              {showWlcConfig && (
+                <div style={{ background: "var(--color-hover)", marginBottom: 16, padding: "16px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                  <h4 style={{ margin: "0 0 16px 0", fontSize: 13, color: "var(--color-ink)" }}>WLC Weight Configuration</h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 }}>
+                        Risk Severity (W1): <span style={{ color: "var(--color-primary)" }}>{wlcConfig.w1_risk}%</span>
+                      </label>
+                      <input type="range" min="0" max="100" value={wlcConfig.w1_risk} onChange={e => setWlcConfig({...wlcConfig, w1_risk: Number(e.target.value)})} style={{ width: "100%", accentColor: "var(--color-primary)" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 }}>
+                        Sector Impact (W2): <span style={{ color: "var(--color-primary)" }}>{wlcConfig.w2_sector}%</span>
+                      </label>
+                      <input type="range" min="0" max="100" value={wlcConfig.w2_sector} onChange={e => setWlcConfig({...wlcConfig, w2_sector: Number(e.target.value)})} style={{ width: "100%", accentColor: "var(--color-primary)" }} />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-muted)", marginBottom: 6 }}>
+                        Travel Distance (W3): <span style={{ color: "var(--color-primary)" }}>{wlcConfig.w3_distance}%</span>
+                      </label>
+                      <input type="range" min="0" max="100" value={wlcConfig.w3_distance} onChange={e => setWlcConfig({...wlcConfig, w3_distance: Number(e.target.value)})} style={{ width: "100%", accentColor: "var(--color-primary)" }} />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button className="ghost-btn" style={{ padding: "6px 12px", fontSize: 11 }} onClick={handleCancelWlc} disabled={savingWlc}>
+                      Cancel
+                    </button>
+                    <button className="primary-btn" style={{ padding: "6px 12px", fontSize: 11 }} onClick={handleSaveWlc} disabled={savingWlc}>
+                      {savingWlc ? "Applying..." : "Apply"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {loading ? <Skeleton h={280} /> : radarData.length === 0 ? (
                 <div style={{ height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
                   Insufficient data for radar.
@@ -1677,9 +2082,9 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Full WLC Rankings Table */}
-            <div className="saas-card frosted-glass" style={{ flex: "1.6 1 400px", minWidth: 0 }}>
+            <div className="tier-2-card saas-card frosted-glass" style={{ borderRadius: 12 }}>
               <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>
                   Inspector Deployment Priority Table
                 </h3>
                 <p style={{ fontSize: 12, color: "var(--color-muted)", margin: 0 }}>
@@ -1688,16 +2093,15 @@ export default function AnalyticsPage() {
               </div>
 
               {loading ? <Skeleton h={380} /> : (
-                <div style={{ overflowX: "auto" }}>
+                <div style={{ maxHeight: 400, overflowY: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                    <thead>
+                    <thead style={{ position: "sticky", top: 0, background: "var(--color-surface)", zIndex: 10 }}>
                       <tr style={{ borderBottom: "2px solid rgba(226,232,240,0.6)", color: "var(--color-muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>#</th>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>Barangay</th>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>OPS</th>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>Flagged</th>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>R / Y / B</th>
-                        <th style={{ padding: "10px 12px", fontWeight: 700 }}>NCR %</th>
                         <th style={{ padding: "10px 12px", fontWeight: 700 }}>Priority</th>
                       </tr>
                     </thead>
@@ -1719,7 +2123,7 @@ export default function AnalyticsPage() {
                           <td style={{ padding: "12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <strong style={{ fontSize: 14, color: "var(--color-ink)", minWidth: 36 }}>{row.ops_score}</strong>
-                              <div className="ops-score-bar">
+                              <div className="ops-score-bar" style={{ width: 40 }}>
                                 <div
                                   className="ops-score-fill"
                                   style={{
@@ -1740,7 +2144,6 @@ export default function AnalyticsPage() {
                             {" / "}
                             <span style={{ color: COLOR.black, fontWeight: 700 }}>{row.black_count}</span>
                           </td>
-                          <td style={{ padding: "12px", color: "var(--color-muted)", fontSize: 13 }}>{row.non_compliance_rate}%</td>
                           <td style={{ padding: "12px" }}>
                             <span style={{
                               padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
@@ -1759,6 +2162,7 @@ export default function AnalyticsPage() {
           </div>
         </section>
       )}
+      </div>
     </DashboardLayout>
   );
 }

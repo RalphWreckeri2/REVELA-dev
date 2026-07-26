@@ -164,7 +164,7 @@ function phaseLabel(displayed, total) {
 }
 
 // ── Main UploadModal ───────────────────────────────────────────────────────────
-export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
+export function UploadModal({ onClose, onSuccess, token, variant = "upload", isClosing }) {
   const isSync = variant === "sync";
   const [dragging,      setDragging]      = useState(false);
   const [file,          setFile]          = useState(null);
@@ -256,8 +256,8 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="modal-backdrop" style={s.backdrop} onClick={!loading ? onClose : undefined}>
-      <div className="modal-panel" style={s.card} onClick={e => e.stopPropagation()}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={s.backdrop} onClick={!loading ? onClose : undefined}>
+      <div className={"modal-panel" + (isClosing ? " closing" : "")} style={s.card} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={s.header}>
@@ -394,9 +394,7 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload" }) {
                 0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
                 40%            { transform: translateY(-6px); opacity: 1; }
               }
-              @keyframes spin {
-                to { transform: rotate(360deg); }
-              }
+              /* spin keyframe now defined globally in global.css */
             `}</style>
           </div>
 

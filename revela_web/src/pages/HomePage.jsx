@@ -108,7 +108,7 @@ function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
   return (
     <div className="dashboard-widget frosted-glass saas-card">
       <div className="widget-header">
-        <h3 style={{ color: "#b91c1c", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
+        <h3 style={{ color: "var(--color-danger)", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
             <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -136,10 +136,9 @@ function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
           return (
             <div 
               key={f.logID || f.id} 
-              style={{ background: "var(--color-surface)", border: "1px solid var(--color-border-soft)", padding: "10px 12px", borderRadius: "10px", cursor: "pointer", transition: "transform 0.15s" }} 
+              className="hover-lift"
+              style={{ background: "var(--color-surface)", border: "1px solid var(--color-border-soft)", padding: "10px 12px", borderRadius: "10px", cursor: "pointer" }} 
               onClick={() => navigate('/map')}
-              onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-              onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
             >
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: fc.marker, display: "inline-block", flexShrink: 0 }}></span>
@@ -152,7 +151,7 @@ function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
           );
         })}
         {criticalFlags.length > 0 && (
-          <button className="ghost-btn" style={{ fontSize: 11, padding: "6px", color: "#b91c1c", borderColor: "transparent", marginTop: 4, width: "100%" }} onClick={() => navigate('/map')}>
+          <button className="ghost-btn" style={{ fontSize: 11, padding: "6px", color: "var(--color-danger)", borderColor: "transparent", marginTop: 4, width: "100%" }} onClick={() => navigate('/map')}>
             View All Critical Targets →
           </button>
         )}
@@ -359,9 +358,9 @@ function VisualCalendarWidget({ inspections, navigate }) {
             let color = isToday ? "var(--color-primary)" : "var(--color-ink)";
             let dotColor = null;
             if (status === 'overdue') {
-              dotColor = "#ef4444";
+              dotColor = "var(--color-danger)";
             } else if (status === 'upcoming') {
-              dotColor = "#10b981";
+              dotColor = "var(--color-primary)";
             }
             
             let bg = isSelected ? "var(--color-border-soft)" : "transparent";
@@ -411,14 +410,14 @@ function VisualCalendarWidget({ inspections, navigate }) {
             return (
               <div 
                 key={task.reportID} 
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-hover)", border: "1px solid var(--color-border-soft)", borderLeft: isOverdue ? "4px solid #ef4444" : "4px solid #10b981", padding: "10px 12px", borderRadius: 10, cursor: "pointer" }} 
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-hover)", border: "1px solid var(--color-border-soft)", borderLeft: isOverdue ? "4px solid var(--color-danger)" : "4px solid var(--color-primary)", padding: "10px 12px", borderRadius: 10, cursor: "pointer" }} 
                 onClick={() => navigate('/inspections')}
               >
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)" }}>{task.detectedName}</div>
                   <div style={{ fontSize: 11, color: "var(--color-muted)", marginTop: 2 }}>Inspector: {task.inspectorName || "Unknown"}</div>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: isOverdue ? "#ef4444" : "var(--color-primary)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: isOverdue ? "var(--color-danger)" : "var(--color-primary)" }}>
                   {isOverdue ? "⚠ Overdue" : new Date(task.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </div>
               </div>
@@ -454,7 +453,7 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#10b981", display: "inline-block" }}></span>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--color-primary)", display: "inline-block" }}></span>
             Submitted Backlog <span style={{ color: "var(--color-muted)", fontSize: 16, fontWeight: 600 }}>({filteredFlags.length})</span>
           </h2>
           
@@ -505,10 +504,11 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
                 return (
                   <div 
                     key={f.logID || f.id}
+                    className="hover-lift"
                     onClick={() => { onClose(); navigate('/map?flag=' + (f.logID || f.id)); }}
                     style={{ 
                       background: "var(--color-surface)", 
-                      border: isRed ? "1px solid #ef4444" : "1px solid var(--color-border-soft)", 
+                      border: isRed ? "1px solid var(--color-danger)" : "1px solid var(--color-border-soft)", 
                       borderRadius: 16, 
                       padding: 20, 
                       display: "flex", 
@@ -516,11 +516,8 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
                       justifyContent: "space-between",
                       cursor: "pointer",
                       boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
-                      transition: "transform 0.15s, box-shadow 0.15s",
                       minHeight: 120
                     }}
-                    onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.06)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)'; }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -537,7 +534,6 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
                           </>
                         )}
                       </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-muted)" }}>#{f.logID || f.id}</span>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -668,12 +664,7 @@ export default function HomePage() {
 
   return (
     <DashboardLayout>
-      <style>{`
-        @keyframes shimmer {
-          0%   { background-position: -200% 0; }
-          100% { background-position:  200% 0; }
-        }
-      `}</style>
+      {/* shimmer keyframe now defined globally in global.css */}
 
       {/* Main Layout: 2 Columns */}
       <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 24, alignItems: "start" }}>
@@ -692,9 +683,9 @@ export default function HomePage() {
 
           {kpiError && (
             <div style={{
-              background: "rgba(239,68,68,0.1)", border: "1px solid #ef4444",
+              background: "var(--color-danger-light)", border: "1px solid var(--color-danger)",
               borderRadius: 8, padding: "10px 16px",
-              color: "#ef4444", fontSize: 13, fontWeight: 600,
+              color: "var(--color-danger)", fontSize: 13, fontWeight: 600,
             }}>
               ⚠ Could not load live metrics — check that the backend is running.
             </div>

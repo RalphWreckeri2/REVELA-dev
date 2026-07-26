@@ -285,7 +285,7 @@
   width: 18px;
   height: 18px;
   color: rgba(26, 58, 26, 0.4);
-  transition: color 0.3s ease;
+  transition: color var(--duration-normal) var(--ease-in-out);
 }
 
 /* Bounded, clear input boxes */
@@ -299,7 +299,7 @@
   color: #1a3a1a;
   outline: none;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) var(--ease-in-out);
 }
 
 .glass-input::placeholder {
@@ -337,7 +337,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s;
+  transition: color var(--duration-normal);
 }
 
 .pw-toggle svg {
@@ -360,7 +360,7 @@
   font-weight: 500;
   color: #56ab2f;
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color var(--duration-normal);
 }
 .forgot-btn:hover {
   color: #1a3a1a;
@@ -374,19 +374,10 @@
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 24px;
-  animation: fadeIn 0.3s ease;
+  animation: revela-slide-down var(--duration-slow) var(--ease-out);
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* fadeIn keyframe — now unified as revela-slide-down in global.css */
 
 .otp-desc {
   font-size: 13px;
@@ -414,7 +405,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--duration-normal);
 }
 
 .otp-send-btn:hover {
@@ -433,7 +424,7 @@
   font-weight: 600;
   cursor: pointer;
   letter-spacing: 0.5px;
-  transition: all 0.2s ease;
+  transition: all var(--duration-normal) var(--ease-in-out);
   margin-bottom: 28px;
   box-shadow: 0 8px 16px rgba(26, 58, 26, 0.2);
 }
@@ -472,7 +463,7 @@
   gap: 12px;
   font-size: 14px;
   font-weight: 500;
-  animation: slideDown 0.3s ease;
+  animation: revela-slide-down var(--duration-slow) var(--ease-out);
   border: 1px solid;
 }
 
@@ -492,22 +483,7 @@
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* spin & slideDown keyframes — now unified in global.css */
 
 .message-alert svg {
   width: 20px;
@@ -584,42 +560,54 @@ html.theme-dark .muni-pre,
 html.theme-dark .muni-loc,
 html.theme-dark .powered-by,
 html.theme-dark .brand-desc,
-html.theme-dark .form-subheading,
-html.theme-dark .form-label,
-html.theme-dark .forgot-pw {
+html.theme-dark .form-sub,
+html.theme-dark .field-label,
+html.theme-dark .forgot-btn {
   color: var(--color-muted);
+}
+
+html.theme-dark .legal-note {
+  color: #ff8a8a;
+  background: rgba(255, 138, 138, 0.1);
+  border-color: rgba(255, 138, 138, 0.2);
+}
+
+.text-accent {
+  color: #56ab2f !important;
+}
+html.theme-dark .text-accent {
+  color: #81c784 !important;
 }
 
 html.theme-dark .tagline {
   color: var(--color-subtle);
 }
 
-html.theme-dark .form-input {
+html.theme-dark .glass-input {
   background: var(--color-input-bg);
   border-color: var(--color-border);
   color: var(--color-ink);
 }
 
-html.theme-dark .form-input:focus {
+html.theme-dark .glass-input:focus {
   border-color: var(--color-primary);
   background: rgba(15, 23, 42, 0.8);
 }
 
-html.theme-dark .icon-btn {
+html.theme-dark .pw-toggle,
+html.theme-dark .input-icon {
   color: var(--color-muted);
 }
-html.theme-dark .icon-btn:hover {
+html.theme-dark .pw-toggle:hover {
   color: var(--color-ink);
 }
 
-html.theme-dark .otp-input {
-  background: var(--color-input-bg);
+html.theme-dark .otp-box {
+  background: rgba(15, 23, 42, 0.4);
   border-color: var(--color-border);
-  color: var(--color-ink);
 }
-html.theme-dark .otp-input:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-light);
+html.theme-dark .otp-desc {
+  color: var(--color-ink);
 }
 
 html.theme-dark .modal-backdrop {

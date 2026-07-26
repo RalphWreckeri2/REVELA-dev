@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
+import AnimatePresence from './AnimatePresence';
 
 const FLAG_COLORS = {
   Red: { marker: "#ef4444", bg: "var(--flag-red-bg)", text: "var(--flag-red-text)", label: "Detected Unregistered" },
   Yellow: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered" },
-  Yellow_Inspector: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered from Inspectors" },
-  Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "1st/2nd Warning / 3rd Notice Closure" },
-  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Closed / Nonconforming" },
+  Yellow_Inspector: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Inspector Reported" },
+  Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "Warning / Notice" },
+  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Closed" },
   Green: { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
 };
 
@@ -25,11 +26,20 @@ function shortBarangay(b) {
   return b.replace(/Barangay\s+/i, "Brgy. ");
 }
 
-export default function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate }) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterColor, setFilterColor] = useState("Yellow_Inspector");
+export default function InspectorReportsModal(props) {
+  return (
+    <AnimatePresence isVisible={props.isOpen}>
+      <InspectorReportsModalInner {...props} />
+    </AnimatePresence>
+  );
+}
 
-  if (!isOpen) return null;
+function InspectorReportsModalInner({ isOpen, onClose, flags, inspectors, navigate, isClosing }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterColor, setFilterColor] = useState("all");
+  const [sortBy, setSortBy] = useState("recent");
+
+  if (!isOpen && !isClosing) return null;
 
   const filteredFlags = flags.filter(f => {
     let matchColor = false;
@@ -48,9 +58,25 @@ export default function InspectorReportsModal({ isOpen, onClose, flags, inspecto
     return matchColor && matchSearch;
   });
 
+  const sortedFlags = [...filteredFlags].sort((a, b) => {
+    if (sortBy === "name") {
+      const nameA = (a.detectedName || a.name || "").toLowerCase();
+      const nameB = (b.detectedName || b.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    } else if (sortBy === "barangay") {
+      const brgyA = (a.barangayName || a.barangay || "").toLowerCase();
+      const brgyB = (b.barangayName || b.barangay || "").toLowerCase();
+      return brgyA.localeCompare(brgyB);
+    } else {
+      const idA = a.logID || a.id || 0;
+      const idB = b.logID || b.id || 0;
+      return idA < idB ? 1 : -1;
+    }
+  });
+
   return ReactDOM.createPortal(
-    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div className="modal-panel modal-content saas-card" onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: "95vw", height: "85vh", display: "flex", flexDirection: "column", padding: 32, borderRadius: 24, background: "var(--color-modal-bg)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className={"modal-panel modal-content saas-card" + (isClosing ? " closing" : "")} onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: "95vw", height: "85vh", display: "flex", flexDirection: "column", padding: 32, borderRadius: 24, background: "var(--color-modal-bg)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}>
         
         {/* Header */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
@@ -73,6 +99,16 @@ export default function InspectorReportsModal({ isOpen, onClose, flags, inspecto
                   onChange={e => setSearchTerm(e.target.value)}
                 />
               </div>
+
+              <select
+                style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--color-border-soft)", background: "var(--color-surface)", color: "var(--color-ink)", fontSize: 13, outline: "none", cursor: "pointer", height: "36px" }}
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+              >
+                <option value="recent">Most Recent</option>
+                <option value="name">By Name</option>
+                <option value="barangay">By Barangay</option>
+              </select>
               
               <button className="modal-close-btn" onClick={onClose}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -106,20 +142,21 @@ export default function InspectorReportsModal({ isOpen, onClose, flags, inspecto
 
         {/* Grid Content */}
         <div style={{ flex: 1, overflowY: "auto", paddingRight: 16 }}>
-          {filteredFlags.length === 0 ? (
+          {sortedFlags.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 0", color: "var(--color-muted)", fontSize: 15, display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
               <img src="/searching.png" alt="No items found" style={{ height: 100, objectFit: "contain", opacity: 0.9 }} />
               No items found matching your criteria.
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-              {filteredFlags.map(f => {
+              {sortedFlags.map(f => {
                 const fc = getFlagColor(parseColor(f));
                 
                 return (
                   <div 
                     key={f.logID || f.id}
-                    onClick={() => { onClose(); navigate('?flag=' + (f.logID || f.id)); }}
+                    className="hover-lift"
+                    onClick={() => { navigate('?flag=' + (f.logID || f.id)); }}
                     style={{ 
                       background: "var(--color-surface)", 
                       border: "1px solid var(--color-border-soft)", 
@@ -130,11 +167,8 @@ export default function InspectorReportsModal({ isOpen, onClose, flags, inspecto
                       justifyContent: "space-between",
                       cursor: "pointer",
                       boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
-                      transition: "transform 0.15s, box-shadow 0.15s",
                       minHeight: 120
                     }}
-                    onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.06)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.02)'; }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -142,7 +176,7 @@ export default function InspectorReportsModal({ isOpen, onClose, flags, inspecto
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                           {fc.label}
                         </span>
-                        {f.noticeLevel && (
+                        {parseColor(f) === 'Orange' && Boolean(f.noticeLevel) && f.noticeLevel !== 0 && f.noticeLevel !== "0" && (
                           <>
                             <span style={{ color: "var(--color-muted)", fontSize: 12 }}>&gt;</span>
                             <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: "var(--flag-orange-bg)", color: "var(--flag-orange-text)" }}>
@@ -151,7 +185,6 @@ export default function InspectorReportsModal({ isOpen, onClose, flags, inspecto
                           </>
                         )}
                       </div>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-muted)" }}>#{f.logID || f.id}</span>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -162,10 +195,6 @@ export default function InspectorReportsModal({ isOpen, onClose, flags, inspecto
                           {shortBarangay(f.barangayName || f.barangay || "—")}
                         </p>
                       </div>
-                      
-                      <button style={{ width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--color-border-soft)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-ink)", flexShrink: 0 }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-                      </button>
                     </div>
                   </div>
                 );

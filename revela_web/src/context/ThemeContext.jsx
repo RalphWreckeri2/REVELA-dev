@@ -21,47 +21,57 @@ export function ThemeProvider({ children }) {
     return "system";
   });
 
-  const [resolved, setResolved] = useState(() => resolveTheme(preference));
+  const [preview, setPreview] = useState(null);
+  const activePref = preview || preference;
+  
+  const [resolved, setResolved] = useState(() => resolveTheme(activePref));
 
-  // Apply the resolved theme to <html> and persist preference
+  useEffect(() => {
+    setResolved(resolveTheme(activePref));
+  }, [activePref]);
+
+  // Apply the resolved theme to <html>
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("theme-dark", resolved === "dark");
+  }, [resolved]);
+
+  // Persist real preference
+  useEffect(() => {
     window.localStorage.setItem("revela-theme", preference);
-  }, [resolved, preference]);
+  }, [preference]);
 
   // Listen for OS theme changes when in "system" mode
   useEffect(() => {
-    if (preference !== "system") {
-      setResolved(preference);
+    if (activePref !== "system") {
       return;
     }
-
     const mql = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e) => setResolved(e.matches ? "dark" : "light");
 
-    // Set initial resolved value
-    setResolved(mql.matches ? "dark" : "light");
-
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
-  }, [preference]);
+  }, [activePref]);
 
   const setTheme = useCallback((newPref) => {
     setPreference(newPref);
-    if (newPref !== "system") {
-      setResolved(newPref);
-    }
+    setPreview(null);
+  }, []);
+  
+  const setPreviewTheme = useCallback((newPref) => {
+    setPreview(newPref);
   }, []);
 
   const value = useMemo(
     () => ({
-      theme: preference,       // "light" | "dark" | "system"
-      resolvedTheme: resolved,  // "light" | "dark" (actual applied theme)
+      theme: preference,       
+      previewTheme: preview,
+      resolvedTheme: resolved,  
       setTheme,
+      setPreviewTheme,
       isDark: resolved === "dark",
     }),
-    [preference, resolved, setTheme]
+    [preference, preview, resolved, setTheme, setPreviewTheme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

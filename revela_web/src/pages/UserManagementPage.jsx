@@ -9,6 +9,7 @@ import {
   API_ORIGIN,
 } from "../services/api";
 import "../styles/UserManagement.css";
+import AnimatePresence from "../components/AnimatePresence";
 import SwalOriginal from "sweetalert2";
 
 const Swal = SwalOriginal.mixin({
@@ -698,24 +699,24 @@ export default function UserManagementPage() {
       </footer>
 
       {/* Modals */}
-      {showCreate && (
+      <AnimatePresence isVisible={showCreate}>
         <CreateUserModal
           token={token}
           onClose={() => setShowCreate(false)}
           onSuccess={fetchUsers}
         />
-      )}
+      </AnimatePresence>
 
-      {editingUser && (
+      <AnimatePresence isVisible={!!editingUser}>
         <EditUserModal
           user={editingUser}
           token={token}
           onClose={() => setEditingUser(null)}
           onSuccess={fetchUsers}
         />
-      )}
+      </AnimatePresence>
 
-      {userToDelete && (
+      <AnimatePresence isVisible={!!userToDelete}>
         <DeleteUserModal
           targetUser={userToDelete}
           token={token}
@@ -724,16 +725,16 @@ export default function UserManagementPage() {
             fetchUsers();
           }}
         />
-      )}
+      </AnimatePresence>
 
-      {userToReset && (
+      <AnimatePresence isVisible={!!userToReset}>
         <ResetPasswordModal
           targetUser={userToReset}
           token={token}
           onClose={() => setUserToReset(null)}
           onSuccess={fetchUsers}
         />
-      )}
+      </AnimatePresence>
     </DashboardLayout>
   );
 }

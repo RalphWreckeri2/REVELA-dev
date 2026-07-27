@@ -38,6 +38,7 @@
 
   /* Glass */
   --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-pill: color-mix(in srgb, var(--color-primary) 25%, var(--glass-bg));
   --glass-border: rgba(255, 255, 255, 0.9);
   --glass-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 1), 0 4px 16px rgba(0, 0, 0, 0.03);
@@ -708,6 +709,7 @@ html.theme-dark {
   --color-hover: rgba(255, 255, 255, 0.05);
 
   --glass-bg: rgba(17, 17, 17, 0.75);
+  --glass-bg-pill: color-mix(in srgb, var(--color-primary) 15%, var(--glass-bg));
   --glass-border: rgba(255, 255, 255, 0.2);
   --glass-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 32px rgba(0, 0, 0, 0.4);

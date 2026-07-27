@@ -185,6 +185,37 @@ def _get_all_analytics_inner(F=None):
         for row in cur.fetchall()
     ]
 
+    # Business type (Legal Structure)
+    cur.execute(f"""
+        SELECT COALESCE(businessType, 'Unknown') AS type_label, COUNT(*) AS count
+        FROM official_registry
+        WHERE 1=1 {reg_all}
+        GROUP BY businessType
+        ORDER BY count DESC
+    """, reg_all_p)
+    business_type_dist = [
+        {"type_label": row["type_label"], "count": row["count"]}
+        for row in cur.fetchall()
+    ]
+
+    # Compliance by Business Size
+    cur.execute(f"""
+        SELECT COALESCE(businessSize, 'Unknown') AS size_label,
+               SUM(CASE WHEN applicationStatus = 'Active' THEN 1 ELSE 0 END) AS active_count,
+               SUM(CASE WHEN applicationStatus != 'Active' THEN 1 ELSE 0 END) AS inactive_count
+        FROM official_registry
+        WHERE 1=1 {reg_all}
+        GROUP BY businessSize
+    """, reg_all_p)
+    compliance_by_size = [
+        {
+            "size_label": row["size_label"],
+            "active_count": row["active_count"] or 0,
+            "inactive_count": row["inactive_count"] or 0
+        }
+        for row in cur.fetchall()
+    ]
+
     # Compliance timeline
     cur.execute(f"""
         SELECT
@@ -303,6 +334,7 @@ def _get_all_analytics_inner(F=None):
 
     # DBSCAN Hotspot Intelligence
     dbscan_insight = "Not enough data to pinpoint specific high-risk zones."
+    dbscan_clusters = []
     try:
         cur.execute(f"""
             SELECT g.latitude, g.longitude, COALESCE(b.barangayName, 'Unknown Area') as barangayName
@@ -332,11 +364,24 @@ def _get_all_analytics_inner(F=None):
             labels = db.labels_
 
             valid_labels = [lbl for lbl in labels if lbl != -1]  # -1 is noise
+            largest_cluster_label = -1
             if valid_labels:
                 # Find largest cluster
                 largest_cluster_label = Counter(
                     valid_labels).most_common(1)[0][0]
                 cluster_size = Counter(valid_labels).most_common(1)[0][1]
+
+            # Export points for visualization
+            for idx, row in enumerate(hotspot_data):
+                dbscan_clusters.append({
+                    "lat": float(row['latitude']),
+                    "lng": float(row['longitude']),
+                    "cluster": int(labels[idx]),
+                    "is_primary": bool(int(labels[idx]) == largest_cluster_label and int(labels[idx]) != -1),
+                    "barangay": row['barangayName']
+                })
+
+            if valid_labels:
 
                 # Find dominant barangay in this cluster
                 cluster_barangays = [hotspot_data[i]['barangayName'] for i, lbl in enumerate(
@@ -353,6 +398,7 @@ def _get_all_analytics_inner(F=None):
 
     # Moran's I Proxy (Spatial Autocorrelation)
     morans_insight = "Not enough data to determine broader geographic patterns."
+    morans_data = {"points": [], "threshold": 0}
     try:
         cur.execute(f"""
             SELECT 
@@ -380,6 +426,13 @@ def _get_all_analytics_inner(F=None):
                 risk_values = [p['risk'] for p in points]
                 threshold = np.percentile(risk_values, 75) if sum(
                     risk_values) > 0 else 0
+                
+                morans_data["threshold"] = float(threshold)
+                morans_data["points"] = [
+                    {"barangay": p['name'], "risk": p['risk'], "is_high_risk": bool(p['risk'] > threshold and p['risk'] > 0)}
+                    for p in points
+                ]
+                
                 high_risk_points = [
                     p for p in points if p['risk'] > threshold and p['risk'] > 0]
 
@@ -569,6 +622,56 @@ def _get_all_analytics_inner(F=None):
                 "recommendation": rec_text
             })
 
+    # ══════════════════════════════════════════════════════════════════════════
+    # TIER 4 — OPERATIONS
+    # ══════════════════════════════════════════════════════════════════════════
+    
+    # 1. Inspector Leaderboard
+    cur.execute(f"""
+        SELECT 
+            u.userID, 
+            u.fullName, 
+            COUNT(ir.reportID) as total_assigned, 
+            SUM(CASE WHEN ir.verificationStatus IN ('Verified', 'Submitted') THEN 1 ELSE 0 END) as total_completed, 
+            AVG(ir.resolutionTime) as avg_resolution_time 
+        FROM inspection_reports ir 
+        JOIN users u ON ir.userID = u.userID 
+        WHERE 1=1 {insp_ir}
+        GROUP BY u.userID
+        ORDER BY total_completed DESC
+    """, insp_ir_p)
+    inspector_stats = list(cur.fetchall())
+    for stat in inspector_stats:
+        if stat["avg_resolution_time"] is not None:
+            stat["avg_resolution_time"] = float(stat["avg_resolution_time"])
+        else:
+            stat["avg_resolution_time"] = 0.0
+
+    # 2. Inspection Status Breakdown
+    cur.execute(f"""
+        SELECT COALESCE(verificationStatus, 'Unassigned') as status, COUNT(reportID) as count
+        FROM inspection_reports ir
+        WHERE 1=1 {insp_ir}
+        GROUP BY verificationStatus
+    """, insp_ir_p)
+    status_breakdown = list(cur.fetchall())
+
+    # 3. Inspection Timeline
+    cur.execute(f"""
+        SELECT DATE(irTimestamp) as date, COUNT(reportID) as count
+        FROM inspection_reports ir
+        WHERE 1=1 {insp_ir}
+        GROUP BY DATE(irTimestamp)
+        ORDER BY date ASC
+    """, insp_ir_p)
+    timeline_rows = list(cur.fetchall())
+    inspection_timeline = []
+    for row in timeline_rows:
+        inspection_timeline.append({
+            "date": row["date"].strftime("%Y-%m-%d") if row["date"] else None,
+            "count": row["count"]
+        })
+
     cur.close()
 
     return jsonify({
@@ -589,6 +692,8 @@ def _get_all_analytics_inner(F=None):
             "nature_per_barangay":   nature_per_barangay,
             "sectoral_distribution": sectoral_distribution,
             "business_size_dist":    business_size_dist,
+            "business_type_dist":    business_type_dist,
+            "compliance_by_size":    compliance_by_size,
             "compliance_timeline":   compliance_timeline,
             "audit_summary": {
                 "total_inspections": total_inspections,
@@ -601,11 +706,18 @@ def _get_all_analytics_inner(F=None):
             "flag_trend":             flag_trend,
             "dbscan_insight":         dbscan_insight,
             "morans_insight":         morans_insight,
+            "dbscan_clusters":        dbscan_clusters,
+            "morans_data":            morans_data,
         },
         "prescriptive": {
             "rankings":   rankings,
             "wlc_config": config,
             "dispatch_recommendations": dispatch_recommendations,
+        },
+        "operations": {
+            "inspector_stats": inspector_stats,
+            "status_breakdown": status_breakdown,
+            "inspection_timeline": inspection_timeline,
         },
     }), 200
 

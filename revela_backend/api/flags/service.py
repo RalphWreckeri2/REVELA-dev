@@ -3,12 +3,26 @@ from sklearn.cluster import DBSCAN
 import os
 import time
 import requests as http
+import json
 from geopy.distance import geodesic
 from app import mysql
 from shapely.geometry import shape, Point
 from api.utils.cancellation import is_cancelled, set_cancel
 
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+
+# ── GeoJSON Loading ───────────────────────────────────────────────────────────
+MATAASNAKAHOY_GEOJSON_PATH = os.path.join(os.path.dirname(__file__), '..', 'utils', 'mataasnakahoy.json')
+_BARANGAY_POLYGONS = {}
+
+if os.path.exists(MATAASNAKAHOY_GEOJSON_PATH):
+    with open(MATAASNAKAHOY_GEOJSON_PATH, 'r', encoding='utf-8') as f:
+        _geojson_data = json.load(f)
+        for feature in _geojson_data.get('features', []):
+            b_name = feature.get('properties', {}).get('ADM4_EN')
+            if b_name:
+                poly = shape(feature.get('geometry'))
+                _BARANGAY_POLYGONS[b_name] = poly
 
 # ── Municipality spatial config ───────────────────────────────────────────────
 # Cross-referencing threshold: POI must be within this distance of a registry
@@ -192,10 +206,44 @@ def _find_nearest(poi_lat, poi_lng, registry):
 
 def _get_barangay_id_by_coords(lat, lng):
     """
-    Find which barangayID a POI belongs to by proximity to existing registry
-    entries. Falls back to barangayID=1 if nothing found.
+    Find which barangayID a POI belongs to by checking GeoJSON boundaries.
+    Falls back to proximity to existing registry entries if not found in any polygon.
     """
+    pt = Point(lng, lat)
+    matched_geojson_name = None
+    for name, poly in _BARANGAY_POLYGONS.items():
+        if poly.contains(pt):
+            matched_geojson_name = name
+            break
+            
     cursor = mysql.connection.cursor()
+    
+    if matched_geojson_name:
+        cursor.execute("SELECT barangayID, barangayName FROM barangays")
+        barangs = cursor.fetchall()
+        
+        mapping = {
+            "District I (Pob.)": "Barangay I",
+            "District II (Pob.)": "Barangay II",
+            "District III (Pob.)": "Barangay III",
+            "District IV (Pob.)": "Barangay IV",
+            "Barangay II-A (Pob.)": "Barangay II-A",
+            "Lumang Lipa": "Barangay Lumanglipa"
+        }
+        
+        for b in barangs:
+            b_name = b['barangayName']
+            target_name = mapping.get(matched_geojson_name)
+            
+            if target_name and target_name == b_name:
+                cursor.close()
+                return b["barangayID"]
+                
+            if not target_name and matched_geojson_name.lower() in b_name.lower():
+                cursor.close()
+                return b["barangayID"]
+
+    # Fallback to proximity
     cursor.execute("""
         SELECT barangayID, latitude, longitude
         FROM official_registry

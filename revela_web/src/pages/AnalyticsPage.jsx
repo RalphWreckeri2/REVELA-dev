@@ -72,7 +72,7 @@ const SectionHeader = ({ tier, title, subtitle }) => {
   const tierColors = {
     descriptive: { bg: COLOR.greenLight, color: COLOR.green, label: "Descriptive" },
     diagnostic: { bg: COLOR.yellowLight, color: "#b45309", label: "Diagnostic" },
-    prescriptive: { bg: COLOR.redLight, color: COLOR.red, label: "Prescriptive" },
+    prescriptive: { bg: "rgba(99,102,241,0.1)", color: "#6366f1", label: "Prescriptive" },
     operations: { bg: COLOR.blueLight, color: COLOR.blue, label: "Operations" },
   }[tier];
   return (
@@ -102,126 +102,6 @@ const Skeleton = ({ h = 200 }) => (
   }} />
 );
 
-// ── Chart Interpretation & Insights ──────────────────────────────────────────
-const ChartInterpretation = ({ type = "info", title = "Analysis & Recommendations", findings = [], actions = [] }) => {
-  const [expanded, setExpanded] = useState(false);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setExpanded(false);
-      }
-    };
-    if (expanded) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [expanded]);
-
-  const styles = {
-    info: {
-      borderLeft: "4px solid #3b82f6",
-      background: "var(--color-hover)",
-      color: "var(--color-muted)",
-      titleColor: "var(--color-ink)",
-    },
-    success: {
-      borderLeft: "4px solid var(--flag-green-text)",
-      background: "var(--color-hover)",
-      color: "var(--color-muted)",
-      titleColor: "var(--flag-green-text)",
-    },
-    warning: {
-      borderLeft: "4px solid var(--flag-orange-text)",
-      background: "var(--color-hover)",
-      color: "var(--color-muted)",
-      titleColor: "var(--flag-orange-text)",
-    },
-    danger: {
-      borderLeft: "4px solid var(--flag-red-text)",
-      background: "var(--color-hover)",
-      color: "var(--color-muted)",
-      titleColor: "var(--flag-red-text)",
-    },
-  }[type] || {
-    borderLeft: "4px solid var(--color-muted)",
-    background: "var(--color-hover)",
-    color: "var(--color-muted)",
-    titleColor: "var(--color-ink)",
-  };
-
-  return (
-    <div ref={containerRef} style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        style={{
-          background: expanded ? styles.background : "var(--color-input-bg)",
-          border: `1px solid ${expanded ? styles.titleColor : "var(--color-border-soft)"}`,
-          color: expanded ? styles.titleColor : "var(--color-muted)",
-          width: 32, height: 32, borderRadius: "50%",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          transition: "all 0.2s"
-        }}
-        title="View Insights"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="16" x2="12" y2="12"></line>
-          <line x1="12" y1="8" x2="12.01" y2="8"></line>
-        </svg>
-      </button>
-
-      {expanded && (
-        <div style={{
-          position: "absolute",
-          top: 40,
-          right: 0,
-          width: 320,
-          padding: "16px 20px",
-          borderRadius: "var(--radius-lg, 12px)",
-          borderTop: styles.borderLeft,
-          background: "var(--color-modal-bg)",
-          fontSize: 13,
-          lineHeight: 1.5,
-          boxShadow: "0 10px 40px rgba(0,0,0,0.12)",
-          border: "1px solid var(--color-border-soft)",
-          zIndex: 20
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: styles.titleColor, flexShrink: 0 }}>
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-            </svg>
-            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: styles.titleColor, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {title}
-            </h4>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {findings.length > 0 && (
-              <div>
-                <strong style={{ color: styles.titleColor, display: "block", marginBottom: 4 }}>Key Observations:</strong>
-                <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
-                  {findings.map((f, i) => <li key={i} style={{ marginBottom: 4 }}>{f}</li>)}
-                </ul>
-              </div>
-            )}
-            {actions.length > 0 && (
-              <div>
-                <strong style={{ color: styles.titleColor, display: "block", marginBottom: 4 }}>Actionable Strategy:</strong>
-                <ul style={{ margin: 0, paddingLeft: 16, color: "var(--color-ink)" }}>
-                  {actions.map((a, i) => <li key={i} style={{ marginBottom: 4, listStyleType: "square" }}>{a}</li>)}
-                </ul>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 const createEmptyFilters = () => ({
   barangay_ids: [],
@@ -270,8 +150,6 @@ function countActiveBackendFilters(applied) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-const maxHeightForCategory = (len) => Math.max(300, len * 40);
 
 // --- Insight Generator Logic (Auto-Analyze) ---
 const InsightGenerator = {
@@ -525,7 +403,7 @@ export default function AnalyticsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview"); // overview, descriptive, diagnostic, prescriptive
+  const [activeTab, setActiveTab] = useState("descriptive"); // descriptive, diagnostic, prescriptive
   const [isScrolled, setIsScrolled] = useState(false);
 
   const tabMarkerRef = useRef(null);
@@ -545,6 +423,7 @@ export default function AnalyticsPage() {
   const [wlcConfig, setWlcConfig] = useState({ w1_risk: 40, w2_sector: 25, w3_distance: 15 });
   const [showWlcConfig, setShowWlcConfig] = useState(false);
   const [savingWlc, setSavingWlc] = useState(false);
+  const [expandedDispatch, setExpandedDispatch] = useState({});
   const [draftFilters, setDraftFilters] = useState(createEmptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(createEmptyFilters);
   const [showFilters, setShowFilters] = useState(false);
@@ -552,10 +431,10 @@ export default function AnalyticsPage() {
   const [brgySearchTerm, setBrgySearchTerm] = useState("");
   const [brgyDropdownOpen, setBrgyDropdownOpen] = useState(false);
   const brgyDropdownRef = useRef(null);
-  const [showDetailCharts, setShowDetailCharts] = useState(false);
+
   const [filterMeta, setFilterMeta] = useState(null);
   const [barangaysList, setBarangaysList] = useState([]);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+
   const [expandedInsights, setExpandedInsights] = useState({});
 
   const toggleInsight = (chartId) => {
@@ -608,7 +487,10 @@ export default function AnalyticsPage() {
     setShowWlcConfig(false);
   };
 
-  useEffect(() => { fetchAnalytics(); fetchWlcConfig(); }, [fetchAnalytics, fetchWlcConfig]);
+  useEffect(() => { 
+    fetchAnalytics(); 
+    fetchWlcConfig(); 
+  }, [fetchAnalytics, fetchWlcConfig]);
 
   useEffect(() => {
     if (!token) return;
@@ -636,66 +518,16 @@ export default function AnalyticsPage() {
   const presc = data?.prescriptive;
   const kpis = desc?.kpis;
 
-  // ── Enforcement progress chart data ──────────────────────────────────────
-  const enforcementData = (desc?.enforcement_progress || []).map(row => ({
-    name: shortBarangay(row.barangayName),
-    Green: row.green_count || 0,
-    Red: row.red_count || 0,
-    Yellow: row.yellow_count || 0,
-    Black: row.black_count || 0,
-    Orange: row.orange_count || 0,
-  }));
 
-  // Calculate aggregate counts of flags per color
-  const totalGreen = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.green_count || 0), 0);
-  const totalYellow = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.yellow_count || 0), 0);
-  const totalRed = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.red_count || 0), 0);
-  const totalBlack = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.black_count || 0), 0);
-  const totalOrange = (desc?.enforcement_progress || []).reduce((sum, r) => sum + (r.orange_count || 0), 0);
 
-  const flagsByColorData = [
-    { name: "Active Business", value: totalGreen, fill: FLAG_COLORS.Green || COLOR.green },
-    { name: "Suspected Unregistered", value: totalYellow, fill: FLAG_COLORS.Yellow || COLOR.yellow },
-    { name: "1st/2nd Warning / Closure", value: totalOrange, fill: FLAG_COLORS.Orange || COLOR.orange },
-    { name: "Detected Unregistered", value: totalRed, fill: FLAG_COLORS.Red || COLOR.red },
-    { name: "Closed / Nonconforming", value: totalBlack, fill: FLAG_COLORS.Black || COLOR.slate },
-  ].filter(item => item.value > 0 || item.name === "1st/2nd Warning / Closure");
 
-  // ── Nature per barangay ───────────────────────────────────────────────────
-  const naturePerBarangayData = desc?.nature_per_barangay || [];
-  const natureKeys = useMemo(() => {
-    const keys = new Set();
-    naturePerBarangayData.forEach(row => {
-      Object.keys(row).forEach(k => {
-        if (k !== 'barangayName') keys.add(k);
-      });
-    });
-    return Array.from(keys);
-  }, [naturePerBarangayData]);
-
-  // ── Palette for Nature Chart ─────────────────────────────────────────────
-  const NATURE_COLORS = [
-    "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-    "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#06b6d4",
-    "#84cc16", "#a855f7", "#fb923c", "#34d399", "#818cf8"
-  ];
-
-  const maxNatureCount = useMemo(() => {
-    let max = 0;
-    naturePerBarangayData.forEach(row => {
-      natureKeys.forEach(k => {
-        if (row[k] > max) max = row[k];
-      });
-    });
-    return max;
-  }, [naturePerBarangayData, natureKeys]);
 
   // ── Sectoral distribution pie ─────────────────────────────────────────────
   const SECTOR_COLORS = [
     "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
     "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#06b6d4",
   ];
-  const sectoralData = (desc?.sectoral_distribution || []).map((r, i) => ({
+  const sectoralData = (desc?.sectoral_distribution || []).map((r) => ({
     name: r.sector,
     value: r.count,
   }));
@@ -747,6 +579,18 @@ export default function AnalyticsPage() {
     "Non-Active": r.non_active_count || 0,
   }));
 
+  // ── Enforcement progress chart data ──────────────────────────────────────
+  const naturePerBarangayData = desc?.nature_per_barangay || [];
+  const natureKeys = useMemo(() => {
+    const keys = new Set();
+    naturePerBarangayData.forEach(row => {
+      Object.keys(row).forEach(k => {
+        if (k !== 'barangayName') keys.add(k);
+      });
+    });
+    return Array.from(keys);
+  }, [naturePerBarangayData]);
+
   // ── Audit result breakdown ────────────────────────────────────────────────
   const auditData = (desc?.audit_summary?.result_breakdown || []).map(r => ({
     name: r.inspectionResult,
@@ -754,18 +598,6 @@ export default function AnalyticsPage() {
     fill: FLAG_COLORS[r.inspectionResult] || COLOR.muted,
   }));
 
-  // ── Diagnostic: barangay risk (stacked bar for heatmap) ──────────────────
-  const riskBarData = (diag?.barangay_risk_data || [])
-    .filter(r => r.flagged_count > 0)
-    .map(r => ({
-      name: shortBarangay(r.barangayName),
-      Red: r.red_count || 0,
-      Yellow: r.yellow_count || 0,
-      Black: r.black_count || 0,
-      Orange: r.orange_count || 0,
-      total: r.flagged_count || 0,
-    }))
-    .slice(0, 10);
 
   // ── Diagnostic: category non-compliance horizontal bar ───────────────────
   const categoryData = (diag?.category_noncompliance || [])
@@ -806,14 +638,24 @@ export default function AnalyticsPage() {
     { step: "Cleared", value: clearedCount, color: "#10b981" },
   ];
 
-  const ahp_w1 = Math.max(1, wlcConfig.w1_risk);
-  const ahp_w2 = Math.max(1, wlcConfig.w2_sector);
-  const ahp_w3 = Math.max(1, wlcConfig.w3_distance);
-  const ahpVal = (num, den) => (num / den).toFixed(2);
+  const flagCounts = useMemo(() => {
+    const progress = desc?.enforcement_progress || [];
+    let green = 0, red = 0, yellow = 0, black = 0, orange = 0;
+    progress.forEach(row => {
+      green += row.green_count || 0;
+      red += row.red_count || 0;
+      yellow += row.yellow_count || 0;
+      black += row.black_count || 0;
+      orange += row.orange_count || 0;
+    });
+    return { green, red, yellow, black, orange, total: green + red + yellow + black + orange };
+  }, [desc?.enforcement_progress]);
+
 
   const leaderboardData = useMemo(() => {
-    if (!desc?.enforcement_progress) return [];
-    return desc.enforcement_progress.map(row => {
+    const progress = desc?.enforcement_progress;
+    if (!progress) return [];
+    return progress.map(row => {
       const g = row.green_count || 0;
       const r = row.red_count || 0;
       const y = row.yellow_count || 0;
@@ -832,18 +674,6 @@ export default function AnalyticsPage() {
     });
   }, [desc?.enforcement_progress]);
 
-  const topCompliant = useMemo(() => {
-    return [...leaderboardData]
-      .sort((a, b) => b.rate - a.rate || b.activeCount - a.activeCount)
-      .slice(0, 5);
-  }, [leaderboardData]);
-
-  const bottomCompliant = useMemo(() => {
-    return [...leaderboardData]
-      .filter(x => x.totalFlags > 0)
-      .sort((a, b) => a.rate - b.rate || b.totalFlags - a.totalFlags)
-      .slice(0, 3);
-  }, [leaderboardData]);
 
   const activeFilterCount = countActiveBackendFilters(data?.applied_filters);
 
@@ -936,9 +766,9 @@ export default function AnalyticsPage() {
         
         /* New Tier System */
         .tier-1-card {
-          border: 2px solid var(--color-danger);
-          background: var(--color-danger-light);
-          box-shadow: 0 4px 20px rgba(244, 63, 94, 0.15);
+          border: 2px solid rgba(99, 102, 241, 0.2);
+          background: rgba(99, 102, 241, 0.03);
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.1);
         }
         .tier-2-card {
           /* Standard current style */
@@ -1645,10 +1475,9 @@ export default function AnalyticsPage() {
           transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
         }}>
           {[
-            { id: "overview", label: "Overview", sub: "Executive summary", dot: "var(--color-ink)" },
             { id: "descriptive", label: "Descriptive", sub: "What is happening?", dot: "var(--color-green)" },
             { id: "diagnostic", label: "Diagnostic", sub: "Why is it happening?", dot: "var(--color-yellow)" },
-            { id: "prescriptive", label: "Prescriptive", sub: "What should we do?", dot: "var(--color-red)" },
+            { id: "prescriptive", label: "Prescriptive", sub: "What should we do?", dot: "#6366f1" },
             { id: "operations", label: "Operations", sub: "Inspector performance", dot: "var(--color-blue, #3b82f6)" }
           ].map(tab => {
             const isActive = activeTab === tab.id;
@@ -1692,80 +1521,68 @@ export default function AnalyticsPage() {
         {/* ══════════════════════════════════════════════════════════════════════
           OVERVIEW SUMMARY
       ══════════════════════════════════════════════════════════════════════ */}
-        {activeTab === "overview" && (
+        {activeTab === "descriptive" && (
           <section style={{ marginBottom: 52 }}>
             <SectionHeader
               tier="descriptive"
-              title="Executive Summary"
-              subtitle="Top-level KPIs and critical dispatch recommendations"
+              title="Descriptive Analytics"
+              subtitle="Current-state demographic profile and field inspection summaries"
             />
-            <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: 20, marginBottom: 24 }}>
-              {loading ? (
-                Array(3).fill(0).map((_, i) => <Skeleton key={i} h={90} />)
-              ) : (
-                <>
-                  <KpiCard
-                    iconVariant="green"
-                    value={kpis ? `${kpis.compliance_rate}%` : "—"}
-                    label="Overall Compliance Rate"
-                    delta={kpis?.compliance_rate_delta ? `${kpis.compliance_rate_delta > 0 ? '+' : ''}${kpis.compliance_rate_delta}% vs last month` : undefined}
-                    trend={kpis?.compliance_rate_delta >= 0 ? "up" : "down"}
-                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>}
-                  />
-                  <KpiCard
-                    iconVariant="red"
-                    value={kpis?.total_flagged ?? "—"}
-                    label="Total Flagged Entities"
-                    delta={kpis?.total_flagged_delta ? `${kpis.total_flagged_delta > 0 ? '+' : ''}${kpis.total_flagged_delta} vs last month` : undefined}
-                    trend={kpis?.total_flagged_delta > 0 ? "down" : "up"}
-                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>}
-                    style={{ background: "var(--color-danger-light)", borderColor: "rgba(244,63,94,0.3)" }}
-                  />
-                  <KpiCard
-                    iconVariant="red"
-                    value={kpis?.high_risk_barangays ?? "—"}
-                    label="High-Risk Barangays"
-                    delta={kpis?.high_risk_barangays_delta ? `${kpis.high_risk_barangays_delta > 0 ? '+' : ''}${kpis.high_risk_barangays_delta} vs last month` : undefined}
-                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26"><polygon points="10.29 3.86 1.82 18 22.18 18 13.71 3.86 10.29 3.86" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>}
-                  />
-                  <KpiCard
-                    iconVariant="gold"
-                    value={inspectedCount ?? "—"}
-                    label="Inspections This Period"
-                    trend="up"
-                    icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="26" height="26"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>}
-                  />
-                </>
-              )}
-            </div>
+            
             {presc?.dispatch_recommendations && presc.dispatch_recommendations.length > 0 && (
               <div className="tier-1-card saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px", borderRadius: 12 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: 8 }}>
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: COLOR.red }}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "#6366f1" }}>
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                   </svg>
-                  Urgent Dispatch Actions
+                  Priority Dispatch Overview
                 </h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {presc.dispatch_recommendations.slice(0, 3).map((rec, idx) => (
-                    <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 14, background: "rgba(244,63,94,0.08)", padding: "14px 18px", borderRadius: 8, border: "1px solid rgba(244,63,94,0.3)" }}>
-                      <span style={{ background: "var(--color-danger, #f43f5e)", color: "#fff", fontWeight: 800, fontSize: 13, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0, marginTop: 0, boxShadow: "0 2px 8px rgba(244,63,94,0.4)" }}>
-                        {rec.rank}
-                      </span>
-                      <p style={{ margin: 0, fontSize: 15, color: "var(--color-ink)", lineHeight: 1.6, fontWeight: 500 }}>
-                        {rec.recommendation}
-                      </p>
+                    <div key={idx} style={{ background: "rgba(99,102,241,0.04)", padding: "14px 18px", borderRadius: 10, border: "1px solid rgba(99,102,241,0.12)", transition: "background 0.2s" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span style={{ background: "#6366f1", color: "#fff", fontWeight: 800, fontSize: 13, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0 }}>
+                          {rec.rank}
+                        </span>
+                        <span style={{ fontWeight: 700, fontSize: 15, color: "var(--color-ink)", flex: 1 }}>{rec.barangayName}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, color: rec.urgencyColor, background: `${rec.urgencyColor}15`, border: `1px solid ${rec.urgencyColor}40`, letterSpacing: "0.05em" }}>{rec.urgency || "—"}</span>
+                        <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>OPS {rec.ops_score ?? "—"}</span>
+                        <span style={{ fontSize: 11, color: "var(--color-muted)" }}>👤 {rec.inspectors ?? 0} · 🚩 {rec.flagged_count ?? 0}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Business Demographic Profile */}
+            {/* SECTION A: Official Registry Demographics */}
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>A. Official Registry Demographics</h3>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--color-blue, #3b82f6)", borderRadius: 12 }}>
+                  Data Source: BPLO Registry
+                </span>
+              </div>
+              
+              <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Business Census</h4>
+              <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 16, marginBottom: 24 }}>
+                <KpiCard iconVariant="gold" value={kpis?.total_businesses ?? "—"} label="Total Registered" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="green" value={kpis?.active_count ?? "—"} label="Active" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="red" value={kpis?.expired_count ?? "—"} label="Expired" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="gold" value={kpis?.pending_count ?? "—"} label="Pending" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="red" value={kpis?.closed_count ?? "—"} label="Closed" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>} style={{ padding: "16px" }} />
+              </div>
+
+              {/* Business Demographic Profile */}
             <div style={{ marginBottom: 24 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 24px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>
-                Business Demographic Profile
-              </h2>
+              <div style={{ display: "none" }}>
+                <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>
+                  Business Demographic Profile
+                </h2>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--color-blue, #3b82f6)", borderRadius: 12 }}>
+                  Data Source: BPLO Registry
+                </span>
+              </div>
 
               {/* Executive FAQs */}
               <div style={{ marginBottom: 32 }}>
@@ -1993,85 +1810,8 @@ export default function AnalyticsPage() {
 
               </div>
             </div>
-          </section>
-        )}
 
-        {/* ══════════════════════════════════════════════════════════════════════
-          TIER 1 — DESCRIPTIVE ANALYTICS
-      ══════════════════════════════════════════════════════════════════════ */}
-        {activeTab === "descriptive" && (
-          <section style={{ marginBottom: 52 }}>
-            <SectionHeader
-              tier="descriptive"
-              title="Descriptive Overview"
-              subtitle="Current-state snapshot of compliance and enforcement across barangays"
-            />
-
-            {/* SECTION A: BUSINESS CENSUS */}
-            <div style={{ marginBottom: 40 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>A. Business Census</h3>
-
-              {/* Census KPIs */}
-              <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 16, marginBottom: 24 }}>
-                <KpiCard iconVariant="gold" value={kpis?.total_businesses ?? "—"} label="Total Registered" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>} style={{ padding: "16px" }} />
-                <KpiCard iconVariant="green" value={kpis?.active_count ?? "—"} label="Active" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>} style={{ padding: "16px" }} />
-                <KpiCard iconVariant="red" value={kpis?.expired_count ?? "—"} label="Expired" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>} style={{ padding: "16px" }} />
-                <KpiCard iconVariant="gold" value={kpis?.pending_count ?? "—"} label="Pending" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>} style={{ padding: "16px" }} />
-                <KpiCard iconVariant="red" value={kpis?.closed_count ?? "—"} label="Closed" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>} style={{ padding: "16px" }} />
-              </div>
-
-              {/* Sector & Size */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Sectoral Distribution</h3>
-                  <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Most businesses operate in the {sectoralData?.[0]?.name || "top"} sector.</p>
-                  <ChartInsightPanel chartId="sectoral" insightText={InsightGenerator.sectoral(sectoralData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  <div style={{ height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={sectoralData?.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(226,232,240,0.2)" />
-                        <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "var(--color-ink)" }} axisLine={false} tickLine={false} width={180} tickFormatter={(val) => typeof val === 'string' && val.length > 25 ? val.substring(0, 25) + '…' : val} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", color: "var(--color-ink)" }} />
-                        <Bar dataKey="value" name="Businesses" fill="#3b82f6" radius={[0, 4, 4, 0]}>
-                          <LabelList dataKey="value" position="right" fill="var(--color-ink)" fontSize={11} fontWeight={600} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Business Size Distribution</h3>
-                  <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Breakdown by reported enterprise size.</p>
-                  <ChartInsightPanel chartId="size" insightText={InsightGenerator.businessSize(sizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  <div style={{ display: "flex", alignItems: "center", height: 260 }}>
-                    <ResponsiveContainer width="55%" height="100%">
-                      <PieChart>
-                        <Pie data={sizeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={65} outerRadius={90} label={false}>
-                          {sizeData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 12, flex: 1, paddingLeft: 10, paddingRight: 20 }}>
-                      {sizeData.map((s, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
-                          <span style={{ width: 12, height: 12, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
-                          <span style={{ color: "var(--color-muted)", flex: 1, textAlign: "left" }}>{s.name}</span>
-                          <strong style={{ color: "var(--color-ink)", fontSize: 15 }}>{s.value}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* SECTION B: COMPLIANCE MONITORING */}
-            <div style={{ marginBottom: 40 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>B. Compliance Monitoring</h3>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
+              <div style={{ marginTop: 24 }}>
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Compliance Timeline (12 Months)</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>The gap between active vs non-active renewals over time.</p>
@@ -2100,6 +1840,63 @@ export default function AnalyticsPage() {
                     </ResponsiveContainer>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* SECTION B: Field Inspections Demographics */}
+            <div style={{ marginBottom: 40 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>B. Field Inspections Demographics</h3>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(245, 158, 11, 0.1)", color: "var(--color-orange, #f59e0b)", borderRadius: 12 }}>
+                  Data Source: Field Inspections
+                </span>
+              </div>
+
+              <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Field & Inspection KPIs</h4>
+              <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 16, marginBottom: 24 }}>
+                <KpiCard iconVariant="red" value={(flagCounts.red + flagCounts.yellow + flagCounts.orange + flagCounts.black) ?? "—"} label="Total Non-Compliant" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="gold" value={inspectedCount ?? "—"} label="Total Inspected" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="green" value={clearedCount ?? "—"} label="Compliant (Cleared)" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="gold" value={`${inspectedCount > 0 ? Math.round((clearedCount / inspectedCount) * 100) : 0}%`} label="Clearance Rate" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>} style={{ padding: "16px" }} />
+              </div>
+
+              {/* Field Inspections FAQs */}
+              <div style={{ marginBottom: 32 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Quick Insights (FAQ)</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(240px, calc(50% - 16px)), 1fr))", gap: 16 }}>
+                  
+                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-blue)", minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Most Common Inspection Outcome</p>
+                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                      {auditData.length > 0 ? `${[...auditData].sort((a,b)=>b.value - a.value)[0].name} (${Math.round(([...auditData].sort((a,b)=>b.value - a.value)[0].value / inspectedCount)*100)}%)` : "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-red)", minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Lowest Compliance Barangay</p>
+                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                      {leaderboardData.length > 0 ? `${[...leaderboardData].sort((a,b)=>a.rate - b.rate)[0].shortName} (${[...leaderboardData].sort((a,b)=>a.rate - b.rate)[0].rate}% compliant)` : "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-orange)", minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>End-to-End Clearance Rate</p>
+                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                      {funnelData[0]?.value > 0 ? `${Math.round((clearedCount / funnelData[0].value) * 100)}% of total detected` : "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-green)", minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Highest Compliance Barangay</p>
+                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                      {leaderboardData.length > 0 ? `${[...leaderboardData].sort((a,b)=>b.rate - a.rate)[0].shortName} (${[...leaderboardData].sort((a,b)=>b.rate - a.rate)[0].rate}% compliant)` : "N/A"}
+                    </p>
+                  </div>
+
+                </div>
+              </div>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Barangay Compliance Leaderboard</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Ranked compliance rates based on registered vs flagged entities.</p>
@@ -2132,13 +1929,30 @@ export default function AnalyticsPage() {
                     </table>
                   </div>
                 </div>
+
+                {/* Category Risk Drivers */}
+                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>Category Risk Drivers</h3>
+                  <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Sector-specific patterns — top flagged lines of business</p>
+                  {loading ? <Skeleton h={220} /> : categoryData.length === 0 ? (
+                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No sector data yet.</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={categoryData.slice(0, 7)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(226,232,240,0.4)" />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--color-ink)", fontWeight: 500 }} width={120} axisLine={false} tickLine={false} tickFormatter={(val) => typeof val === 'string' && val.length > 18 ? val.substring(0, 18) + '…' : val} />
+                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)" }} />
+                        <Bar dataKey="count" fill={COLOR.orange} radius={[0, 4, 4, 0]} name="Flagged">
+                          <LabelList dataKey="count" position="right" fill="var(--color-ink)" fontSize={11} fontWeight={600} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* SECTION C: AUDIT SUMMARY */}
-            <div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>C. Audit & Enforcement Summary</h3>
-
+              {/* Audit Summary Section */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Inspection Result Breakdown</h3>
@@ -2203,7 +2017,7 @@ export default function AnalyticsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: "24px", borderRadius: 12 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-                    <div style={{ color: COLOR.red }}>
+                    <div style={{ color: "#8b5cf6" }}>
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <circle cx="12" cy="12" r="10" />
                         <line x1="12" y1="8" x2="12" y2="12" />
@@ -2252,7 +2066,7 @@ export default function AnalyticsPage() {
                                     shape={(props) => {
                                       const { cx, cy, payload } = props;
                                       const isPrimary = payload.is_primary;
-                                      const baseColor = isPrimary ? COLOR.red : COLOR.orange;
+                                      const baseColor = isPrimary ? "#6366f1" : COLOR.orange;
                                       
                                       if (payload.renderType === 'noise') {
                                         return <circle cx={cx} cy={cy} r={3} fill={COLOR.slate} opacity={0.3} />;
@@ -2308,10 +2122,10 @@ export default function AnalyticsPage() {
                               <XAxis dataKey="barangay" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} hide />
                               <YAxis tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                               <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
-                              <ReferenceLine y={diag.morans_data.threshold} stroke={COLOR.red} strokeDasharray="3 3" label={{ position: 'top', value: 'High Risk Threshold', fill: COLOR.red, fontSize: 10 }} />
+                              <ReferenceLine y={diag.morans_data.threshold} stroke="#6366f1" strokeDasharray="3 3" label={{ position: 'top', value: 'High Risk Threshold', fill: "#6366f1", fontSize: 10 }} />
                               <Bar dataKey="risk" name="Severe Flags" radius={[2, 2, 0, 0]}>
                                 {diag.morans_data.points.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.is_high_risk ? COLOR.red : "#8b5cf6"} opacity={entry.is_high_risk ? 0.9 : 0.4} />
+                                  <Cell key={`cell-${index}`} fill={entry.is_high_risk ? "#6366f1" : "#8b5cf6"} opacity={entry.is_high_risk ? 0.9 : 0.4} />
                                 ))}
                               </Bar>
                             </BarChart>
@@ -2346,32 +2160,8 @@ export default function AnalyticsPage() {
                         <XAxis dataKey="week" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                         <Tooltip content={<CustomTooltip />} />
-                        <Line type="monotone" dataKey="New Red Flags" stroke={COLOR.red} strokeWidth={3} dot={{ r: 4, fill: COLOR.red }} activeDot={{ r: 6 }} />
+                        <Line type="monotone" dataKey="New Red Flags" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: "#6366f1" }} activeDot={{ r: 6 }} />
                       </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </div>
-
-              {/* D3. RISK BREAKDOWN */}
-              <div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>D3. Risk Breakdown</h3>
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, height: "calc(100% - 46px)" }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>Category Risk Drivers</h3>
-                  <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Sector-specific patterns — top flagged lines of business</p>
-                  {loading ? <Skeleton h={220} /> : categoryData.length === 0 ? (
-                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No sector data yet.</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={categoryData.slice(0, 7)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(226,232,240,0.4)" />
-                        <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--color-ink)", fontWeight: 500 }} width={120} axisLine={false} tickLine={false} tickFormatter={(val) => typeof val === 'string' && val.length > 18 ? val.substring(0, 18) + '…' : val} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)" }} />
-                        <Bar dataKey="count" fill={COLOR.orange} radius={[0, 4, 4, 0]} name="Flagged">
-                          <LabelList dataKey="count" position="right" fill="var(--color-ink)" fontSize={11} fontWeight={600} />
-                        </Bar>
-                      </BarChart>
                     </ResponsiveContainer>
                   )}
                 </div>
@@ -2391,32 +2181,91 @@ export default function AnalyticsPage() {
               subtitle="Weighted Linear Combination model (OPS = W1·Risk + W2·Sector − W3·Distance) normalised 0–100 per barangay"
             />
 
-            {/* Focal Point: Actionable Dispatch Recommendations (Tier 1) */}
+            {/* Focal Point: Actionable Dispatch Recommendations */}
             {presc?.dispatch_recommendations && presc.dispatch_recommendations.length > 0 && (
               <div className="tier-1-card saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px 24px", borderRadius: 12 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-                  <div style={{ marginTop: 2, color: COLOR.red }}>
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                    </svg>
-                  </div>
-                  <div style={{ width: "100%" }}>
-                    <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      Actionable Dispatch Recommendations
-                    </h3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {presc.dispatch_recommendations.map((rec, idx) => (
-                        <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 16, background: "rgba(244,63,94,0.08)", padding: "16px 20px", borderRadius: 10, border: "1px solid rgba(244,63,94,0.3)", boxShadow: "inset 0 0 0 1px rgba(244,63,94,0.1)" }}>
-                          <span style={{ background: "var(--color-danger, #f43f5e)", color: "#fff", fontWeight: 800, fontSize: 14, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0, marginTop: 0, boxShadow: "0 4px 12px rgba(244,63,94,0.4)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#6366f1" strokeWidth="2.5">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                  <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Actionable Dispatch Recommendations
+                  </h3>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {presc.dispatch_recommendations.map((rec, idx) => {
+                    const isOpen = !!expandedDispatch[`presc-${idx}`];
+                    return (
+                      <div key={idx} style={{ background: "rgba(99,102,241,0.03)", borderRadius: 12, border: "1px solid rgba(99,102,241,0.10)", overflow: "hidden" }}>
+                        {/* Clickable Header */}
+                        <button
+                          onClick={() => setExpandedDispatch(prev => ({ ...prev, [`presc-${idx}`]: !prev[`presc-${idx}`] }))}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                        >
+                          <span style={{ background: "#6366f1", color: "#fff", fontWeight: 800, fontSize: 14, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", flexShrink: 0 }}>
                             {rec.rank}
                           </span>
-                          <p style={{ margin: 0, fontSize: 16, color: "var(--color-ink)", lineHeight: 1.6, fontWeight: 500 }}>
-                            {rec.recommendation}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span style={{ fontWeight: 700, fontSize: 16, color: "var(--color-ink)" }}>{rec.barangayName}</span>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, color: rec.urgencyColor, background: `${rec.urgencyColor}15`, border: `1px solid ${rec.urgencyColor}40`, letterSpacing: "0.05em" }}>{rec.urgency || "—"}</span>
+                            </div>
+                            <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "var(--color-muted)" }}>
+                              <span>OPS <strong style={{ color: "var(--color-ink)" }}>{rec.ops_score ?? "—"}</strong>/100</span>
+                              <span>👤 {rec.inspectors ?? 0} inspector{(rec.inspectors ?? 0) !== 1 ? "s" : ""}</span>
+                              <span>🚩 {rec.flagged_count ?? 0} flag{(rec.flagged_count ?? 0) !== 1 ? "s" : ""}</span>
+                            </div>
+                          </div>
+                          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--color-muted)" strokeWidth="2" style={{ flexShrink: 0, transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+
+                        {/* Expandable Detail */}
+                        {isOpen && (
+                          <div style={{ padding: "0 20px 20px 20px", borderTop: "1px solid rgba(99,102,241,0.08)" }}>
+                            {/* Flag Badges */}
+                            <div style={{ display: "flex", gap: 8, marginTop: 14, marginBottom: 14, flexWrap: "wrap" }}>
+                              {rec.red_count > 0 && <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}>📌 {rec.red_count} Unregistered</span>}
+                              {rec.yellow_count > 0 && <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}>⚠️ {rec.yellow_count} Suspicious</span>}
+                              {rec.black_count > 0 && <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}>🛑 {rec.black_count} Violations</span>}
+                            </div>
+
+                            {/* Score Breakdown */}
+                            {rec.scoreBreakdown && (
+                              <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+                                {[
+                                  { label: "Risk", data: rec.scoreBreakdown.risk, color: "#8b5cf6" },
+                                  { label: "Sector", data: rec.scoreBreakdown.sector, color: "#f59e0b" },
+                                  { label: "Proximity", data: rec.scoreBreakdown.distance, color: "#3b82f6" },
+                                ].map(({ label, data, color }) => (
+                                  <div key={label} style={{ flex: "1 1 120px", background: "var(--color-surface)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label} ({data?.weight ?? 0}%)</div>
+                                    <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                                      <span style={{ fontSize: 20, fontWeight: 800, color }}>{data?.raw ?? 0}</span>
+                                      <span style={{ fontSize: 11, color: "var(--color-muted)" }}>→ +{data?.contribution ?? 0}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Action Steps */}
+                            {rec.actionSteps && rec.actionSteps.length > 0 && (
+                              <div style={{ background: "var(--color-surface)", padding: "14px 16px", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Action Plan</div>
+                                <ol style={{ margin: 0, paddingLeft: 20 }}>
+                                  {rec.actionSteps.map((step, sIdx) => (
+                                    <li key={sIdx} style={{ fontSize: 13, color: "var(--color-ink)", lineHeight: 1.7, fontWeight: 500 }}>{step}</li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2477,7 +2326,7 @@ export default function AnalyticsPage() {
                       <PolarGrid stroke="rgba(226,232,240,0.6)" />
                       <PolarAngleAxis dataKey="barangay" tick={{ fontSize: 10, fill: "var(--color-muted)" }} />
                       <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 9 }} />
-                      <Radar name="OPS Score" dataKey="OPS" stroke={COLOR.red} fill={COLOR.red} fillOpacity={0.18} strokeWidth={2} />
+                      <Radar name="OPS Score" dataKey="OPS" stroke="#6366f1" fill="#6366f1" fillOpacity={0.18} strokeWidth={2} />
                       <Radar name="Non-Compliance %" dataKey="Non-Compliance %" stroke={COLOR.yellow} fill={COLOR.yellow} fillOpacity={0.12} strokeWidth={2} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Tooltip content={<CustomTooltip />} />
@@ -2609,11 +2458,12 @@ export default function AnalyticsPage() {
                             <th style={{ padding: "10px 12px", fontWeight: 700 }}>Inspector</th>
                             <th style={{ padding: "10px 12px", fontWeight: 700 }}>Completed</th>
                             <th style={{ padding: "10px 12px", fontWeight: 700 }}>Assigned</th>
+                            <th style={{ padding: "10px 12px", fontWeight: 700 }}>Yellow Flags Reported</th>
                             <th style={{ padding: "10px 12px", fontWeight: 700 }}>Avg Time (Days)</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {(data?.operations?.inspector_stats || []).map((row, idx) => (
+                          {(data?.operations?.inspector_stats || []).map((row) => (
                             <tr key={row.userID} style={{ borderBottom: "1px solid rgba(226,232,240,0.35)" }}>
                               <td style={{ padding: "12px", fontWeight: 600, color: "var(--color-ink)", fontSize: 13 }}>
                                 {row.fullName}
@@ -2624,8 +2474,11 @@ export default function AnalyticsPage() {
                               <td style={{ padding: "12px", color: "var(--color-muted)", fontSize: 13 }}>
                                 {row.total_assigned}
                               </td>
+                              <td style={{ padding: "12px", color: COLOR.gold, fontWeight: 600, fontSize: 13 }}>
+                                {row.yellow_flags_reported || 0}
+                              </td>
                               <td style={{ padding: "12px", color: "var(--color-muted)", fontSize: 13 }}>
-                                {row.avg_resolution_time ? row.avg_resolution_time.toFixed(1) : "-"}
+                                {row.avg_resolution_time ? (row.avg_resolution_time / 1440).toFixed(1) : "-"}
                               </td>
                             </tr>
                           ))}

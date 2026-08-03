@@ -46,6 +46,8 @@ def upload():
     summary, error = upload_registry(file, ext)
 
     if error:
+        if "cancelled by user" in error:
+            return jsonify({"message": error}), 200
         return jsonify({"error": error}), 500
 
     return jsonify(summary), 201
@@ -75,6 +77,8 @@ def sync():
     summary, error = sync_registry(file, ext)
 
     if error:
+        if "cancelled by user" in error:
+            return jsonify({"message": error}), 200
         return jsonify({"error": error}), 500
 
     return jsonify(summary), 200

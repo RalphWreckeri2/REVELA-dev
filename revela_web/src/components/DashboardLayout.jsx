@@ -273,6 +273,10 @@ function TopNavbar({ user = { initials: "JD", name: "J. Dela Cruz" }, searchPlac
           window.dispatchEvent(
             new CustomEvent("revela:detection-progress", { detail: data }),
           );
+        } else if (data.type === "registry_progress") {
+          window.dispatchEvent(
+            new CustomEvent("revela:registry-progress", { detail: data }),
+          );
         } else if (data.type === "password_reset_requested") {
           window.dispatchEvent(
             new CustomEvent("revela:password-reset", { detail: data }),

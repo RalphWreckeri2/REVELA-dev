@@ -562,65 +562,17 @@ def _get_all_analytics_inner(F=None):
     for i, r in enumerate(rankings):
         r["rank"] = i + 1
 
-    dispatch_recommendations = []
-    top_3 = rankings[:3]
-    valid_top_3 = [b for b in top_3 if b["flagged_count"] > 0]
+    # --- Dispatch Recommendations ---
+    from api.analytics.dispatch import generate_recommendations
 
-    geo_dispatch, geo_dispatch_p = geo_sql(
-        "g", filters_without(Fx, "barangay_ids"))
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM users WHERE userRole = 'Inspector' AND isActive = 1")
+    inspector_row = cur.fetchone()
+    total_inspectors = int(inspector_row["n"]) if inspector_row and inspector_row["n"] else 6
 
-    if valid_top_3:
-        # Count actual active inspectors from the users table
-        cur.execute(
-            "SELECT COUNT(*) AS n FROM users WHERE userRole = 'Inspector' AND isActive = 1")
-        inspector_row = cur.fetchone()
-        total_inspectors = int(
-            inspector_row["n"]) if inspector_row and inspector_row["n"] else 6
-        # Ensure we have at least enough to assign 1 to each top barangay
-        total_inspectors = max(len(valid_top_3), total_inspectors)
-
-        top_3_flags = sum(b["flagged_count"] for b in valid_top_3)
-        available_inspectors = total_inspectors
-
-        for i, brgy in enumerate(valid_top_3):
-            cur.execute(f"""
-                SELECT COALESCE(o.lineOfBusiness, 'Unclassified') AS category, COUNT(g.logID) as count
-                FROM geospatial_logs g
-                LEFT JOIN official_registry o ON g.detectedName = o.businessName
-                    AND g.barangayID = o.barangayID{reg_o}
-                WHERE g.barangayID = %s {geo_dispatch}
-                GROUP BY category
-                ORDER BY count DESC
-                LIMIT 2
-            """, [brgy["barangayID"]] + reg_o_p + geo_dispatch_p)
-
-            top_cats_rows = cur.fetchall()
-            if top_cats_rows:
-                top_cats = [str(row["category"]) for row in top_cats_rows]
-                priority_text = " and ".join(top_cats)
-            else:
-                priority_text = "General Categories"
-
-            # Proportionally distribute actual inspectors across the top 3
-            if i == len(valid_top_3) - 1:
-                inspectors = available_inspectors
-            else:
-                inspectors = max(
-                    1, round((brgy["flagged_count"] / top_3_flags) * total_inspectors))
-                # Ensure we leave at least 1 inspector for the remaining barangays in the list
-                inspectors = min(
-                    inspectors, available_inspectors - (len(valid_top_3) - 1 - i))
-
-            available_inspectors -= inspectors
-
-            rec_text = f"Deploy {inspectors} inspector{'s' if inspectors > 1 else ''} to {brgy['barangayName']} this week. Priority: {priority_text} (Sector Severity: {brgy['sector_score']}). Estimated coverage: {brgy['flagged_count']} flagged entities."
-
-            dispatch_recommendations.append({
-                "barangayID": brgy["barangayID"],
-                "barangayName": brgy["barangayName"],
-                "rank": brgy["rank"],
-                "recommendation": rec_text
-            })
+    # Pass the actual WLC weights (w1, w2, w3 are already normalised floats from config)
+    dispatch_weights = {"w1": w1, "w2": w2, "w3": w3}
+    dispatch_recommendations = generate_recommendations(rankings, total_inspectors, dispatch_weights)
 
     # ══════════════════════════════════════════════════════════════════════════
     # TIER 4 — OPERATIONS
@@ -633,7 +585,8 @@ def _get_all_analytics_inner(F=None):
             u.fullName, 
             COUNT(ir.reportID) as total_assigned, 
             SUM(CASE WHEN ir.verificationStatus IN ('Verified', 'Submitted') THEN 1 ELSE 0 END) as total_completed, 
-            AVG(ir.resolutionTime) as avg_resolution_time 
+            AVG(ir.resolutionTime) as avg_resolution_time,
+            (SELECT COUNT(*) FROM geospatial_logs g2 WHERE g2.reportedByUserID = u.userID AND g2.flagColor = 'Yellow') as yellow_flags_reported
         FROM inspection_reports ir 
         JOIN users u ON ir.userID = u.userID 
         WHERE 1=1 {insp_ir}
@@ -649,19 +602,19 @@ def _get_all_analytics_inner(F=None):
 
     # 2. Inspection Status Breakdown
     cur.execute(f"""
-        SELECT COALESCE(verificationStatus, 'Unassigned') as status, COUNT(reportID) as count
+        SELECT COALESCE(ir.verificationStatus, 'Unassigned') as status, COUNT(ir.reportID) as count
         FROM inspection_reports ir
         WHERE 1=1 {insp_ir}
-        GROUP BY verificationStatus
+        GROUP BY ir.verificationStatus
     """, insp_ir_p)
     status_breakdown = list(cur.fetchall())
 
     # 3. Inspection Timeline
     cur.execute(f"""
-        SELECT DATE(irTimestamp) as date, COUNT(reportID) as count
+        SELECT DATE(ir.irTimestamp) as date, COUNT(ir.reportID) as count
         FROM inspection_reports ir
         WHERE 1=1 {insp_ir}
-        GROUP BY DATE(irTimestamp)
+        GROUP BY DATE(ir.irTimestamp)
         ORDER BY date ASC
     """, insp_ir_p)
     timeline_rows = list(cur.fetchall())

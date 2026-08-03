@@ -210,9 +210,17 @@ def upload_registry(file, ext: str):
         skipped = 0
         errors = []
 
+        from api.notifications import hub
         cursor = mysql.connection.cursor()
 
         for idx, row in df.iterrows():
+            if idx % 5 == 0:
+                hub.publish_to_admins({
+                    "type": "registry_progress",
+                    "processed": idx,
+                    "total": total_rows
+                })
+                
             if is_cancelled("registry_import"):
                 mysql.connection.rollback()
                 cursor.close()
@@ -359,9 +367,17 @@ def sync_registry(file, ext: str):
         skipped = 0
         errors = []
 
+        from api.notifications import hub
         cursor = mysql.connection.cursor()
 
         for idx, row in df.iterrows():
+            if idx % 5 == 0:
+                hub.publish_to_admins({
+                    "type": "registry_progress",
+                    "processed": idx,
+                    "total": total_rows
+                })
+                
             if is_cancelled("registry_import"):
                 mysql.connection.rollback()
                 cursor.close()

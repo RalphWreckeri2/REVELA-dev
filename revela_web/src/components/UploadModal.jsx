@@ -59,68 +59,29 @@ const Icon = {
   ),
 };
 
-// ── Easing helper ──────────────────────────────────────────────────────────────
-// Maps linear progress [0,1] → eased progress [0, MAX_VISUAL_PROGRESS].
-// Slows sharply after 80% so we never visually "finish" before the server.
-const MAX_VISUAL_PROGRESS = 0.95; // freeze at 95% until real response
-function easeProgress(linear) {
-  if (linear <= 0.8) {
-    // Fast first 80% — ease-out cubic
-    return MAX_VISUAL_PROGRESS * 0.85 * (1 - Math.pow(1 - linear / 0.8, 3));
-  }
-  // Slow crawl from 85% → 95% over the last 20% of estimated time
-  const tail = (linear - 0.8) / 0.2;
-  return MAX_VISUAL_PROGRESS * (0.85 + 0.10 * tail);
-}
-
-// ── Animated counter hook ──────────────────────────────────────────────────────
-// Ticks `displayed` from 0 → target, firing setDisplayed on each tick.
-// Automatically clears when done is true or component unmounts.
-function useRowCounter({ total, active, done, finalCount }) {
+function useRegistryProgress({ active, done, finalCount }) {
   const [displayed, setDisplayed] = useState(0);
-  const tickRef   = useRef(null);
-  const startRef  = useRef(null);
 
-  const stop = useCallback(() => {
-    if (tickRef.current) {
-      clearInterval(tickRef.current);
-      tickRef.current = null;
-    }
-  }, []);
-
-  // Start ticking when active flips to true
   useEffect(() => {
-    if (!active || !total) return;
-    setDisplayed(0);
-    startRef.current = Date.now();
+    if (!active || done) return;
+    
+    const handleProgress = (e) => {
+      const data = e.detail;
+      if (data.processed !== undefined) {
+        setDisplayed(data.processed);
+      }
+    };
 
-    // Estimated total processing time: ~400ms per row (geocoding overhead),
-    // but cap at 4 minutes so the UI doesn't feel dead for huge files.
-    const estimatedMs = Math.min(total * 400, 4 * 60 * 1000);
+    window.addEventListener("revela:registry-progress", handleProgress);
+    return () => window.removeEventListener("revela:registry-progress", handleProgress);
+  }, [active, done]);
 
-    tickRef.current = setInterval(() => {
-      const elapsed = Date.now() - startRef.current;
-      const linear  = Math.min(elapsed / estimatedMs, 1);
-      const eased   = easeProgress(linear);
-      const next    = Math.floor(eased * total);
-      setDisplayed(next);
-
-      // Once we've hit the ceiling, keep ticking slowly until `done` arrives
-      if (linear >= 1) stop();
-    }, 120); // tick every 120ms — smooth but not janky
-
-    return stop;
-  }, [active, total, stop]);
-
-  // When done arrives, snap to real count
   useEffect(() => {
     if (done && finalCount !== undefined) {
-      stop();
       setDisplayed(finalCount);
     }
-  }, [done, finalCount, stop]);
+  }, [done, finalCount]);
 
-  // Reset when inactive
   useEffect(() => {
     if (!active && !done) setDisplayed(0);
   }, [active, done]);
@@ -177,8 +138,7 @@ export function UploadModal({ onClose, onSuccess, token, variant = "upload", isC
   const abortControllerRef = useRef(null);
 
   // Counter state
-  const displayed = useRowCounter({
-    total:      fileRowCount,
+  const displayed = useRegistryProgress({
     active:     loading,
     done:       !!summary,
     finalCount: summary

@@ -29,6 +29,8 @@ def run_detection_route():
     """Trigger full Places API fetch + cross-reference + Red Flag insertion."""
     result, error = run_detection()
     if error:
+        if error == "Detection cancelled by user.":
+            return jsonify({"message": error}), 200
         return jsonify({"error": error}), 500
     return jsonify(result), 200
 

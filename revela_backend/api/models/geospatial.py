@@ -9,7 +9,6 @@ def insert_green_flag(barangay_id, business_name, lat, lng, address=None, color=
              flagColor, nearestLandmark)
         VALUES (%s, %s, %s, %s, %s, %s)
     """, (barangay_id, business_name, lat, lng, color, address))
-    mysql.connection.commit()
     cursor.close()
 
 

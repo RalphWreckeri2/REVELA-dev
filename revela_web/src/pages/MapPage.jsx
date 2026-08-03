@@ -315,7 +315,9 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
         : "Official BPLO Registry";
 
   const isInspectorReported = flag.source === "inspector_reported";
-  const mapsUrl = flag.latitude ? `https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}` : null;
+  const mapsUrl = flag.latitude 
+    ? `https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}${flag.placeID ? `&query_place_id=${flag.placeID}` : ''}` 
+    : null;
 
   return createPortal(
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={styles.modalBackdrop} onClick={onClose}>
@@ -345,7 +347,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
               Detected unregistered
             </div>
             {isInspectorReported && (
-               <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: "rgba(234, 88, 12, 0.15)", border: "1px solid rgba(234, 88, 12, 0.1)", fontSize: 12, fontWeight: 600, color: "#ea580c", marginTop: 8 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 8, background: "rgba(234, 88, 12, 0.15)", border: "1px solid rgba(234, 88, 12, 0.1)", fontSize: 12, fontWeight: 600, color: "#ea580c", marginTop: 8 }}>
                 Inspector reported
               </div>
             )}
@@ -441,7 +443,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
             </div>
             {showMoreActions ? "Less actions" : "More actions"}
           </button>
-          
+
           {showMoreActions && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
               {isAdmin && (flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange") && (
@@ -1195,7 +1197,7 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
   return createPortal(
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} onClick={!loading ? onClose : undefined} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div className={"modal-panel" + (isClosing ? " closing" : "")} onClick={e => e.stopPropagation()} style={{ width: 640, maxWidth: "95vw", maxHeight: "85vh", display: "flex", flexDirection: "column", padding: 32, borderRadius: 24, background: "var(--color-modal-bg)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}>
-        
+
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 12 }}>
@@ -1239,11 +1241,11 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
                 {label}
               </label>
               <input
-                style={{ 
-                  width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", 
-                  borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", 
-                  color: readOnly ? "var(--color-muted)" : "var(--color-ink)", 
-                  background: readOnly ? "var(--color-hover)" : "var(--color-input-bg)", 
+                style={{
+                  width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)",
+                  borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)",
+                  color: readOnly ? "var(--color-muted)" : "var(--color-ink)",
+                  background: readOnly ? "var(--color-hover)" : "var(--color-input-bg)",
                   outline: "none",
                   cursor: readOnly ? "not-allowed" : "text"
                 }}
@@ -1560,7 +1562,7 @@ export default function MapPage() {
         const list = Array.isArray(data) ? data : (data.data ?? []);
         setInspectors(list.filter(u => u.isActive !== 0 && u.isActive !== false && u.userRole === 'Inspector'));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [token]);
 
   useEffect(() => {
@@ -1802,7 +1804,7 @@ export default function MapPage() {
       e.stop(); // Prevent base map click
       const lat = e.latLng.lat();
       const lng = e.latLng.lng();
-      
+
       let geoName = (
         e.feature.getProperty('ADM4_EN') ||
         e.feature.getProperty('NAME_4') || ""
@@ -1812,7 +1814,7 @@ export default function MapPage() {
         .replace(/district/g, "")
         .replace(/\(pob\.\)/g, "")
         .replace(/\s+/g, ""); // strip all spaces! e.g., "lumanglipa"
-        
+
       let matchedId = "";
       const matched = barangays.find(b => {
         let dbName = b.barangayName.toLowerCase()
@@ -1821,17 +1823,17 @@ export default function MapPage() {
           .replace(/district/g, "")
           .replace(/\(pob\.\)/g, "")
           .replace(/\s+/g, ""); // strip all spaces
-          
+
         return dbName === geoName || dbName.includes(geoName) || geoName.includes(dbName);
       });
-      
+
       if (matched) {
         matchedId = String(matched.barangayID);
       }
 
-      setYellowDraft(prev => ({ 
-        ...prev, 
-        lat: lat.toFixed(6), 
+      setYellowDraft(prev => ({
+        ...prev,
+        lat: lat.toFixed(6),
         lng: lng.toFixed(6),
         barangayID: matchedId
       }));
@@ -2096,7 +2098,7 @@ export default function MapPage() {
                 const isSelected = filterColor === c;
                 const dotColor = c === "all" ? "var(--color-ink)" : (FLAG_COLORS[c]?.marker ?? "var(--color-ink)");
                 const label = c === "all" ? "All Locations" : (FLAG_COLORS[c]?.label ?? c);
-                
+
                 return (
                   <button
                     key={c}
@@ -2120,22 +2122,22 @@ export default function MapPage() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ 
-                        width: 10, height: 10, borderRadius: "50%", 
+                      <span style={{
+                        width: 10, height: 10, borderRadius: "50%",
                         background: dotColor,
                         boxShadow: isSelected ? `0 0 0 2px var(--color-surface), 0 0 0 4px ${dotColor}40` : "none"
                       }} />
-                      <span style={{ 
-                        fontSize: 13, 
-                        fontWeight: isSelected ? 700 : 500, 
-                        color: isSelected ? "var(--color-ink)" : "var(--color-muted)" 
+                      <span style={{
+                        fontSize: 13,
+                        fontWeight: isSelected ? 700 : 500,
+                        color: isSelected ? "var(--color-ink)" : "var(--color-muted)"
                       }}>
                         {label}
                       </span>
                     </div>
-                    <span style={{ 
-                      fontSize: 11, 
-                      fontWeight: 700, 
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
                       color: isSelected ? "var(--color-ink)" : "var(--color-muted)",
                       background: isSelected ? "var(--color-hover)" : "transparent",
                       padding: "2px 8px",
@@ -2213,12 +2215,12 @@ export default function MapPage() {
           {/* Action Buttons at Bottom */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
             {isAdmin && (
-              <button 
+              <button
                 className="primary-btn"
-                style={{ width: "100%", justifyContent: "center", padding: "12px", borderRadius: 12, fontSize: 14 }} 
+                style={{ width: "100%", justifyContent: "center", padding: "12px", borderRadius: 12, fontSize: 14 }}
                 onClick={() => setIsInspectorModalOpen(true)}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 8 }}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 8 }}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>
                 View Inspector Backlog
               </button>
             )}
@@ -2279,12 +2281,12 @@ export default function MapPage() {
       </AnimatePresence>
 
       {/* Modals */}
-      <InspectorReportsModal 
-        isOpen={isInspectorModalOpen} 
-        onClose={() => setIsInspectorModalOpen(false)} 
-        flags={flags} 
-        inspectors={inspectors} 
-        navigate={navigate} 
+      <InspectorReportsModal
+        isOpen={isInspectorModalOpen}
+        onClose={() => setIsInspectorModalOpen(false)}
+        flags={flags}
+        inspectors={inspectors}
+        navigate={navigate}
       />
     </DashboardLayout>
   );

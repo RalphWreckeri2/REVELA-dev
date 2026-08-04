@@ -180,10 +180,21 @@ def _normalise_status(raw: str) -> str:
         "lapsed":         "Expired",
         "license issued": "Active",
         "issued":         "Active",
-        "renewal":        "Active",
+        "renewal":        "Pending",
         "closed":         "Closed",
     }
     return mapping.get(str(raw).strip().lower(), "Pending")
+
+
+def _status_to_flag_color(status: str) -> str:
+    mapping = {
+        "Active": "Green",
+        "Pending": "Yellow",
+        "Expired": "Red",
+        "Revoked": "Red",
+        "Closed": "Black"
+    }
+    return mapping.get(status, "Green")
 
 
 # ── Service functions ─────────────────────────────────────────────────────────
@@ -313,13 +324,15 @@ def upload_registry(file, ext: str):
 
             if cursor.rowcount > 0:
                 inserted += 1
-                # Auto-seed Green Flag baseline into GEOSPATIAL_LOGS
+                flag_color = _status_to_flag_color(status)
+                # Auto-seed Flag baseline into GEOSPATIAL_LOGS
                 insert_green_flag(
                     barangay_id,
                     str(business_name).strip(),
                     lat,
                     lng,
                     str(address_raw).strip() or None,
+                    color=flag_color
                 )
             else:
                 skipped += 1
@@ -495,12 +508,14 @@ def sync_registry(file, ext: str):
                 )
                 if cursor.rowcount > 0:
                     inserted += 1
+                    flag_color = _status_to_flag_color(status)
                     insert_green_flag(
                         barangay_id,
                         name_key,
                         lat,
                         lng,
                         addr,
+                        color=flag_color
                     )
 
         mysql.connection.commit()

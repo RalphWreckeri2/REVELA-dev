@@ -907,3 +907,19 @@ export async function getOpsRankingsRequest(token) {
     connectionGuard(err);
   }
 }
+
+export async function sendAnalyticsChatRequest(payload, token) {
+  try {
+    const res = await fetch(`${BASE_URL}/analytics/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    return await handleResponse(res);
+  } catch (err) {
+    connectionGuard(err);
+  }
+}

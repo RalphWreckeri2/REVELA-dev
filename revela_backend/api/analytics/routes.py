@@ -303,7 +303,7 @@ def _get_all_analytics_inner(F=None):
         FROM geospatial_logs g
         LEFT JOIN official_registry o ON g.detectedName = o.businessName
             AND g.barangayID = o.barangayID{reg_o}
-        WHERE 1=1 {geo_g}
+        WHERE 1=1 AND g.flagColor != 'Green' {geo_g}
         GROUP BY category
         ORDER BY flagged_count DESC
         LIMIT 10
@@ -844,3 +844,55 @@ def update_config():
     if error:
         return jsonify({"error": error}), 500
     return jsonify({"message": "WLC configuration updated successfully.", "data": updated_config}), 200
+
+
+import os
+from groq import Groq
+
+
+@analytics_bp.route("/chat", methods=["POST"])
+@jwt_required()
+def analytics_chat():
+    data = request.get_json()
+    chart_id = data.get("chartId")
+    chart_data = data.get("data")
+    messages = data.get("messages", [])
+    user_query = data.get("userQuery")
+
+    if not user_query:
+        return jsonify({"error": "User query is required"}), 400
+
+    groq_api_key = os.environ.get("GROQ_API_KEY")
+    if not groq_api_key:
+        return jsonify({"error": "GROQ_API_KEY is not configured in the backend environment."}), 500
+
+    client = Groq(api_key=groq_api_key)
+
+    system_message = (
+        f"You are the REVELAsys Analytics AI Assistant. "
+        f"You help users understand their business registry and enforcement data. "
+        f"The user is asking about the '{chart_id}' chart. "
+        f"Here is the JSON data for this chart: {chart_data}. "
+        f"Answer their questions concisely, professionally, and accurately based ONLY on this data."
+    )
+
+    try:
+        formatted_messages = [{"role": "system", "content": system_message}]
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "assistant"
+            formatted_messages.append({"role": role, "content": msg["content"]})
+        formatted_messages.append({"role": "user", "content": user_query})
+
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=formatted_messages,
+            temperature=0.4,
+            max_tokens=1024,
+        )
+
+        return jsonify({
+            "response": response.choices[0].message.content
+        }), 200
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": f"AI Assistant Error: {str(e)}"}), 500

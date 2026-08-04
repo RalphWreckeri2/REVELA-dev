@@ -28,3 +28,6 @@ Thumbs.db
 # macOS generated files
 revela_mobile/macos/Flutter/GeneratedPluginRegistrant.swift
 revela_mobile/macos/Flutter/ephemeral/
+
+# Analytics and Colab Exports
+revela_backend/colab_export/

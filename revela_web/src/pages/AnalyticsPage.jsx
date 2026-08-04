@@ -14,6 +14,7 @@ import {
   getAnalyticsOverviewRequest,
   getAnalyticsFilterMetadataRequest,
   getBarangaysRequest,
+  sendAnalyticsChatRequest,
 } from "../services/api";
 
 // ── Palette — matches REVELA's premium styling ────────────────────────────────
@@ -100,6 +101,20 @@ const Skeleton = ({ h = 200 }) => (
     backgroundSize: "200% 100%",
     animation: "shimmer 1.5s infinite",
   }} />
+);
+
+// ── Empty State ──────────────────────────────────────────────────────────────
+const EmptyState = ({ title = "No Data", message = "", h = 220, icon }) => (
+  <div style={{
+    height: h, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    textAlign: "center", gap: 12
+  }}>
+    {icon || <img src="/searching.png" alt="Empty" style={{ height: 80, objectFit: "contain", opacity: 0.9 }} />}
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)", marginBottom: message ? 4 : 0 }}>{title}</div>
+      {message && <div style={{ fontSize: 13, color: "var(--color-muted)", maxWidth: 220, margin: "0 auto", lineHeight: 1.4 }}>{message}</div>}
+    </div>
+  </div>
 );
 
 
@@ -196,7 +211,7 @@ const InsightGenerator = {
     })[0];
     const best = [...data].sort((a, b) => {
       if (a.rate !== b.rate) return b.rate - a.rate;
-      return a.totalFlags - b.totalFlags;
+      return (b.totalEntities || b.totalFlags) - (a.totalEntities || a.totalFlags);
     })[0];
 
     if (worst.rate < 70) {
@@ -207,14 +222,14 @@ const InsightGenerator = {
 
   funnel: (data) => {
     if (!data || data.length < 2) return "Not enough funnel data.";
-    const total = data.find(d => d.step === "Total Detected")?.value || 0;
-    const cleared = data.find(d => d.step === "Cleared")?.value || 0;
+    const total = data.find(d => d.step === "Total Non-Compliant")?.value || 0;
+    const cleared = data.find(d => d.step === "Compliant (Cleared)")?.value || 0;
     const conversion = total > 0 ? Math.round((cleared / total) * 100) : 0;
 
     if (conversion < 10) {
-      return `We're seeing a very low end-to-end clearance rate of just ${conversion}%. This means the vast majority of detected entities are getting stuck somewhere in the audit or registration process. We need to streamline the inspection pipeline.`;
+      return `We're seeing a very low end-to-end clearance rate of just ${conversion}%. This means the vast majority of non-compliant entities are getting stuck somewhere in the audit process or ignoring warnings. We need to streamline field inspections.`;
     }
-    return `About ${conversion}% of all detected entities successfully make it through to full clearance.`;
+    return `About ${conversion}% of all non-compliant entities successfully make it through to full clearance.`;
   },
 
   sectoral: (data) => {
@@ -227,6 +242,18 @@ const InsightGenerator = {
       return `The "${top.name}" sector is absolutely dominating this segment, making up ${pct}% of all records. Any policy changes here will have a massive ripple effect on the entire ecosystem.`;
     }
     return `The largest sector here is "${top.name}", but the distribution is fairly spread out across multiple industries, meaning risk isn't concentrated in just one area.`;
+  },
+
+  geographic: (data) => {
+    if (!data || data.length === 0) return "No geographic spread data available.";
+    const total = data.reduce((sum, item) => sum + Object.values(item).reduce((acc, val) => typeof val === 'number' ? acc + val : acc, 0), 0);
+    return `This chart shows the distribution of ${total} businesses across different barangays, broken down by sector. The AI can help identify specific concentrations of industries in certain areas.`;
+  },
+
+  categoryRisk: (data) => {
+    if (!data || data.length === 0) return "No category risk data available.";
+    const top = data[0];
+    return `The "${top.name}" sector currently has the highest number of flags (${top.count}). This indicates a sector-specific risk pattern that may require targeted enforcement or policy review.`;
   },
 
   businessSize: (data) => {
@@ -361,36 +388,241 @@ const InsightGenerator = {
   }
 };
 
-const ChartInsightPanel = ({ chartId, insightText, expandedInsights, toggleInsight }) => {
+const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, toggleInsight }) => {
   const isExpanded = !!expandedInsights[chartId];
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { token } = useAuth();
+  const chatScrollRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (isExpanded && messages.length === 0 && insightText) {
+      setMessages([{ role: "model", content: insightText }]);
+    }
+    if (isExpanded && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  }, [isExpanded, insightText, messages.length]);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      const el = chatScrollRef.current;
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages, loading]);
+
+  const handleSend = async (e) => {
+    e?.preventDefault();
+    if (!input.trim() || loading) return;
+
+    const userMsg = { role: "user", content: input.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const data = await sendAnalyticsChatRequest({
+        chartId,
+        data: chartData,
+        messages: messages,
+        userQuery: userMsg.content
+      }, token);
+      
+      setMessages([...newMessages, { role: "model", content: data.response }]);
+    } catch (err) {
+      setMessages([...newMessages, { role: "model", content: `Error: ${err.message}` }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sparkleIcon = (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v1m0 16v1m-7.07-2.93l.71-.71M5.64 5.64l-.71-.71M3 12h1m16 0h1m-2.93 7.07l-.71-.71M18.36 5.64l.71-.71"/>
+      <circle cx="12" cy="12" r="4"/>
+    </svg>
+  );
+
   return (
     <div style={{ marginBottom: 16 }}>
+      <style>{`
+        @keyframes aiChatSlideIn {
+          from { opacity: 0; transform: translateY(-8px) scaleY(0.95); }
+          to { opacity: 1; transform: translateY(0) scaleY(1); }
+        }
+        @keyframes aiBubbleFadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes aiTypingDot {
+          0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+          30% { opacity: 1; transform: translateY(-4px); }
+        }
+        @keyframes aiPulseGlow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.3); }
+          50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+        }
+        .ai-chat-input:focus {
+          border-color: var(--color-primary) !important;
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent) !important;
+        }
+        .ai-send-btn:hover:not(:disabled) {
+          filter: brightness(1.1);
+          transform: scale(1.03);
+        }
+      `}</style>
+
       <button
         onClick={() => toggleInsight(chartId)}
         type="button"
         style={{
-          display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700,
-          color: isExpanded ? "var(--color-primary-dark)" : "var(--color-muted)",
-          background: isExpanded ? "color-mix(in srgb, var(--color-primary) 15%, transparent)" : "transparent",
-          padding: "6px 12px", borderRadius: 20, border: "1px solid",
-          borderColor: isExpanded ? "var(--color-primary)" : "var(--color-border)",
-          cursor: "pointer", transition: "all 0.2s ease"
+          display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700,
+          color: isExpanded ? "#fff" : "var(--color-primary)",
+          background: isExpanded ? "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))" : "transparent",
+          padding: "7px 14px", borderRadius: 20, border: "1px solid",
+          borderColor: isExpanded ? "transparent" : "var(--color-primary)",
+          cursor: "pointer", transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          animation: isExpanded ? "aiPulseGlow 2s ease-in-out infinite" : "none"
         }}
-        onMouseEnter={(e) => { if (!isExpanded) e.currentTarget.style.borderColor = "var(--color-primary)"; }}
-        onMouseLeave={(e) => { if (!isExpanded) e.currentTarget.style.borderColor = "var(--color-border)"; }}
       >
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-        {isExpanded ? "Hide Insight" : "Auto-Analyze"}
+        {sparkleIcon}
+        {isExpanded ? "Hide AI Assistant" : "AI Auto-Analyze"}
       </button>
+      
       {isExpanded && (
         <div style={{
-          marginTop: 12, padding: "14px 18px", borderRadius: 10,
-          background: "color-mix(in srgb, var(--color-primary) 8%, var(--color-surface))",
-          border: "1px solid color-mix(in srgb, var(--color-primary) 25%, transparent)",
-          color: "var(--color-ink)", fontSize: 14, lineHeight: 1.6, fontWeight: 500,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.03)"
+          marginTop: 12, borderRadius: 14,
+          background: "var(--color-surface)",
+          border: "1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)",
+          display: "flex", flexDirection: "column",
+          height: 340, overflow: "hidden",
+          animation: "aiChatSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards",
+          transformOrigin: "top center"
         }}>
-          {insightText}
+          {/* Header */}
+          <div style={{
+            padding: "10px 16px", display: "flex", alignItems: "center", gap: 8,
+            borderBottom: "1px solid var(--color-border)",
+            background: "color-mix(in srgb, var(--color-primary) 5%, var(--color-surface))",
+            flexShrink: 0
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: "50%",
+              background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", fontSize: 14
+            }}>✦</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)" }}>REVELAsys AI Analyst</div>
+              <div style={{ fontSize: 10, color: "var(--color-muted)" }}>
+                {loading ? "Analyzing..." : "Ready to assist"}
+              </div>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div ref={chatScrollRef} style={{
+            padding: "14px 16px", overflowY: "auto", display: "flex",
+            flexDirection: "column", gap: 10, flexGrow: 1
+          }}>
+            {messages.map((m, i) => (
+              <div key={i} style={{ 
+                alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                animation: "aiBubbleFadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards",
+                animationDelay: `${i * 0.05}s`,
+                opacity: 0,
+                maxWidth: "85%",
+              }}>
+                <div style={{
+                  background: m.role === "user"
+                    ? "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))"
+                    : "color-mix(in srgb, var(--color-primary) 6%, var(--color-card-alt))",
+                  color: m.role === "user" ? "#fff" : "var(--color-ink)",
+                  padding: "10px 14px", borderRadius: 14,
+                  borderBottomRightRadius: m.role === "user" ? 4 : 14,
+                  borderBottomLeftRadius: m.role === "model" ? 4 : 14,
+                  fontSize: 13, lineHeight: 1.6,
+                  border: m.role === "model" ? "1px solid var(--color-border)" : "none",
+                  boxShadow: m.role === "user"
+                    ? "0 2px 8px rgba(0,0,0,0.12)"
+                    : "0 1px 4px rgba(0,0,0,0.04)"
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {m.role === "user" ? "You" : "AI Analyst"}
+                  </div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div style={{
+                alignSelf: "flex-start", padding: "12px 18px",
+                background: "color-mix(in srgb, var(--color-primary) 6%, var(--color-card-alt))",
+                borderRadius: 14, borderBottomLeftRadius: 4,
+                border: "1px solid var(--color-border)",
+                display: "flex", alignItems: "center", gap: 5,
+                animation: "aiBubbleFadeIn 0.3s ease forwards"
+              }}>
+                {[0, 1, 2].map(n => (
+                  <div key={n} style={{
+                    width: 7, height: 7, borderRadius: "50%",
+                    background: "var(--color-primary)",
+                    animation: `aiTypingDot 1.2s ease-in-out ${n * 0.15}s infinite`
+                  }}/>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Input */}
+          <form onSubmit={handleSend} style={{
+            display: "flex", gap: 8,
+            borderTop: "1px solid var(--color-border)",
+            padding: "10px 12px",
+            background: "color-mix(in srgb, var(--color-primary) 3%, var(--color-surface))",
+            flexShrink: 0
+          }}>
+            <input 
+              ref={inputRef}
+              type="text" 
+              value={input} 
+              onChange={e => setInput(e.target.value)}
+              placeholder="Ask about this chart..."
+              className="ai-chat-input"
+              style={{
+                flexGrow: 1, padding: "9px 14px", border: "1.5px solid var(--color-border)", 
+                borderRadius: 22, fontSize: 13, outline: "none",
+                background: "var(--color-card-alt)",
+                color: "var(--color-ink)", fontFamily: "var(--font-base)",
+                transition: "all 0.2s ease"
+              }}
+              disabled={loading}
+            />
+            <button 
+              type="submit"
+              className="ai-send-btn"
+              disabled={loading || !input.trim()}
+              style={{
+                padding: "9px 18px", borderRadius: 22, border: "none",
+                background: input.trim() && !loading
+                  ? "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))"
+                  : "var(--color-border)",
+                color: "#fff", fontWeight: 600, fontSize: 13,
+                cursor: input.trim() && !loading ? "pointer" : "not-allowed",
+                transition: "all 0.2s ease", flexShrink: 0,
+                display: "flex", alignItems: "center", gap: 5
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+              Send
+            </button>
+          </form>
         </div>
       )}
     </div>
@@ -621,22 +853,9 @@ export default function AnalyticsPage() {
     "Red Flags": Math.min((r.red_count / Math.max(...(presc?.rankings || []).map(x => x.red_count), 1)) * 100, 100),
   }));
 
-  // ── Enforcement Funnel Data ───────────────────────────────────────────────
-  const kpiTotalFlagged = kpis?.total_flagged || 0;
-  const kpiTotalBiz = kpis?.total_businesses || 0;
-  const kpiActive = kpis?.active_count || 0;
-
   const auditBreakdown = desc?.audit_summary?.result_breakdown || [];
   const inspectedCount = auditBreakdown.reduce((sum, r) => sum + r.count, 0);
   const clearedCount = auditBreakdown.find(r => r.inspectionResult === 'Green' || r.inspectionResult === 'Compliant')?.count || 0;
-
-  const funnelData = [
-    { step: "Total Detected", value: kpiTotalBiz + kpiTotalFlagged, color: "var(--color-ink)" },
-    { step: "Registered", value: kpiTotalBiz, color: "#3b82f6" },
-    { step: "Active", value: kpiActive, color: "#f59e0b" },
-    { step: "Inspected", value: inspectedCount, color: "#8b5cf6" },
-    { step: "Cleared", value: clearedCount, color: "#10b981" },
-  ];
 
   const flagCounts = useMemo(() => {
     const progress = desc?.enforcement_progress || [];
@@ -651,6 +870,13 @@ export default function AnalyticsPage() {
     return { green, red, yellow, black, orange, total: green + red + yellow + black + orange };
   }, [desc?.enforcement_progress]);
 
+  const funnelData = [
+    { step: "Total Flags", value: flagCounts.total, color: "var(--color-ink)" },
+    { step: "Total Non-Compliant", value: flagCounts.red + flagCounts.yellow + flagCounts.orange + flagCounts.black, color: "#f43f5e" },
+    { step: "Total Inspected", value: inspectedCount, color: "#8b5cf6" },
+    { step: "Compliant (Cleared)", value: clearedCount, color: "#10b981" },
+  ];
+
 
   const leaderboardData = useMemo(() => {
     const progress = desc?.enforcement_progress;
@@ -661,13 +887,15 @@ export default function AnalyticsPage() {
       const y = row.yellow_count || 0;
       const b = row.black_count || 0;
       const o = row.orange_count || 0;
-      const total = g + r + y + b + o;
-      const rate = total > 0 ? Math.round((g / total) * 100) : 100;
+      const totalEntities = g + r + y + b + o;
+      const totalFlags = r + y + b + o;
+      const rate = totalEntities > 0 ? Math.round((g / totalEntities) * 100) : 100;
       return {
         barangayName: row.barangayName,
         shortName: shortBarangay(row.barangayName),
         activeCount: g,
-        totalFlags: total,
+        totalEntities,
+        totalFlags,
         rate,
         g, y, o, r, b
       };
@@ -1547,7 +1775,17 @@ export default function AnalyticsPage() {
                         <span style={{ fontWeight: 700, fontSize: 15, color: "var(--color-ink)", flex: 1 }}>{rec.barangayName}</span>
                         <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, color: rec.urgencyColor, background: `${rec.urgencyColor}15`, border: `1px solid ${rec.urgencyColor}40`, letterSpacing: "0.05em" }}>{rec.urgency || "—"}</span>
                         <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>OPS {rec.ops_score ?? "—"}</span>
-                        <span style={{ fontSize: 11, color: "var(--color-muted)" }}>👤 {rec.inspectors ?? 0} · 🚩 {rec.flagged_count ?? 0}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--color-muted)" }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            {rec.inspectors ?? 0}
+                          </span>
+                          <span>&middot;</span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                            {rec.flagged_count ?? 0}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1630,9 +1868,10 @@ export default function AnalyticsPage() {
                     </div>
                     <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--color-blue, #3b82f6)", borderRadius: 12 }}>Demographics</span>
                   </div>
+                  <ChartInsightPanel chartId="overviewGeographic" chartData={naturePerBarangayData} insightText={InsightGenerator.geographic(naturePerBarangayData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   
                   {loading ? <Skeleton h={350} /> : naturePerBarangayData.length === 0 ? (
-                    <div style={{ height: 350, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No geographic data available.</div>
+                    <EmptyState h={350} title="No Geographic Data" message="No data available for the selected filters." />
                   ) : (
                     <div style={{ height: 350, width: "100%" }}>
                       <ResponsiveContainer width="100%" height="100%">
@@ -1662,10 +1901,10 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Highest volume business lines</p>
                     </div>
                   </div>
-                  <ChartInsightPanel chartId="overviewSectoral" insightText={InsightGenerator.sectoral(sectoralData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="overviewSectoral" chartData={sectoralData} insightText={InsightGenerator.sectoral(sectoralData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   
                   {loading ? <Skeleton h={220} /> : sectoralData.length === 0 ? (
-                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No sector data yet.</div>
+                    <EmptyState h={220} title="No Sector Data" />
                   ) : (
                     <div style={{ height: 220, width: "100%" }}>
                       <ResponsiveContainer width="100%" height="100%">
@@ -1693,10 +1932,10 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Distribution by enterprise scale</p>
                     </div>
                   </div>
-                  <ChartInsightPanel chartId="overviewSize" insightText={InsightGenerator.businessSize(sizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="overviewSize" chartData={sizeData} insightText={InsightGenerator.businessSize(sizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
 
                   {loading ? <Skeleton h={220} /> : sizeData.length === 0 ? (
-                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No size data yet.</div>
+                    <EmptyState h={220} title="No Size Data" />
                   ) : (
                     <div style={{ height: 220, width: "100%", display: "flex", alignItems: "center" }}>
                       <ResponsiveContainer width="50%" height="100%">
@@ -1740,10 +1979,10 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Distribution by business type</p>
                     </div>
                   </div>
-                  <ChartInsightPanel chartId="overviewType" insightText={InsightGenerator.businessType(typeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="overviewType" chartData={typeData} insightText={InsightGenerator.businessType(typeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
 
                   {loading ? <Skeleton h={220} /> : typeData.length === 0 ? (
-                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No type data yet.</div>
+                    <EmptyState h={220} title="No Type Data" />
                   ) : (
                     <div style={{ height: 220, width: "100%", display: "flex", alignItems: "center" }}>
                       <ResponsiveContainer width="50%" height="100%">
@@ -1787,10 +2026,10 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Active vs Non-Active comparison</p>
                     </div>
                   </div>
-                  <ChartInsightPanel chartId="overviewComplianceSize" insightText={InsightGenerator.complianceBySize(complianceBySizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="overviewComplianceSize" chartData={complianceBySizeData} insightText={InsightGenerator.complianceBySize(complianceBySizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   
                   {loading ? <Skeleton h={220} /> : complianceBySizeData.length === 0 ? (
-                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No compliance data yet.</div>
+                    <EmptyState h={220} title="No Compliance Data" />
                   ) : (
                     <div style={{ height: 220, width: "100%" }}>
                       <ResponsiveContainer width="100%" height="100%">
@@ -1815,7 +2054,7 @@ export default function AnalyticsPage() {
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Compliance Timeline (12 Months)</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>The gap between active vs non-active renewals over time.</p>
-                  <ChartInsightPanel chartId="timeline" insightText={InsightGenerator.timeline(timelineData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="timeline" chartData={timelineData} insightText={InsightGenerator.timeline(timelineData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   <div style={{ height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -1889,7 +2128,13 @@ export default function AnalyticsPage() {
                   <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-green)", minWidth: 0 }}>
                     <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Highest Compliance Barangay</p>
                     <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
-                      {leaderboardData.length > 0 ? `${[...leaderboardData].sort((a,b)=>b.rate - a.rate)[0].shortName} (${[...leaderboardData].sort((a,b)=>b.rate - a.rate)[0].rate}% compliant)` : "N/A"}
+                      {leaderboardData.length > 0 ? (() => {
+                        const best = [...leaderboardData].sort((a,b) => {
+                          if (a.rate !== b.rate) return b.rate - a.rate;
+                          return b.totalEntities - a.totalEntities;
+                        })[0];
+                        return `${best.shortName} (${best.rate}% compliant)`;
+                      })() : "N/A"}
                     </p>
                   </div>
 
@@ -1900,7 +2145,7 @@ export default function AnalyticsPage() {
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Barangay Compliance Leaderboard</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Ranked compliance rates based on registered vs flagged entities.</p>
-                  <ChartInsightPanel chartId="leaderboard" insightText={InsightGenerator.leaderboard(leaderboardData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="leaderboard" chartData={leaderboardData} insightText={InsightGenerator.leaderboard(leaderboardData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   <div style={{ maxHeight: 260, overflowY: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                       <thead style={{ position: "sticky", top: 0, background: "var(--color-surface)", zIndex: 10 }}>
@@ -1911,7 +2156,10 @@ export default function AnalyticsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {leaderboardData.sort((a, b) => b.rate - a.rate).map((row) => (
+                        {[...leaderboardData].sort((a, b) => {
+                          if (a.rate !== b.rate) return b.rate - a.rate;
+                          return b.totalEntities - a.totalEntities;
+                        }).map((row) => (
                           <tr key={row.barangayName} style={{ borderBottom: "1px solid rgba(226,232,240,0.35)" }}>
                             <td style={{ padding: "8px", fontWeight: 600, color: "var(--color-ink)", fontSize: 12 }}>{row.barangayName}</td>
                             <td style={{ padding: "8px" }}>
@@ -1932,10 +2180,15 @@ export default function AnalyticsPage() {
 
                 {/* Category Risk Drivers */}
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 8px 0" }}>Category Risk Drivers</h3>
-                  <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Sector-specific patterns — top flagged lines of business</p>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Category Risk Drivers</h3>
+                      <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Sector-specific patterns — top flagged lines of business</p>
+                    </div>
+                  </div>
+                  <ChartInsightPanel chartId="overviewRiskDrivers" chartData={categoryData} insightText={InsightGenerator.categoryRisk(categoryData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   {loading ? <Skeleton h={220} /> : categoryData.length === 0 ? (
-                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No sector data yet.</div>
+                    <EmptyState h={220} title="No Category Risk Data" />
                   ) : (
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart data={categoryData.slice(0, 7)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
@@ -1957,9 +2210,12 @@ export default function AnalyticsPage() {
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Inspection Result Breakdown</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Distribution of audit outcomes for verified businesses.</p>
-                  <ChartInsightPanel chartId="auditBreakdown" insightText={InsightGenerator.auditBreakdown(auditData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  <div style={{ height: 260 }}>
-                    <ResponsiveContainer width="100%" height="100%">
+                  <ChartInsightPanel chartId="auditBreakdown" chartData={auditData} insightText={InsightGenerator.auditBreakdown(auditData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  {loading ? <Skeleton h={260} /> : auditData.length === 0 ? (
+                    <EmptyState h={260} title="No Audit Data" />
+                  ) : (
+                    <div style={{ height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={auditData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
                         <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
@@ -1973,11 +2229,12 @@ export default function AnalyticsPage() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+                  )}
                 </div>
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Enforcement Funnel</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Actual conversion of detected entities through the audit process.</p>
-                  <ChartInsightPanel chartId="funnel" insightText={InsightGenerator.funnel(funnelData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="funnel" chartData={funnelData} insightText={InsightGenerator.funnel(funnelData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
                     {funnelData.map((f, i) => {
                       const maxVal = Math.max(...funnelData.map(d => d.value)) || 1;
@@ -2012,6 +2269,7 @@ export default function AnalyticsPage() {
 
             {/* D1. NARRATIVES */}
             <div style={{ marginBottom: 40 }}>
+              <ChartInsightPanel chartId="diagnosticNarratives" chartData={{ dbscan: diag?.dbscan_insight, morans: diag?.morans_insight }} insightText={diag?.dbscan_insight && diag?.morans_insight ? `DBSCAN Analysis: ${diag.dbscan_insight} — Moran's I Analysis: ${diag.morans_insight}` : "Diagnostic analysis data not yet available."} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
               <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>D1. Risk Intelligence Narratives</h3>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
@@ -2149,10 +2407,10 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 12, color: "var(--color-muted)", margin: 0 }}>Are we catching more critical issues over time?</p>
                     </div>
                   </div>
-                  <ChartInsightPanel chartId="redFlagTrend" insightText={InsightGenerator.redFlagTrend(trendData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
+                  <ChartInsightPanel chartId="redFlagTrend" chartData={trendData} insightText={InsightGenerator.redFlagTrend(trendData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
 
                   {loading ? <Skeleton h={220} /> : trendData.length === 0 ? (
-                    <div style={{ height: 220, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted }}>No trend data yet.</div>
+                    <EmptyState h={220} title="No Trend Data" />
                   ) : (
                     <ResponsiveContainer width="100%" height={220}>
                       <LineChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -2211,9 +2469,14 @@ export default function AnalyticsPage() {
                               <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, color: rec.urgencyColor, background: `${rec.urgencyColor}15`, border: `1px solid ${rec.urgencyColor}40`, letterSpacing: "0.05em" }}>{rec.urgency || "—"}</span>
                             </div>
                             <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "var(--color-muted)" }}>
-                              <span>OPS <strong style={{ color: "var(--color-ink)" }}>{rec.ops_score ?? "—"}</strong>/100</span>
-                              <span>👤 {rec.inspectors ?? 0} inspector{(rec.inspectors ?? 0) !== 1 ? "s" : ""}</span>
-                              <span>🚩 {rec.flagged_count ?? 0} flag{(rec.flagged_count ?? 0) !== 1 ? "s" : ""}</span>
+                              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                {rec.inspectors ?? 0} inspector{(rec.inspectors ?? 0) !== 1 ? "s" : ""}
+                              </span>
+                              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                                {rec.flagged_count ?? 0} flag{(rec.flagged_count ?? 0) !== 1 ? "s" : ""}
+                              </span>
                             </div>
                           </div>
                           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--color-muted)" strokeWidth="2" style={{ flexShrink: 0, transition: "transform 0.2s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
@@ -2226,9 +2489,9 @@ export default function AnalyticsPage() {
                           <div style={{ padding: "0 20px 20px 20px", borderTop: "1px solid rgba(99,102,241,0.08)" }}>
                             {/* Flag Badges */}
                             <div style={{ display: "flex", gap: 8, marginTop: 14, marginBottom: 14, flexWrap: "wrap" }}>
-                              {rec.red_count > 0 && <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}>📌 {rec.red_count} Unregistered</span>}
-                              {rec.yellow_count > 0 && <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}>⚠️ {rec.yellow_count} Suspicious</span>}
-                              {rec.black_count > 0 && <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}>🛑 {rec.black_count} Violations</span>}
+                              {rec.red_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> {rec.red_count} Unregistered</span>}
+                              {rec.yellow_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> {rec.yellow_count} Suspicious</span>}
+                              {rec.black_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> {rec.black_count} Violations</span>}
                             </div>
 
                             {/* Score Breakdown */}
@@ -2273,6 +2536,7 @@ export default function AnalyticsPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
               {/* Radar chart — top 8 */}
               <div className="tier-3-card saas-card frosted-glass" style={{ borderRadius: 12 }}>
+                <ChartInsightPanel chartId="prescriptiveOps" chartData={{ radar: radarData, rankings: presc?.rankings, dispatch: presc?.dispatch_recommendations }} insightText={radarData.length > 0 ? `The OPS model has ranked ${radarData.length} barangays. ${radarData[0]?.barangay || "Top barangay"} has the highest priority score of ${radarData[0]?.OPS || 0}, indicating it needs the most urgent enforcement attention.` : "No OPS data available yet."} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>
                     OPS Radar — Top 8 Barangays
@@ -2317,9 +2581,7 @@ export default function AnalyticsPage() {
                 )}
 
                 {loading ? <Skeleton h={280} /> : radarData.length === 0 ? (
-                  <div style={{ height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
-                    Insufficient data for radar.
-                  </div>
+                  <EmptyState h={280} title="Insufficient Data" message="Not enough data to compute OPS rankings." />
                 ) : (
                   <ResponsiveContainer width="100%" height={280}>
                     <RadarChart data={radarData}>
@@ -2446,6 +2708,7 @@ export default function AnalyticsPage() {
                         </svg>
                         Inspector Leaderboard
                       </h3>
+                      <ChartInsightPanel chartId="opsInspectors" chartData={data?.operations?.inspector_stats} insightText={InsightGenerator.inspectorPerformance(data?.operations?.inspector_stats)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                       <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5 }}>
                         {InsightGenerator.inspectorPerformance(data?.operations?.inspector_stats)}
                       </p>
@@ -2484,8 +2747,8 @@ export default function AnalyticsPage() {
                           ))}
                           {(!data?.operations?.inspector_stats || data.operations.inspector_stats.length === 0) && (
                             <tr>
-                              <td colSpan="4" style={{ padding: "24px", textAlign: "center", color: "var(--color-muted)", fontSize: 13 }}>
-                                No inspector data found.
+                              <td colSpan="5" style={{ padding: "24px" }}>
+                                <EmptyState h={160} title="No Inspector Data" message="No operations found for these criteria." />
                               </td>
                             </tr>
                           )}
@@ -2503,15 +2766,14 @@ export default function AnalyticsPage() {
                         </svg>
                         Inspection Status Breakdown
                       </h3>
+                      <ChartInsightPanel chartId="opsStatusBreakdown" chartData={data?.operations?.status_breakdown} insightText={InsightGenerator.inspectionStatus(data?.operations?.status_breakdown)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                       <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5 }}>
                         {InsightGenerator.inspectionStatus(data?.operations?.status_breakdown)}
                       </p>
                     </div>
                     
                     {data?.operations?.status_breakdown?.length === 0 ? (
-                      <div style={{ height: 260, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
-                        No status data.
-                      </div>
+                      <EmptyState h={260} title="No Status Data" message="No inspection status data available." />
                     ) : (
                       <div style={{ height: 260, width: "100%" }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -2551,15 +2813,14 @@ export default function AnalyticsPage() {
                       </svg>
                       Inspection Activity Timeline
                     </h3>
+                    <ChartInsightPanel chartId="opsTimeline" chartData={data?.operations?.inspection_timeline} insightText={InsightGenerator.opsTimeline(data?.operations?.inspection_timeline)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                     <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5 }}>
                       {InsightGenerator.opsTimeline(data?.operations?.inspection_timeline)}
                     </p>
                   </div>
                   
                   {data?.operations?.inspection_timeline?.length === 0 ? (
-                    <div style={{ height: 300, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: COLOR.muted, fontSize: 13 }}>
-                      No timeline data.
-                    </div>
+                    <EmptyState h={300} title="No Timeline Data" message="Not enough timeline data available." />
                   ) : (
                     <div style={{ height: 300, width: "100%" }}>
                       <ResponsiveContainer width="100%" height="100%">

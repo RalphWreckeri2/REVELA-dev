@@ -1,5 +1,8 @@
+import json
 import math
 import traceback
+import os
+import google.generativeai as genai
 
 from flask import Blueprint, jsonify, request
 from api.middleware.decorators import jwt_required, admin_required
@@ -90,6 +93,13 @@ def _get_all_analytics_inner(F=None):
         reg_no_status_p,
     )
     pending_count = cur.fetchone()["n"]
+
+    cur.execute(
+        "SELECT COUNT(*) AS n FROM official_registry WHERE applicationStatus = 'Revoked'"
+        + reg_no_status,
+        reg_no_status_p,
+    )
+    revoked_count = cur.fetchone()["n"]
 
     cur.execute(
         "SELECT COUNT(*) AS n FROM official_registry WHERE YEAR(lastRenewalDate) = YEAR(CURDATE())"
@@ -636,6 +646,7 @@ def _get_all_analytics_inner(F=None):
                 "expired_count":       expired_count,
                 "closed_count":        closed_count,
                 "pending_count":       pending_count,
+                "revoked_count":       revoked_count,
                 "current_year_count":  current_year_count,
                 "total_flagged":       total_flagged,
                 "compliance_rate":     compliance_rate,
@@ -846,10 +857,6 @@ def update_config():
     return jsonify({"message": "WLC configuration updated successfully.", "data": updated_config}), 200
 
 
-import os
-from groq import Groq
-
-
 @analytics_bp.route("/chat", methods=["POST"])
 @jwt_required()
 def analytics_chat():
@@ -862,37 +869,242 @@ def analytics_chat():
     if not user_query:
         return jsonify({"error": "User query is required"}), 400
 
-    groq_api_key = os.environ.get("GROQ_API_KEY")
-    if not groq_api_key:
-        return jsonify({"error": "GROQ_API_KEY is not configured in the backend environment."}), 500
+    gemini_api_key = os.environ.get("GEMINI_API_KEY")
+    if not gemini_api_key:
+        return jsonify({"error": "GEMINI_API_KEY is not configured in the backend environment."}), 500
 
-    client = Groq(api_key=groq_api_key)
+    genai.configure(api_key=gemini_api_key)
 
-    system_message = (
-        f"You are the REVELAsys Analytics AI Assistant. "
-        f"You help users understand their business registry and enforcement data. "
-        f"The user is asking about the '{chart_id}' chart. "
-        f"Here is the JSON data for this chart: {chart_data}. "
-        f"Answer their questions concisely, professionally, and accurately based ONLY on this data."
-    )
+    # ── Summarize global dashboard data so the LLM gets digestible context ──
+    if chart_id == "global_dashboard" and isinstance(chart_data, dict):
+        summary_parts = []
+
+        # KPIs
+        kpis = chart_data.get("kpis", {})
+        if kpis:
+            summary_parts.append(f"KPIs: {json.dumps(kpis)}")
+
+        # Geographic (barangay breakdown) – all barangays
+        geo = chart_data.get("geographic", [])
+        if geo:
+            try:
+                sorted_geo = sorted(geo, key=lambda x: sum(v for k, v in x.items() if k != "barangay" and isinstance(v, (int, float))), reverse=True)
+            except Exception:
+                sorted_geo = geo
+            summary_parts.append(f"All Barangays (by business volume, highest first): {json.dumps(sorted_geo)}")
+
+        # Sectoral (business lines) – all sectors
+        sectors = chart_data.get("sectoral", [])
+        if sectors:
+            try:
+                sorted_sectors = sorted(sectors, key=lambda x: x.get("count", x.get("value", 0)), reverse=True)
+            except Exception:
+                sorted_sectors = sectors
+            summary_parts.append(f"All Business Sectors (by count, highest first): {json.dumps(sorted_sectors)}")
+
+        # Business sizes
+        sizes = chart_data.get("size", [])
+        if sizes:
+            summary_parts.append(f"Business Size Distribution: {json.dumps(sizes)}")
+
+        # Legal structure
+        legal = chart_data.get("legalStructure", [])
+        if legal:
+            summary_parts.append(f"Business Legal Structure: {json.dumps(legal)}")
+
+        # Compliance by size
+        comp_size = chart_data.get("complianceBySize", [])
+        if comp_size:
+            summary_parts.append(f"Compliance by Business Size: {json.dumps(comp_size)}")
+
+        # Compliance timeline
+        timeline = chart_data.get("complianceTimeline", [])
+        if timeline:
+            summary_parts.append(f"Compliance Timeline (12 months): {json.dumps(timeline)}")
+
+        # Enforcement / Flag breakdown (aggregate totals across all barangays)
+        enforcement = chart_data.get("enforcement", [])
+        if enforcement:
+            total_green = sum(b.get("green_count", 0) for b in enforcement)
+            total_red = sum(b.get("red_count", 0) for b in enforcement)
+            total_yellow = sum(b.get("yellow_count", 0) for b in enforcement)
+            total_black = sum(b.get("black_count", 0) for b in enforcement)
+            total_orange = sum(b.get("orange_count", 0) for b in enforcement)
+            flag_summary = {
+                "green_flags": total_green,
+                "yellow_flags": total_yellow,
+                "red_flags": total_red,
+                "black_flags": total_black,
+                "orange_flags": total_orange,
+                "total_non_green_flags": total_red + total_yellow + total_black + total_orange
+            }
+            summary_parts.append(f"Flag Color Breakdown (system-wide totals): {json.dumps(flag_summary)}")
+            # Also include top flagged barangays
+            flagged_barangays = [b for b in enforcement if (b.get("red_count", 0) + b.get("yellow_count", 0) + b.get("black_count", 0) + b.get("orange_count", 0)) > 0]
+            if flagged_barangays:
+                flagged_barangays.sort(key=lambda x: x.get("red_count", 0) + x.get("yellow_count", 0) + x.get("black_count", 0) + x.get("orange_count", 0), reverse=True)
+                summary_parts.append(f"Barangays with non-green flags: {json.dumps(flagged_barangays[:10])}")
+
+        # Audit summary
+        audit = chart_data.get("audit", {})
+        if audit:
+            summary_parts.append(f"Inspection/Audit Summary: {json.dumps(audit)}")
+
+        # Barangay risk data (diagnostic) – top 10
+        brgy_risk = chart_data.get("barangayRisk", [])
+        if brgy_risk:
+            summary_parts.append(f"Top Barangay Risk Data: {json.dumps(brgy_risk[:10])}")
+
+        # Category noncompliance (diagnostic)
+        cat_noncomp = chart_data.get("categoryNoncompliance", [])
+        if cat_noncomp:
+            summary_parts.append(f"Category Noncompliance: {json.dumps(cat_noncomp)}")
+
+        # Flag trend (diagnostic)
+        flag_trend = chart_data.get("flagTrend", [])
+        if flag_trend:
+            summary_parts.append(f"Flag Trend: {json.dumps(flag_trend)}")
+
+        # ── PRESCRIPTIVE TIER ──
+
+        # OPS/WLC Rankings (sorted by ops_score descending)
+        ops_rankings = chart_data.get("opsRankings", [])
+        if ops_rankings:
+            # Include key fields only to keep concise
+            slim_rankings = [{
+                "rank": r.get("rank"),
+                "barangay": r.get("barangayName"),
+                "ops_score": r.get("ops_score"),
+                "risk_score": r.get("risk_score"),
+                "sector_score": r.get("sector_score"),
+                "distance_score": r.get("distance_score"),
+                "risk_level": r.get("risk_level"),
+                "flagged_count": r.get("flagged_count"),
+                "non_compliance_rate": r.get("non_compliance_rate"),
+            } for r in ops_rankings]
+            summary_parts.append(f"OPS Priority Rankings (WLC-based, all barangays): {json.dumps(slim_rankings)}")
+
+        # WLC Config (weights)
+        wlc_config = chart_data.get("wlcConfig", {})
+        if wlc_config:
+            summary_parts.append(f"WLC Weight Configuration: {json.dumps(wlc_config)}")
+
+        # Dispatch Recommendations
+        dispatch = chart_data.get("dispatchRecommendations", [])
+        if dispatch:
+            summary_parts.append(f"Dispatch Recommendations: {json.dumps(dispatch[:10])}")
+
+        # ── OPERATIONS TIER ──
+
+        # Inspector stats
+        inspector_stats = chart_data.get("inspectorStats", [])
+        if inspector_stats:
+            summary_parts.append(f"Inspector Performance Stats: {json.dumps(inspector_stats)}")
+
+        # Status breakdown
+        status_breakdown = chart_data.get("statusBreakdown", [])
+        if status_breakdown:
+            summary_parts.append(f"Inspection Status Breakdown: {json.dumps(status_breakdown)}")
+
+        # Inspection timeline
+        insp_timeline = chart_data.get("inspectionTimeline", [])
+        if insp_timeline:
+            summary_parts.append(f"Inspection Timeline (monthly): {json.dumps(insp_timeline)}")
+
+        data_context = "\n".join(summary_parts) if summary_parts else "No data available."
+
+        system_message = (
+            "You are the REVELA AI Analyst — the built-in analytics assistant for REVELAsys.\n\n"
+
+            "## About REVELAsys\n"
+            "REVELAsys (Registry, Evaluation, Verification, Enforcement, and Licensing Analytics System) "
+            "is a web-based platform used by the Business Permits and Licensing Office (BPLO) of a "
+            "local government unit (municipality) in the Philippines. It digitizes the management of "
+            "business permits, regulatory compliance, and enforcement operations.\n\n"
+
+            "## Key Domain Concepts\n"
+            "- **Official Registry**: The master list of all businesses registered in the municipality. "
+            "Each business has an application status: Active (permit is current), Expired (permit lapsed and was not renewed), "
+            "Closed (business voluntarily closed), or Pending (application is being processed).\n"
+            "- **Barangays**: The smallest administrative division in the Philippines. Businesses are grouped by barangay.\n"
+            "- **Business Size**: Classified as Micro, Small, Medium, or Large based on asset size per Philippine DTI standards.\n"
+            "- **Lines of Business**: The industry or trade a business operates in (e.g., 'Retail selling', 'Renting or leasing').\n"
+            "- **Flag System**: Businesses can be flagged with color-coded flags during inspections or reviews:\n"
+            "  - Green = Fully compliant\n"
+            "  - Yellow = Minor issues found, needs attention\n"
+            "  - Red = Serious violations, requires enforcement action\n"
+            "  - Black = Critical / ordered to cease operations\n"
+            "  - Orange = Under investigation or special monitoring\n"
+            "- **Compliance Rate**: Percentage of businesses with Active status out of total registered.\n"
+            "- **Inspections**: Field inspections conducted by municipal inspectors. A business may have zero inspections "
+            "if it has not yet been scheduled — this is normal, especially for newly registered businesses or if the "
+            "inspection program is still being rolled out.\n"
+            "- **Compliance by Size**: Shows how many Active vs Non-Active businesses exist per size category. "
+            "'Non-Active' includes Expired, Closed, and Pending — it does NOT necessarily mean the business is violating rules.\n"
+            "- **Compliance Timeline**: Monthly trend of active vs non-active business counts over the past 12 months.\n"
+            "- **Barangay Risk**: Diagnostic data showing which barangays have the highest concentration of non-compliant businesses.\n"
+            "- **Category Noncompliance**: Which business categories (lines of business) have the most non-compliant entries.\n"
+            "- **Flag Trend**: Weekly trend of new flags raised.\n"
+            "- **OPS Score (Operational Priority Score)**: A composite score (0-100) computed using WLC (Weighted Linear Combination) "
+            "that ranks barangays by inspection priority. Higher score = higher priority for dispatching inspectors.\n"
+            "- **WLC Weights**: The OPS score is computed from three weighted sub-scores:\n"
+            "  - Risk Score (w1): Based on the severity and count of flags (red, yellow, black) in the barangay\n"
+            "  - Sector Score (w2): Based on the risk profile of the dominant business sectors in the barangay\n"
+            "  - Distance Score (w3): Based on proximity to the BPLO office (closer = easier to dispatch)\n"
+            "- **Risk Level**: Derived from OPS score — High (>=60), Medium (>=30), Low (<30)\n"
+            "- **Dispatch Recommendations**: AI-generated suggestions for which barangays to prioritize for inspector dispatch, based on OPS rankings.\n"
+            "- **Inspector Stats**: Performance metrics for individual inspectors (inspections completed, resolution time, etc.).\n"
+            "- **Inspection Status Breakdown**: Distribution of inspection statuses (Pending, In Progress, Completed, etc.).\n\n"
+
+            "## Important Guidelines\n"
+            "- Do NOT flag zero inspections as an anomaly — inspections are conducted on a rolling schedule and many businesses may not have been inspected yet.\n"
+            "- 'Non-Active' in compliance charts means the business status is not 'Active' — it includes Expired, Closed, and Pending. Do not confuse this with violations.\n"
+            "- ALWAYS respect the numerical 'rank' exactly as provided in the OPS Priority Rankings and Dispatch Recommendations. Do NOT re-order barangays yourself (e.g. do not promote a lower-ranked barangay above a higher-ranked one just because of flag colors). Follow the exact WLC-computed ranking order.\n"
+            "- When discussing compliance, frame it in terms of permit renewal and regulatory status, not moral judgments.\n"
+            "- Be helpful to BPLO staff — suggest actionable next steps like 'consider prioritizing inspections in Barangay X' or 'the high proportion of Micro businesses suggests focusing outreach on small enterprise compliance'.\n"
+            "- Use Filipino-friendly language when appropriate (e.g., barangay, BPLO).\n\n"
+
+            "## Dashboard Data\n"
+            f"{data_context}\n\n"
+            "Answer questions concisely, professionally, and accurately based ONLY on this data. "
+            "Use specific numbers to support your answers. "
+            "If asked about trends or insights, provide actionable recommendations relevant to BPLO operations."
+        )
+    else:
+        # Single chart mode (legacy)
+        system_message = (
+            f"You are the REVELAsys Analytics AI Assistant. "
+            f"You help users understand their business registry and enforcement data. "
+            f"The user is asking about the '{chart_id}' chart. "
+            f"Here is the JSON data for this chart: {chart_data}. "
+            f"Answer their questions concisely, professionally, and accurately based ONLY on this data."
+        )
 
     try:
-        formatted_messages = [{"role": "system", "content": system_message}]
-        for msg in messages:
-            role = "user" if msg["role"] == "user" else "assistant"
-            formatted_messages.append({"role": role, "content": msg["content"]})
-        formatted_messages.append({"role": "user", "content": user_query})
+        model = genai.GenerativeModel(
+            model_name="gemini-3-flash-preview",
+            system_instruction=system_message
+        )
 
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=formatted_messages,
-            temperature=0.4,
-            max_tokens=1024,
+        gemini_messages = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            gemini_messages.append({"role": role, "parts": [msg["content"]]})
+        
+        gemini_messages.append({"role": "user", "parts": [user_query]})
+
+        response = model.generate_content(
+            gemini_messages,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.4,
+                max_output_tokens=1024,
+            )
         )
 
         return jsonify({
-            "response": response.choices[0].message.content
+            "response": response.text
         }), 200
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": f"AI Assistant Error: {str(e)}"}), 500
+

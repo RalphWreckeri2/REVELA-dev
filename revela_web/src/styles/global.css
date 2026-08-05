@@ -207,6 +207,10 @@ body {
   background: rgba(230, 81, 0, 0.12);
   color: #e65100;
 }
+.badge--black {
+  background: #f3f4f6;
+  color: #1f2937;
+}
 
 /* Dot indicator */
 .dot-indicator {
@@ -829,6 +833,10 @@ html.theme-dark .badge--gold {
 html.theme-dark .badge--orange {
   background: rgba(230, 81, 0, 0.18);
   color: #fb923c;
+}
+html.theme-dark .badge--black {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
 }
 
 /* ── Dark: Form elements ── */

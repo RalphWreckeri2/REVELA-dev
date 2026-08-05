@@ -53,7 +53,7 @@ function LegalDocModal({ title, children, onClose, isClosing }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", borderBottom: "1px solid var(--color-border-soft)" }}>
           <h3 style={{ margin: 0, fontSize: 16, color: "var(--color-ink)" }}>{title}</h3>
           <button className="modal-close-btn" onClick={onClose}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
@@ -97,7 +97,7 @@ function ChangePasswordModal({ onClose, token, isClosing }) {
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
       <div className={"modal-panel saas-card frosted-glass" + (isClosing ? " closing" : "")} style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button className="modal-close-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
         <h3 style={{ margin: "0 0 20px 0", fontSize: 18, color: "var(--color-ink)" }}>Change Password</h3>
 
@@ -182,7 +182,7 @@ function Setup2FAModal({ onClose, token, onSuccess, isClosing }) {
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
       <div className={"modal-panel saas-card frosted-glass" + (isClosing ? " closing" : "")} style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button className="modal-close-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>
         <h3 style={{ margin: "0 0 20px 0", fontSize: 18, color: "var(--color-ink)" }}>Set up Two-Factor Auth</h3>
         {error && <p style={{ background: "var(--color-error-bg)", border: "1px solid var(--color-error-border)", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--color-danger)", marginBottom: 16 }}>{error}</p>}
@@ -215,7 +215,7 @@ export default function SettingsPage() {
   const { token, user, refreshUser } = useContext(AuthContext);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const { theme, previewTheme, isDark, setTheme, setPreviewTheme } = useTheme();
-  
+
   const activeTheme = previewTheme || theme;
 
   const [savingPreferences, setSavingPreferences] = useState(false);
@@ -537,10 +537,10 @@ export default function SettingsPage() {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-ink)" }}>Apply Preset:</span>
               <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => applyPreset("health")}>
-                🚑 Health Crisis Mode
+                Health Crisis Mode
               </button>
               <button type="button" className="ghost-btn" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => applyPreset("renewal")}>
-                📈 Business Renewal Peak
+                Business Renewal Peak
               </button>
             </div>
 
@@ -614,7 +614,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            
+
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
               <button className="primary-btn" type="button" onClick={handleSavePolicy} disabled={savingPolicy}>
                 {savingPolicy ? "Saving..." : "Save Policy"}

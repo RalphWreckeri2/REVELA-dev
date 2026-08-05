@@ -104,7 +104,7 @@ const DEFAULT_PAGE_SIZE = 10;
 
 // ── Status helpers ─────────────────────────────────────────────────────────────
 function getStatusVariant(status) {
-  return { Active: "green", Expired: "gold", Revoked: "red", Pending: "default", Closed: "orange" }[status] ?? "default";
+  return { Active: "green", Expired: "gold", Revoked: "black", Pending: "default", Closed: "orange" }[status] ?? "default";
 }
 
 function getFlagVariant(flag) {
@@ -113,7 +113,8 @@ function getFlagVariant(flag) {
   if (f === "Green") return "green";
   if (f === "Yellow") return "gold";
   if (f === "Orange") return "orange";
-  if (f === "Black" || f === "Red") return "red";
+  if (f === "Black") return "black";
+  if (f === "Red") return "red";
   return "default";
 }
 

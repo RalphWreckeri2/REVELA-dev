@@ -96,6 +96,9 @@
 .um-table-card {
   padding: 0 !important;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 280px);
 }
 
 /* ── Toolbar ── */
@@ -173,6 +176,8 @@
 /* ── Table ── */
 .um-table-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .um-table {

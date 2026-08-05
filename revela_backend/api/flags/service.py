@@ -623,7 +623,7 @@ def escalate_to_black(log_id):
         cursor = mysql.connection.cursor()
 
         cursor.execute(
-            "SELECT flagColor FROM geospatial_logs WHERE logID = %s",
+            "SELECT flagColor, detectedName, barangayID FROM geospatial_logs WHERE logID = %s",
             (log_id,)
         )
         row = cursor.fetchone()
@@ -641,6 +641,14 @@ def escalate_to_black(log_id):
             SET flagColor = 'Black'
             WHERE logID = %s
         """, (log_id,))
+        
+        # Propagate changes: if marked Black, set registry status to Revoked
+        cursor.execute("""
+            UPDATE official_registry
+            SET applicationStatus = 'Revoked'
+            WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
+        """, (row["detectedName"], row["barangayID"]))
+        
         mysql.connection.commit()
         cursor.close()
         return True, None

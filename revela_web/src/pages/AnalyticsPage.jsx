@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid,
@@ -340,7 +340,7 @@ const InsightGenerator = {
     const first = data[0]["New Red Flags"];
     const last = data[data.length - 1]["New Red Flags"];
     const diff = last - first;
-    
+
     if (diff > 0) {
       return `Red flag emergence is trending upwards, with an increase of ${diff} cases compared to the start of the period. This indicates a growing compliance risk that requires attention.`;
     } else if (diff < 0) {
@@ -373,12 +373,12 @@ const InsightGenerator = {
     const total = data.reduce((sum, item) => sum + item.value, 0);
     const green = data.find(d => d.name === "Green")?.value || 0;
     const red = data.find(d => d.name === "Red")?.value || 0;
-    
+
     if (total === 0) return "No inspections have been recorded yet.";
-    
+
     const greenPct = Math.round((green / total) * 100);
     const redPct = Math.round((red / total) * 100);
-    
+
     if (redPct > 30) {
       return `Warning: ${redPct}% of verified inspections are resulting in a Red flag (severe non-compliance). This highlights a critical need for targeted enforcement and follow-up.`;
     } else if (greenPct > 70) {
@@ -388,8 +388,123 @@ const InsightGenerator = {
   }
 };
 
-const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, toggleInsight }) => {
-  const isExpanded = !!expandedInsights[chartId];
+// Lightweight markdown renderer for AI chat bubbles
+const renderMarkdown = (text) => {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const elements = [];
+  let listItems = [];
+  let listType = null;
+  
+  let inTable = false;
+  let tableHeader = null;
+  let tableRows = [];
+
+  const formatInline = (str) => {
+    const parts = str.split(/(\*\*[^*]+\*\*)/);
+    return parts.map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      const Tag = listType === 'ol' ? 'ol' : 'ul';
+      elements.push(
+        <Tag key={`list-${elements.length}`} style={{ margin: "6px 0", paddingLeft: 20, lineHeight: 1.7 }}>
+          {listItems.map((li, j) => <li key={j}>{formatInline(li)}</li>)}
+        </Tag>
+      );
+      listItems = [];
+      listType = null;
+    }
+  };
+
+  const flushTable = () => {
+    if (inTable) {
+       elements.push(
+         <div key={`table-${elements.length}`} style={{ overflowX: "auto", margin: "10px 0", borderRadius: 8, border: "1px solid var(--color-border)" }}>
+           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+             {tableHeader && <thead><tr style={{ background: "color-mix(in srgb, var(--color-ink) 5%, transparent)" }}>
+               {tableHeader.map((h, i) => <th key={i} style={{ padding: "8px 12px", borderBottom: "1px solid var(--color-border)", fontWeight: 600 }}>{formatInline(h)}</th>)}
+             </tr></thead>}
+             <tbody>
+               {tableRows.map((row, i) => (
+                 <tr key={i} style={{ borderBottom: i === tableRows.length - 1 ? "none" : "1px solid var(--color-border)" }}>
+                   {row.map((cell, j) => <td key={j} style={{ padding: "8px 12px" }}>{formatInline(cell)}</td>)}
+                 </tr>
+               ))}
+             </tbody>
+           </table>
+         </div>
+       );
+       inTable = false;
+       tableHeader = null;
+       tableRows = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const olMatch = line.match(/^(\d+)\.\s+(.+)/);
+    const ulMatch = line.match(/^[-*]\s+(.+)/);
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)/);
+    const tableMatch = line.match(/^\|(.+)\|$/);
+
+    if (tableMatch) {
+      flushList();
+      const cells = tableMatch[1].split('|').map(c => c.trim()).filter(c => c !== "");
+      if (!inTable) {
+        inTable = true;
+        tableHeader = cells;
+      } else {
+        if (cells.every(c => c.replace(/[:\- ]/g, '') === '')) {
+           // skip separator
+        } else {
+           tableRows.push(cells);
+        }
+      }
+    } else if (headingMatch) {
+      flushTable();
+      flushList();
+      const level = headingMatch[1].length;
+      const Tag = `h${level}`;
+      const fontSize = level === 1 ? 16 : level === 2 ? 15 : 14;
+      elements.push(
+        <Tag key={`h-${i}`} style={{ margin: "10px 0 4px", fontSize, fontWeight: 700 }}>
+          {formatInline(headingMatch[2])}
+        </Tag>
+      );
+    } else if (olMatch) {
+      flushTable();
+      if (listType !== 'ol') flushList();
+      listType = 'ol';
+      listItems.push(olMatch[2]);
+    } else if (ulMatch) {
+      flushTable();
+      if (listType !== 'ul') flushList();
+      listType = 'ul';
+      listItems.push(ulMatch[1]);
+    } else {
+      flushTable();
+      flushList();
+      if (line === "") {
+        elements.push(<div key={`br-${i}`} style={{ height: 6 }} />);
+      } else {
+        elements.push(<p key={`p-${i}`} style={{ margin: "3px 0" }}>{formatInline(line)}</p>);
+      }
+    }
+  }
+  flushTable();
+  flushList();
+  return elements;
+};
+
+const GlobalAIAssistant = memo(({ globalData }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -398,13 +513,13 @@ const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, 
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (isExpanded && messages.length === 0 && insightText) {
-      setMessages([{ role: "model", content: insightText }]);
+    if (isExpanded && messages.length === 0) {
+      setMessages([{ role: "model", content: "I am the REVELA AI Analyst. I have reviewed all the data currently visible on your dashboard. What would you like to know?" }]);
     }
     if (isExpanded && inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
-  }, [isExpanded, insightText, messages.length]);
+  }, [isExpanded, messages.length]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -413,24 +528,25 @@ const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, 
     }
   }, [messages, loading]);
 
-  const handleSend = async (e) => {
+  const handleSend = async (e, forcedInput = null) => {
     e?.preventDefault();
-    if (!input.trim() || loading) return;
+    const textToSend = forcedInput !== null ? forcedInput : input;
+    if (!textToSend.trim() || loading) return;
 
-    const userMsg = { role: "user", content: input.trim() };
+    const userMsg = { role: "user", content: textToSend.trim() };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
-    setInput("");
+    if (forcedInput === null) setInput("");
     setLoading(true);
 
     try {
       const data = await sendAnalyticsChatRequest({
-        chartId,
-        data: chartData,
+        chartId: "global_dashboard",
+        data: globalData,
         messages: messages,
         userQuery: userMsg.content
       }, token);
-      
+
       setMessages([...newMessages, { role: "model", content: data.response }]);
     } catch (err) {
       setMessages([...newMessages, { role: "model", content: `Error: ${err.message}` }]);
@@ -439,19 +555,12 @@ const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, 
     }
   };
 
-  const sparkleIcon = (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v1m0 16v1m-7.07-2.93l.71-.71M5.64 5.64l-.71-.71M3 12h1m16 0h1m-2.93 7.07l-.71-.71M18.36 5.64l.71-.71"/>
-      <circle cx="12" cy="12" r="4"/>
-    </svg>
-  );
-
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ position: "fixed", bottom: 32, right: 32, zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
       <style>{`
         @keyframes aiChatSlideIn {
-          from { opacity: 0; transform: translateY(-8px) scaleY(0.95); }
-          to { opacity: 1; transform: translateY(0) scaleY(1); }
+          from { opacity: 0; transform: translateY(20px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
         @keyframes aiBubbleFadeIn {
           from { opacity: 0; transform: translateY(8px); }
@@ -462,8 +571,8 @@ const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, 
           30% { opacity: 1; transform: translateY(-4px); }
         }
         @keyframes aiPulseGlow {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.3); }
-          50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+          50% { box-shadow: 0 0 0 10px rgba(16,185,129,0); }
         }
         .ai-chat-input:focus {
           border-color: var(--color-primary) !important;
@@ -473,64 +582,91 @@ const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, 
           filter: brightness(1.1);
           transform: scale(1.03);
         }
+        .ai-fab:hover {
+          transform: scale(1.05);
+        }
       `}</style>
 
-      <button
-        onClick={() => toggleInsight(chartId)}
-        type="button"
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700,
-          color: isExpanded ? "#fff" : "var(--color-primary)",
-          background: isExpanded ? "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))" : "transparent",
-          padding: "7px 14px", borderRadius: 20, border: "1px solid",
-          borderColor: isExpanded ? "transparent" : "var(--color-primary)",
-          cursor: "pointer", transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
-          animation: isExpanded ? "aiPulseGlow 2s ease-in-out infinite" : "none"
-        }}
-      >
-        {sparkleIcon}
-        {isExpanded ? "Hide AI Assistant" : "AI Auto-Analyze"}
-      </button>
-      
+      {!isExpanded && (
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="ai-fab"
+          style={{
+            width: 110, height: 110, border: "none", background: "transparent",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            padding: 0, overflow: "visible", position: "relative"
+          }}
+        >
+          <img src="/standing.png" alt="AI Analyst" style={{ width: "100%", height: "100%", objectFit: "contain", filter: "drop-shadow(0 0 2px rgba(255,255,255,0.9)) drop-shadow(0 10px 15px rgba(0,0,0,0.2))" }} />
+          <div style={{
+            position: "absolute", bottom: 0, right: 0, width: 28, height: 28,
+            background: "var(--color-primary)", borderRadius: "50%",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", boxShadow: "0 4px 12px rgba(0,0,0,0.3)", fontSize: 14,
+            animation: "aiPulseGlow 3s ease-in-out infinite"
+          }}>✦</div>
+        </button>
+      )}
+
       {isExpanded && (
         <div style={{
-          marginTop: 12, borderRadius: 14,
+          borderRadius: 20,
           background: "var(--color-surface)",
           border: "1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)",
+          boxShadow: "0 12px 48px rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.08)",
           display: "flex", flexDirection: "column",
-          height: 340, overflow: "hidden",
+          width: 380, height: 500, overflow: "hidden",
           animation: "aiChatSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards",
-          transformOrigin: "top center"
+          transformOrigin: "bottom right"
         }}>
           {/* Header */}
           <div style={{
-            padding: "10px 16px", display: "flex", alignItems: "center", gap: 8,
+            padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between",
             borderBottom: "1px solid var(--color-border)",
             background: "color-mix(in srgb, var(--color-primary) 5%, var(--color-surface))",
             flexShrink: 0
           }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#fff", fontSize: 14
-            }}>✦</div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)" }}>REVELAsys AI Analyst</div>
-              <div style={{ fontSize: 10, color: "var(--color-muted)" }}>
-                {loading ? "Analyzing..." : "Ready to assist"}
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: "linear-gradient(135deg, var(--color-surface), #f1f5f9)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: "2px solid var(--color-primary)", overflow: "hidden"
+              }}>
+                <img src={loading ? "/searching.png" : "/standing.png"} alt="Mascot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--color-ink)" }}>REVELA AI Analyst</div>
+                <div style={{ fontSize: 11, color: "var(--color-primary)", fontWeight: 600 }}>
+                  {loading ? "Analyzing dashboard..." : "Online & Ready"}
+                </div>
               </div>
             </div>
+            <button 
+              onClick={() => setIsExpanded(false)} 
+              style={{ 
+                background: "transparent", border: "none", cursor: "pointer", 
+                color: "var(--color-muted)", padding: 4, borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--color-border)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
           </div>
 
           {/* Messages */}
           <div ref={chatScrollRef} style={{
-            padding: "14px 16px", overflowY: "auto", display: "flex",
-            flexDirection: "column", gap: 10, flexGrow: 1
+            padding: "20px 20px", overflowY: "auto", display: "flex",
+            flexDirection: "column", gap: 12, flexGrow: 1
           }}>
             {messages.map((m, i) => (
-              <div key={i} style={{ 
+              <div key={i} style={{
                 alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                 animation: "aiBubbleFadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards",
                 animationDelay: `${i * 0.05}s`,
@@ -541,84 +677,114 @@ const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, 
                   background: m.role === "user"
                     ? "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))"
                     : "color-mix(in srgb, var(--color-primary) 6%, var(--color-card-alt))",
-                  color: m.role === "user" ? "#fff" : "var(--color-ink)",
-                  padding: "10px 14px", borderRadius: 14,
-                  borderBottomRightRadius: m.role === "user" ? 4 : 14,
-                  borderBottomLeftRadius: m.role === "model" ? 4 : 14,
+                  color: m.role === "user" ? "#022c22" : "var(--color-ink)",
+                  padding: "12px 16px", borderRadius: 16,
+                  borderBottomRightRadius: m.role === "user" ? 4 : 16,
+                  borderBottomLeftRadius: m.role === "model" ? 4 : 16,
                   fontSize: 13, lineHeight: 1.6,
                   border: m.role === "model" ? "1px solid var(--color-border)" : "none",
                   boxShadow: m.role === "user"
-                    ? "0 2px 8px rgba(0,0,0,0.12)"
-                    : "0 1px 4px rgba(0,0,0,0.04)"
+                    ? "0 4px 12px rgba(16,185,129,0.2)"
+                    : "0 2px 6px rgba(0,0,0,0.04)"
                 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4, opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     {m.role === "user" ? "You" : "AI Analyst"}
                   </div>
-                  <div style={{ whiteSpace: "pre-wrap" }}>{m.content}</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{m.role === "model" ? renderMarkdown(m.content) : m.content}</div>
                 </div>
               </div>
             ))}
             {loading && (
               <div style={{
-                alignSelf: "flex-start", padding: "12px 18px",
+                alignSelf: "flex-start", padding: "14px 20px",
                 background: "color-mix(in srgb, var(--color-primary) 6%, var(--color-card-alt))",
-                borderRadius: 14, borderBottomLeftRadius: 4,
+                borderRadius: 16, borderBottomLeftRadius: 4,
                 border: "1px solid var(--color-border)",
-                display: "flex", alignItems: "center", gap: 5,
+                display: "flex", alignItems: "center", gap: 6,
                 animation: "aiBubbleFadeIn 0.3s ease forwards"
               }}>
                 {[0, 1, 2].map(n => (
                   <div key={n} style={{
-                    width: 7, height: 7, borderRadius: "50%",
+                    width: 8, height: 8, borderRadius: "50%",
                     background: "var(--color-primary)",
                     animation: `aiTypingDot 1.2s ease-in-out ${n * 0.15}s infinite`
-                  }}/>
+                  }} />
                 ))}
               </div>
             )}
           </div>
-          
+
+          {/* Predefined Questions */}
+          {messages.length === 1 && !loading && (
+            <div style={{
+              display: "flex", gap: 8, padding: "0 20px 14px", flexWrap: "wrap",
+              background: "var(--color-surface)"
+            }}>
+              {[
+                "What are the main takeaways?",
+                "Are there any anomalies?",
+                "How does this compare to expected trends?"
+              ].map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSend(null, q)}
+                  type="button"
+                  style={{
+                    padding: "8px 14px", borderRadius: 16, border: "1px solid var(--color-border)",
+                    background: "var(--color-card-alt)", color: "var(--color-ink)",
+                    fontSize: 12, cursor: "pointer", transition: "all 0.2s ease",
+                    fontWeight: 500
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--color-primary)"; e.currentTarget.style.color = "var(--color-primary)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--color-border)"; e.currentTarget.style.color = "var(--color-ink)"; }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Input */}
           <form onSubmit={handleSend} style={{
-            display: "flex", gap: 8,
+            display: "flex", gap: 10,
             borderTop: "1px solid var(--color-border)",
-            padding: "10px 12px",
-            background: "color-mix(in srgb, var(--color-primary) 3%, var(--color-surface))",
+            padding: "16px 20px",
+            background: "var(--color-surface)",
             flexShrink: 0
           }}>
-            <input 
+            <input
               ref={inputRef}
-              type="text" 
-              value={input} 
+              type="text"
+              value={input}
               onChange={e => setInput(e.target.value)}
-              placeholder="Ask about this chart..."
+              placeholder="Ask me anything about this data..."
               className="ai-chat-input"
               style={{
-                flexGrow: 1, padding: "9px 14px", border: "1.5px solid var(--color-border)", 
-                borderRadius: 22, fontSize: 13, outline: "none",
+                flexGrow: 1, padding: "10px 16px", border: "1.5px solid var(--color-border)",
+                borderRadius: 24, fontSize: 13, outline: "none",
                 background: "var(--color-card-alt)",
                 color: "var(--color-ink)", fontFamily: "var(--font-base)",
                 transition: "all 0.2s ease"
               }}
               disabled={loading}
             />
-            <button 
+            <button
               type="submit"
               className="ai-send-btn"
               disabled={loading || !input.trim()}
               style={{
-                padding: "9px 18px", borderRadius: 22, border: "none",
+                padding: "10px 20px", borderRadius: 24, border: "none",
                 background: input.trim() && !loading
                   ? "linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))"
                   : "var(--color-border)",
-                color: "#fff", fontWeight: 600, fontSize: 13,
+                color: input.trim() && !loading ? "#022c22" : "var(--color-muted)", fontWeight: 600, fontSize: 13,
                 cursor: input.trim() && !loading ? "pointer" : "not-allowed",
                 transition: "all 0.2s ease", flexShrink: 0,
-                display: "flex", alignItems: "center", gap: 5
+                display: "flex", alignItems: "center", gap: 6
               }}
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
               Send
             </button>
@@ -627,7 +793,7 @@ const ChartInsightPanel = ({ chartId, chartData, insightText, expandedInsights, 
       )}
     </div>
   );
-};
+});
 
 
 export default function AnalyticsPage() {
@@ -643,9 +809,9 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setIsScrolled(!entry.isIntersecting && entry.boundingClientRect.top <= 100);
+        setIsScrolled(!entry.isIntersecting && entry.boundingClientRect.top < 300);
       },
-      { threshold: 0, rootMargin: "-100px 0px 0px 0px" }
+      { threshold: 0, rootMargin: "0px 0px 0px 0px" }
     );
     if (tabMarkerRef.current) {
       observer.observe(tabMarkerRef.current);
@@ -666,12 +832,6 @@ export default function AnalyticsPage() {
 
   const [filterMeta, setFilterMeta] = useState(null);
   const [barangaysList, setBarangaysList] = useState([]);
-
-  const [expandedInsights, setExpandedInsights] = useState({});
-
-  const toggleInsight = (chartId) => {
-    setExpandedInsights(prev => ({ ...prev, [chartId]: !prev[chartId] }));
-  };
 
   const fetchAnalytics = useCallback(async () => {
     if (!token) return;
@@ -719,9 +879,9 @@ export default function AnalyticsPage() {
     setShowWlcConfig(false);
   };
 
-  useEffect(() => { 
-    fetchAnalytics(); 
-    fetchWlcConfig(); 
+  useEffect(() => {
+    fetchAnalytics();
+    fetchWlcConfig();
   }, [fetchAnalytics, fetchWlcConfig]);
 
   useEffect(() => {
@@ -985,8 +1145,32 @@ export default function AnalyticsPage() {
   );
 
   // ─────────────────────────────────────────────────────────────────────────
+  const globalData = useMemo(() => ({
+    geographic: data?.descriptive?.nature_per_barangay || [],
+    sectoral: data?.descriptive?.sectoral_distribution || [],
+    size: data?.descriptive?.business_size_dist || [],
+    legalStructure: data?.descriptive?.business_type_dist || [],
+    complianceBySize: data?.descriptive?.compliance_by_size || [],
+    complianceTimeline: data?.descriptive?.compliance_timeline || [],
+    enforcement: data?.descriptive?.enforcement_progress || [],
+    audit: data?.descriptive?.audit_summary || {},
+    kpis: data?.descriptive?.kpis || {},
+    barangayRisk: data?.diagnostic?.barangay_risk_data || [],
+    categoryNoncompliance: data?.diagnostic?.category_noncompliance || [],
+    flagTrend: data?.diagnostic?.flag_trend || [],
+    // Prescriptive tier
+    opsRankings: data?.prescriptive?.rankings || [],
+    wlcConfig: data?.prescriptive?.wlc_config || {},
+    dispatchRecommendations: data?.prescriptive?.dispatch_recommendations || [],
+    // Operations tier
+    inspectorStats: data?.operations?.inspector_stats || [],
+    statusBreakdown: data?.operations?.status_breakdown || [],
+    inspectionTimeline: data?.operations?.inspection_timeline || [],
+  }), [data]);
+
   return (
     <DashboardLayout>
+      <GlobalAIAssistant globalData={globalData} />
       <style>{`
         /* shimmer keyframe now defined globally in global.css */
         .saas-card { position: relative; }
@@ -1677,30 +1861,22 @@ export default function AnalyticsPage() {
 
         {/* Scroll Marker */}
         <div ref={tabMarkerRef} style={{ width: "100%", height: 1, marginBottom: -1 }} />
-        {isScrolled && <div style={{ height: 110, width: "100%" }} />}
 
-        {/* TAB FILTER */}
-        <div className="sticky-tabs tier-1-card saas-card frosted-glass" style={{
+        {/* MAIN TABS (Normal Flow) */}
+        <div className="tier-1-card saas-card frosted-glass" style={{
           display: "flex",
           gap: 12,
-          flexWrap: isScrolled ? "nowrap" : "wrap",
+          flexWrap: "wrap",
           flexDirection: "row",
-          position: isScrolled ? "fixed" : "relative",
-          top: isScrolled ? "auto" : 0,
-          bottom: isScrolled ? 32 : "auto",
-          left: isScrolled ? "50%" : "auto",
-          transform: isScrolled ? "translateX(-50%)" : "none",
-          width: isScrolled ? "max-content" : "auto",
-          background: isScrolled ? "var(--glass-bg-pill)" : "var(--glass-bg)",
-          backdropFilter: isScrolled ? "blur(16px)" : "var(--glass-blur)",
-          WebkitBackdropFilter: isScrolled ? "blur(16px)" : "var(--glass-blur)",
-          boxShadow: isScrolled ? "0 20px 40px rgba(0, 0, 0, 0.08)" : "none",
-          zIndex: 999,
-          padding: isScrolled ? "8px" : "24px",
-          margin: isScrolled ? 0 : "0 0 32px 0",
-          borderRadius: isScrolled ? 100 : 12,
-          border: isScrolled ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid var(--color-border)",
-          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
+          position: "relative",
+          background: "var(--glass-bg)",
+          backdropFilter: "var(--glass-blur)",
+          WebkitBackdropFilter: "var(--glass-blur)",
+          boxShadow: "none",
+          padding: "24px",
+          margin: "0 0 32px 0",
+          borderRadius: 12,
+          border: "1px solid var(--color-border)"
         }}>
           {[
             { id: "descriptive", label: "Descriptive", sub: "What is happening?", dot: "var(--color-green)" },
@@ -1716,22 +1892,79 @@ export default function AnalyticsPage() {
                 onClick={() => setActiveTab(tab.id)}
                 style={{
                   display: "flex",
-                  flexDirection: isScrolled ? "row" : "column",
-                  alignItems: isScrolled ? "center" : "flex-start",
-                  padding: isScrolled ? "12px 24px" : "12px 20px",
-                  borderRadius: isScrolled ? 100 : 8,
-                  border: isScrolled ? "1px solid transparent" : "1px solid var(--color-border)",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  padding: "12px 20px",
+                  borderRadius: 8,
+                  border: "1px solid var(--color-border)",
                   background: isActive ? "var(--color-surface)" : "transparent",
                   cursor: "pointer",
-                  minWidth: isScrolled ? "auto" : 160,
+                  minWidth: 160,
                   transition: "all 0.2s ease"
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, color: isActive ? "var(--color-primary-dark)" : "var(--color-muted)" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: !isActive && isScrolled ? "var(--color-muted)" : tab.dot, opacity: (!isActive && isScrolled) ? 0.5 : 1 }} />
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: tab.dot }} />
                   {tab.label}
                 </div>
-                {!isScrolled && <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4, marginLeft: 16 }}>{tab.sub}</div>}
+                <div style={{ fontSize: 12, color: "var(--color-muted)", marginTop: 4, marginLeft: 16 }}>{tab.sub}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* FLOATING PILL (Shows when scrolled) */}
+        <div style={{
+          position: "fixed",
+          bottom: 32,
+          left: "50%",
+          transform: `translateX(-50%) translateY(${isScrolled ? 0 : 20}px)`,
+          opacity: isScrolled ? 1 : 0,
+          pointerEvents: isScrolled ? "auto" : "none",
+          zIndex: 999,
+          display: "flex",
+          flexDirection: "row",
+          gap: 12,
+          padding: "8px",
+          borderRadius: 100,
+          background: "var(--glass-bg-pill)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.15)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease"
+        }}>
+          {[
+            { id: "descriptive", label: "Descriptive", dot: "var(--color-green)" },
+            { id: "diagnostic", label: "Diagnostic", dot: "var(--color-yellow)" },
+            { id: "prescriptive", label: "Prescriptive", dot: "#6366f1" },
+            { id: "operations", label: "Operations", dot: "var(--color-blue, #3b82f6)" }
+          ].map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tabMarkerRef.current) {
+                    tabMarkerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "10px 20px",
+                  borderRadius: 100,
+                  border: "1px solid transparent",
+                  background: isActive ? "var(--color-surface)" : "transparent",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 13, color: isActive ? "var(--color-primary-dark)" : "var(--color-muted)" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: !isActive ? "var(--color-muted)" : tab.dot, opacity: (!isActive) ? 0.5 : 1 }} />
+                  {tab.label}
+                </div>
               </button>
             );
           })}
@@ -1756,7 +1989,7 @@ export default function AnalyticsPage() {
               title="Descriptive Analytics"
               subtitle="Current-state demographic profile and field inspection summaries"
             />
-            
+
             {presc?.dispatch_recommendations && presc.dispatch_recommendations.length > 0 && (
               <div className="tier-1-card saas-card frosted-glass" style={{ marginBottom: 24, padding: "20px", borderRadius: 12 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1777,12 +2010,12 @@ export default function AnalyticsPage() {
                         <span style={{ fontSize: 12, color: "var(--color-muted)", fontWeight: 600 }}>OPS {rec.ops_score ?? "—"}</span>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--color-muted)" }}>
                           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                             {rec.inspectors ?? 0}
                           </span>
                           <span>&middot;</span>
                           <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>
                             {rec.flagged_count ?? 0}
                           </span>
                         </div>
@@ -1801,7 +2034,7 @@ export default function AnalyticsPage() {
                   Data Source: BPLO Registry
                 </span>
               </div>
-              
+
               <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Business Census</h4>
               <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 16, marginBottom: 24 }}>
                 <KpiCard iconVariant="gold" value={kpis?.total_businesses ?? "—"} label="Total Registered" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>} style={{ padding: "16px" }} />
@@ -1809,252 +2042,242 @@ export default function AnalyticsPage() {
                 <KpiCard iconVariant="red" value={kpis?.expired_count ?? "—"} label="Expired" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>} style={{ padding: "16px" }} />
                 <KpiCard iconVariant="gold" value={kpis?.pending_count ?? "—"} label="Pending" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>} style={{ padding: "16px" }} />
                 <KpiCard iconVariant="red" value={kpis?.closed_count ?? "—"} label="Closed" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="red" value={kpis?.revoked_count ?? "—"} label="Revoked" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>} style={{ padding: "16px" }} />
               </div>
 
               {/* Business Demographic Profile */}
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: "none" }}>
-                <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>
-                  Business Demographic Profile
-                </h2>
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--color-blue, #3b82f6)", borderRadius: 12 }}>
-                  Data Source: BPLO Registry
-                </span>
-              </div>
-
-              {/* Executive FAQs */}
-              <div style={{ marginBottom: 32 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Quick Insights (FAQ)</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(240px, calc(50% - 16px)), 1fr))", gap: 16 }}>
-                  
-                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-blue)", minWidth: 0 }}>
-                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Most Common Legal Structure</p>
-                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
-                      {typeData?.[0] ? `${typeData[0].name} (${Math.round((typeData[0].value / typeData.reduce((a,b)=>a+b.value,0))*100)}%)` : "N/A"}
-                    </p>
-                  </div>
-
-                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-green)", minWidth: 0 }}>
-                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Dominant Economic Sector</p>
-                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
-                      {sectoralData?.[0] ? sectoralData[0].name : "N/A"}
-                    </p>
-                  </div>
-
-                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-red)", minWidth: 0 }}>
-                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Highest Compliance Risk</p>
-                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
-                      {worstComplianceSize ? `${worstComplianceSize.name} Enterprises (${worstComplianceSize.pct}% non-compliant)` : "None (100% Compliant)"}
-                    </p>
-                  </div>
-
-                  <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-orange)", minWidth: 0 }}>
-                    <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Overall Compliance Rate</p>
-                    <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
-                      {kpis?.compliance_rate != null ? `${kpis.compliance_rate}% of registered businesses` : "N/A"}
-                    </p>
-                  </div>
-
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(400px, calc(50% - 24px)), 1fr))", gap: 24 }}>
-                {/* Geographic & Sector Spread */}
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, gridColumn: "1 / -1" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                    <div>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Geographic & Sector Spread</h3>
-                      <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Business distribution across barangays by sector</p>
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--color-blue, #3b82f6)", borderRadius: 12 }}>Demographics</span>
-                  </div>
-                  <ChartInsightPanel chartId="overviewGeographic" chartData={naturePerBarangayData} insightText={InsightGenerator.geographic(naturePerBarangayData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  
-                  {loading ? <Skeleton h={350} /> : naturePerBarangayData.length === 0 ? (
-                    <EmptyState h={350} title="No Geographic Data" message="No data available for the selected filters." />
-                  ) : (
-                    <div style={{ height: 350, width: "100%" }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart 
-                          data={naturePerBarangayData.map(r => ({
-                            barangayName: r.barangayName,
-                            total: natureKeys.reduce((sum, key) => sum + (r[key] || 0), 0)
-                          }))} 
-                          margin={{ top: 10, right: 10, left: -20, bottom: 60 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
-                          <XAxis dataKey="barangayName" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={0} angle={-45} textAnchor="end" />
-                          <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
-                          <Bar dataKey="total" name="Total Businesses" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: "none" }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--color-ink)", margin: 0 }}>
+                    Business Demographic Profile
+                  </h2>
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--color-blue, #3b82f6)", borderRadius: 12 }}>
+                    Data Source: BPLO Registry
+                  </span>
                 </div>
 
-                {/* Top Sectors Overall */}
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                    <div>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Top Sectors</h3>
-                      <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Highest volume business lines</p>
+                {/* Executive FAQs */}
+                <div style={{ marginBottom: 32 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Quick Insights (FAQ)</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(240px, calc(50% - 16px)), 1fr))", gap: 16 }}>
+
+                    <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-blue)", minWidth: 0 }}>
+                      <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Most Common Legal Structure</p>
+                      <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                        {typeData?.[0] ? `${typeData[0].name} (${Math.round((typeData[0].value / typeData.reduce((a, b) => a + b.value, 0)) * 100)}%)` : "N/A"}
+                      </p>
                     </div>
+
+                    <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-green)", minWidth: 0 }}>
+                      <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Dominant Economic Sector</p>
+                      <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                        {sectoralData?.[0] ? sectoralData[0].name : "N/A"}
+                      </p>
+                    </div>
+
+                    <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-red)", minWidth: 0 }}>
+                      <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Highest Compliance Risk</p>
+                      <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                        {worstComplianceSize ? `${worstComplianceSize.name} Enterprises (${worstComplianceSize.pct}% non-compliant)` : "None (100% Compliant)"}
+                      </p>
+                    </div>
+
+                    <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-orange)", minWidth: 0 }}>
+                      <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Overall Compliance Rate</p>
+                      <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
+                        {kpis?.compliance_rate != null ? `${kpis.compliance_rate}% of registered businesses` : "N/A"}
+                      </p>
+                    </div>
+
                   </div>
-                  <ChartInsightPanel chartId="overviewSectoral" chartData={sectoralData} insightText={InsightGenerator.sectoral(sectoralData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  
-                  {loading ? <Skeleton h={220} /> : sectoralData.length === 0 ? (
-                    <EmptyState h={220} title="No Sector Data" />
-                  ) : (
-                    <div style={{ height: 220, width: "100%" }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={sectoralData.slice(0, 5)} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(226,232,240,0.4)" />
-                          <XAxis type="number" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                          <YAxis dataKey="name" type="category" width={160} tickFormatter={(v) => v.length > 25 ? v.substring(0, 25) + '...' : v} tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
-                          <Bar dataKey="value" name="Businesses" radius={[0, 4, 4, 0]}>
-                            {sectoralData.slice(0, 5).map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={SECTOR_COLORS[index % SECTOR_COLORS.length]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
                 </div>
 
-                {/* Business Size Profile */}
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                    <div>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Business Size Profile</h3>
-                      <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Distribution by enterprise scale</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(400px, calc(50% - 24px)), 1fr))", gap: 24 }}>
+                  {/* Geographic & Sector Spread */}
+                  <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, gridColumn: "1 / -1", display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Geographic & Sector Spread</h3>
+                        <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Business distribution across barangays by sector</p>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", padding: "4px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--color-blue, #3b82f6)", borderRadius: 12 }}>Demographics</span>
                     </div>
-                  </div>
-                  <ChartInsightPanel chartId="overviewSize" chartData={sizeData} insightText={InsightGenerator.businessSize(sizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-
-                  {loading ? <Skeleton h={220} /> : sizeData.length === 0 ? (
-                    <EmptyState h={220} title="No Size Data" />
-                  ) : (
-                    <div style={{ height: 220, width: "100%", display: "flex", alignItems: "center" }}>
-                      <ResponsiveContainer width="50%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={sizeData}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={65}
-                            outerRadius={95}
-                            paddingAngle={4}
-                            isAnimationActive={false}
+                    {loading ? <Skeleton h={350} /> : naturePerBarangayData.length === 0 ? (
+                      <EmptyState h={350} title="No Geographic Data" message="No data available for the selected filters." />
+                    ) : (
+                      <div style={{ flexGrow: 1, minHeight: 350, width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={naturePerBarangayData.map(r => ({
+                              barangayName: r.barangayName,
+                              total: natureKeys.reduce((sum, key) => sum + (r[key] || 0), 0)
+                            }))}
+                            margin={{ top: 10, right: 10, left: -20, bottom: 60 }}
                           >
-                            {sizeData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.fill} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={<CustomTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, flex: 1, paddingLeft: 20 }}>
-                        {sizeData.map((s, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                            <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
-                            <span style={{ color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
-                            <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
-                          </div>
-                        ))}
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
+                            <XAxis dataKey="barangayName" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={0} angle={-45} textAnchor="end" />
+                            <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
+                            <Bar dataKey="total" name="Total Businesses" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Top Sectors Overall */}
+                  <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Top Sectors</h3>
+                        <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Highest volume business lines</p>
                       </div>
                     </div>
-                  )}
-                </div>
-
-                {/* Business Legal Structure */}
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                    <div>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Business Legal Structure</h3>
-                      <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Distribution by business type</p>
-                    </div>
+                    {loading ? <Skeleton h={220} /> : sectoralData.length === 0 ? (
+                      <EmptyState h={220} title="No Sector Data" />
+                    ) : (
+                      <div style={{ flexGrow: 1, minHeight: 220, width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={sectoralData.slice(0, 5)} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(226,232,240,0.4)" />
+                            <XAxis type="number" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                            <YAxis dataKey="name" type="category" width={160} tickFormatter={(v) => v.length > 25 ? v.substring(0, 25) + '...' : v} tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
+                            <Bar dataKey="value" name="Businesses" radius={[0, 4, 4, 0]}>
+                              {sectoralData.slice(0, 5).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={SECTOR_COLORS[index % SECTOR_COLORS.length]} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
                   </div>
-                  <ChartInsightPanel chartId="overviewType" chartData={typeData} insightText={InsightGenerator.businessType(typeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
 
-                  {loading ? <Skeleton h={220} /> : typeData.length === 0 ? (
-                    <EmptyState h={220} title="No Type Data" />
-                  ) : (
-                    <div style={{ height: 220, width: "100%", display: "flex", alignItems: "center" }}>
-                      <ResponsiveContainer width="50%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={typeData}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={65}
-                            outerRadius={95}
-                            paddingAngle={4}
-                            isAnimationActive={false}
-                          >
-                            {typeData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.fill} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={<CustomTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, flex: 1, paddingLeft: 20 }}>
-                        {typeData.map((s, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                            <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
-                            <span style={{ color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
-                            <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
-                          </div>
-                        ))}
+                  {/* Business Size Profile */}
+                  <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Business Size Profile</h3>
+                        <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Distribution by enterprise scale</p>
                       </div>
                     </div>
-                  )}
-                </div>
-
-                {/* Compliance by Business Size */}
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                    <div>
-                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Compliance by Business Size</h3>
-                      <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Active vs Non-Active comparison</p>
-                    </div>
+                    {loading ? <Skeleton h={220} /> : sizeData.length === 0 ? (
+                      <EmptyState h={220} title="No Size Data" />
+                    ) : (
+                      <div style={{ flexGrow: 1, minHeight: 220, width: "100%", display: "flex", alignItems: "center" }}>
+                        <ResponsiveContainer width="50%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={sizeData}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={65}
+                              outerRadius={95}
+                              paddingAngle={4}
+                              isAnimationActive={false}
+                            >
+                              {sizeData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<CustomTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, flex: 1, paddingLeft: 20 }}>
+                          {sizeData.map((s, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                              <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
+                              <span style={{ color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
+                              <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <ChartInsightPanel chartId="overviewComplianceSize" chartData={complianceBySizeData} insightText={InsightGenerator.complianceBySize(complianceBySizeData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  
-                  {loading ? <Skeleton h={220} /> : complianceBySizeData.length === 0 ? (
-                    <EmptyState h={220} title="No Compliance Data" />
-                  ) : (
-                    <div style={{ height: 220, width: "100%" }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={complianceBySizeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
-                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                          <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
-                          <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-                          <Bar dataKey="Active" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-                          <Bar dataKey="Non-Active" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </div>
 
+                  {/* Business Legal Structure */}
+                  <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Business Legal Structure</h3>
+                        <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Distribution by business type</p>
+                      </div>
+                    </div>
+                    {loading ? <Skeleton h={220} /> : typeData.length === 0 ? (
+                      <EmptyState h={220} title="No Type Data" />
+                    ) : (
+                      <div style={{ flexGrow: 1, minHeight: 220, width: "100%", display: "flex", alignItems: "center" }}>
+                        <ResponsiveContainer width="50%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={typeData}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={65}
+                              outerRadius={95}
+                              paddingAngle={4}
+                              isAnimationActive={false}
+                            >
+                              {typeData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                              ))}
+                            </Pie>
+                            <Tooltip content={<CustomTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 10, flex: 1, paddingLeft: 20 }}>
+                          {typeData.map((s, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                              <span style={{ width: 10, height: 10, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
+                              <span style={{ color: "var(--color-muted)", flex: 1 }}>{s.name}</span>
+                              <strong style={{ color: "var(--color-ink)" }}>{s.value}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Compliance by Business Size */}
+                  <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Compliance by Business Size</h3>
+                        <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Active vs Non-Active comparison</p>
+                      </div>
+                    </div>
+                    {loading ? <Skeleton h={220} /> : complianceBySizeData.length === 0 ? (
+                      <EmptyState h={220} title="No Compliance Data" />
+                    ) : (
+                      <div style={{ flexGrow: 1, minHeight: 220, width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={complianceBySizeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
+                            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                            <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
+                            <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
+                            <Bar dataKey="Active" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="Non-Active" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
               </div>
-            </div>
 
               <div style={{ marginTop: 24 }}>
                 <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Compliance Timeline (12 Months)</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>The gap between active vs non-active renewals over time.</p>
-                  <ChartInsightPanel chartId="timeline" chartData={timelineData} insightText={InsightGenerator.timeline(timelineData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   <div style={{ height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -2094,6 +2317,7 @@ export default function AnalyticsPage() {
               <h4 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Field & Inspection KPIs</h4>
               <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 16, marginBottom: 24 }}>
                 <KpiCard iconVariant="red" value={(flagCounts.red + flagCounts.yellow + flagCounts.orange + flagCounts.black) ?? "—"} label="Total Non-Compliant" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>} style={{ padding: "16px" }} />
+                <KpiCard iconVariant="orange" value={flagCounts.orange ?? "—"} label="Dispatched" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M5 12h14"></path><path d="M12 5l7 7-7 7"></path></svg>} style={{ padding: "16px" }} />
                 <KpiCard iconVariant="gold" value={inspectedCount ?? "—"} label="Total Inspected" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>} style={{ padding: "16px" }} />
                 <KpiCard iconVariant="green" value={clearedCount ?? "—"} label="Compliant (Cleared)" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>} style={{ padding: "16px" }} />
                 <KpiCard iconVariant="gold" value={`${inspectedCount > 0 ? Math.round((clearedCount / inspectedCount) * 100) : 0}%`} label="Clearance Rate" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>} style={{ padding: "16px" }} />
@@ -2103,18 +2327,18 @@ export default function AnalyticsPage() {
               <div style={{ marginBottom: 32 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 16px 0" }}>Quick Insights (FAQ)</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(240px, calc(50% - 16px)), 1fr))", gap: 16 }}>
-                  
+
                   <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-blue)", minWidth: 0 }}>
                     <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Most Common Inspection Outcome</p>
                     <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
-                      {auditData.length > 0 ? `${[...auditData].sort((a,b)=>b.value - a.value)[0].name} (${Math.round(([...auditData].sort((a,b)=>b.value - a.value)[0].value / inspectedCount)*100)}%)` : "N/A"}
+                      {auditData.length > 0 ? `${[...auditData].sort((a, b) => b.value - a.value)[0].name} (${Math.round(([...auditData].sort((a, b) => b.value - a.value)[0].value / inspectedCount) * 100)}%)` : "N/A"}
                     </p>
                   </div>
 
                   <div className="saas-card frosted-glass" style={{ padding: 16, borderRadius: 12, borderLeft: "4px solid var(--color-red)", minWidth: 0 }}>
                     <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Lowest Compliance Barangay</p>
                     <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
-                      {leaderboardData.length > 0 ? `${[...leaderboardData].sort((a,b)=>a.rate - b.rate)[0].shortName} (${[...leaderboardData].sort((a,b)=>a.rate - b.rate)[0].rate}% compliant)` : "N/A"}
+                      {leaderboardData.length > 0 ? `${[...leaderboardData].sort((a, b) => a.rate - b.rate)[0].shortName} (${[...leaderboardData].sort((a, b) => a.rate - b.rate)[0].rate}% compliant)` : "N/A"}
                     </p>
                   </div>
 
@@ -2129,7 +2353,7 @@ export default function AnalyticsPage() {
                     <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 4px 0", fontWeight: 600, textTransform: "uppercase" }}>Highest Compliance Barangay</p>
                     <p style={{ fontSize: 15, color: "var(--color-ink)", margin: 0, fontWeight: 700 }}>
                       {leaderboardData.length > 0 ? (() => {
-                        const best = [...leaderboardData].sort((a,b) => {
+                        const best = [...leaderboardData].sort((a, b) => {
                           if (a.rate !== b.rate) return b.rate - a.rate;
                           return b.totalEntities - a.totalEntities;
                         })[0];
@@ -2140,13 +2364,12 @@ export default function AnalyticsPage() {
 
                 </div>
               </div>
-              
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Barangay Compliance Leaderboard</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Ranked compliance rates based on registered vs flagged entities.</p>
-                  <ChartInsightPanel chartId="leaderboard" chartData={leaderboardData} insightText={InsightGenerator.leaderboard(leaderboardData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                  <div style={{ flexGrow: 1, minHeight: 260, overflowY: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                       <thead style={{ position: "sticky", top: 0, background: "var(--color-surface)", zIndex: 10 }}>
                         <tr style={{ borderBottom: "2px solid rgba(226,232,240,0.6)", color: "var(--color-muted)", fontSize: 11, textTransform: "uppercase" }}>
@@ -2179,18 +2402,18 @@ export default function AnalyticsPage() {
                 </div>
 
                 {/* Category Risk Drivers */}
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                     <div>
                       <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Category Risk Drivers</h3>
                       <p style={{ fontSize: 13, color: "var(--color-muted)", margin: 0 }}>Sector-specific patterns — top flagged lines of business</p>
                     </div>
                   </div>
-                  <ChartInsightPanel chartId="overviewRiskDrivers" chartData={categoryData} insightText={InsightGenerator.categoryRisk(categoryData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   {loading ? <Skeleton h={220} /> : categoryData.length === 0 ? (
                     <EmptyState h={220} title="No Category Risk Data" />
                   ) : (
-                    <ResponsiveContainer width="100%" height={220}>
+                    <div style={{ flexGrow: 1, minHeight: 220, width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={categoryData.slice(0, 7)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(226,232,240,0.4)" />
                         <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
@@ -2200,42 +2423,41 @@ export default function AnalyticsPage() {
                           <LabelList dataKey="count" position="right" fill="var(--color-ink)" fontSize={11} fontWeight={600} />
                         </Bar>
                       </BarChart>
-                    </ResponsiveContainer>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
               </div>
 
               {/* Audit Summary Section */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Inspection Result Breakdown</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Distribution of audit outcomes for verified businesses.</p>
-                  <ChartInsightPanel chartId="auditBreakdown" chartData={auditData} insightText={InsightGenerator.auditBreakdown(auditData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                   {loading ? <Skeleton h={260} /> : auditData.length === 0 ? (
                     <EmptyState h={260} title="No Audit Data" />
                   ) : (
-                    <div style={{ height: 260 }}>
+                    <div style={{ flexGrow: 1, minHeight: 260, width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={auditData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
-                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)" }} />
-                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
-                          {auditData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                        <BarChart data={auditData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)" }} />
+                          <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
+                            {auditData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
-                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12 }}>
+                <div className="tier-2-card saas-card frosted-glass" style={{ padding: 24, borderRadius: 12, display: "flex", flexDirection: "column" }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: "0 0 4px 0" }}>Enforcement Funnel</h3>
                   <p style={{ fontSize: 12, color: "var(--color-muted)", margin: "0 0 16px 0" }}>Actual conversion of detected entities through the audit process.</p>
-                  <ChartInsightPanel chartId="funnel" chartData={funnelData} insightText={InsightGenerator.funnel(funnelData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
+                  <div style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: 12, marginTop: 24, justifyContent: "center" }}>
                     {funnelData.map((f, i) => {
                       const maxVal = Math.max(...funnelData.map(d => d.value)) || 1;
                       const pct = (f.value / maxVal) * 100;
@@ -2269,7 +2491,6 @@ export default function AnalyticsPage() {
 
             {/* D1. NARRATIVES */}
             <div style={{ marginBottom: 40 }}>
-              <ChartInsightPanel chartId="diagnosticNarratives" chartData={{ dbscan: diag?.dbscan_insight, morans: diag?.morans_insight }} insightText={diag?.dbscan_insight && diag?.morans_insight ? `DBSCAN Analysis: ${diag.dbscan_insight} — Moran's I Analysis: ${diag.morans_insight}` : "Diagnostic analysis data not yet available."} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
               <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-ink)", margin: "0 0 16px 0", borderBottom: "2px solid rgba(226,232,240,0.6)", paddingBottom: 8 }}>D1. Risk Intelligence Narratives</h3>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24 }}>
@@ -2287,7 +2508,7 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 14, color: "var(--color-muted)", margin: 0, lineHeight: 1.5 }}>
                         {loading ? "Analyzing local map patterns..." : (diag?.dbscan_insight || "Hotspot detection temporarily unavailable.")}
                       </p>
-                      
+
                       {diag?.dbscan_clusters && diag.dbscan_clusters.length > 0 && (
                         (() => {
                           const displayClusters = [];
@@ -2318,25 +2539,25 @@ export default function AnalyticsPage() {
                                   <YAxis type="number" dataKey="lat" name="Latitude" domain={['auto', 'auto']} tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => v.toFixed(3)} />
                                   <ZAxis type="category" dataKey="barangay" name="Barangay" />
                                   <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
-                                  <Scatter 
-                                    name="Clusters" 
+                                  <Scatter
+                                    name="Clusters"
                                     data={displayClusters}
                                     shape={(props) => {
                                       const { cx, cy, payload } = props;
                                       const isPrimary = payload.is_primary;
                                       const baseColor = isPrimary ? "#6366f1" : COLOR.orange;
-                                      
+
                                       if (payload.renderType === 'noise') {
                                         return <circle cx={cx} cy={cy} r={3} fill={COLOR.slate} opacity={0.3} />;
                                       }
-                                      
+
                                       if (payload.renderType === 'centroid') {
                                         const radius = isPrimary ? 14 : 10;
                                         return (
-                                          <circle 
-                                            cx={cx} cy={cy} r={radius} 
-                                            fill={baseColor} fillOpacity={0.1} 
-                                            stroke={baseColor} strokeWidth={2} strokeOpacity={1} 
+                                          <circle
+                                            cx={cx} cy={cy} r={radius}
+                                            fill={baseColor} fillOpacity={0.1}
+                                            stroke={baseColor} strokeWidth={2} strokeOpacity={1}
                                           />
                                         );
                                       }
@@ -2371,7 +2592,7 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 14, color: "var(--color-muted)", margin: 0, lineHeight: 1.5 }}>
                         {loading ? "Evaluating broader geographic patterns..." : (diag?.morans_insight || "Regional analysis temporarily unavailable.")}
                       </p>
-                      
+
                       {diag?.morans_data?.points && diag.morans_data.points.length > 0 && (
                         <div style={{ height: 180, width: "100%", marginTop: 16 }}>
                           <ResponsiveContainer width="100%" height="100%">
@@ -2407,8 +2628,6 @@ export default function AnalyticsPage() {
                       <p style={{ fontSize: 12, color: "var(--color-muted)", margin: 0 }}>Are we catching more critical issues over time?</p>
                     </div>
                   </div>
-                  <ChartInsightPanel chartId="redFlagTrend" chartData={trendData} insightText={InsightGenerator.redFlagTrend(trendData)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
-
                   {loading ? <Skeleton h={220} /> : trendData.length === 0 ? (
                     <EmptyState h={220} title="No Trend Data" />
                   ) : (
@@ -2470,11 +2689,11 @@ export default function AnalyticsPage() {
                             </div>
                             <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "var(--color-muted)" }}>
                               <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                                 {rec.inspectors ?? 0} inspector{(rec.inspectors ?? 0) !== 1 ? "s" : ""}
                               </span>
                               <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>
                                 {rec.flagged_count ?? 0} flag{(rec.flagged_count ?? 0) !== 1 ? "s" : ""}
                               </span>
                             </div>
@@ -2489,9 +2708,9 @@ export default function AnalyticsPage() {
                           <div style={{ padding: "0 20px 20px 20px", borderTop: "1px solid rgba(99,102,241,0.08)" }}>
                             {/* Flag Badges */}
                             <div style={{ display: "flex", gap: 8, marginTop: 14, marginBottom: 14, flexWrap: "wrap" }}>
-                              {rec.red_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> {rec.red_count} Unregistered</span>}
-                              {rec.yellow_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> {rec.yellow_count} Suspicious</span>}
-                              {rec.black_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> {rec.black_count} Violations</span>}
+                              {rec.red_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg> {rec.red_count} Unregistered</span>}
+                              {rec.yellow_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg> {rec.yellow_count} Suspicious</span>}
+                              {rec.black_count > 0 && <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 8, background: "rgba(100,116,139,0.08)", color: "#475569" }}><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg> {rec.black_count} Violations</span>}
                             </div>
 
                             {/* Score Breakdown */}
@@ -2536,7 +2755,6 @@ export default function AnalyticsPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
               {/* Radar chart — top 8 */}
               <div className="tier-3-card saas-card frosted-glass" style={{ borderRadius: 12 }}>
-                <ChartInsightPanel chartId="prescriptiveOps" chartData={{ radar: radarData, rankings: presc?.rankings, dispatch: presc?.dispatch_recommendations }} insightText={radarData.length > 0 ? `The OPS model has ranked ${radarData.length} barangays. ${radarData[0]?.barangay || "Top barangay"} has the highest priority score of ${radarData[0]?.OPS || 0}, indicating it needs the most urgent enforcement attention.` : "No OPS data available yet."} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--color-ink)", margin: 0 }}>
                     OPS Radar — Top 8 Barangays
@@ -2689,7 +2907,7 @@ export default function AnalyticsPage() {
               title="Inspector Operations"
               subtitle="Monitor inspector performance, timelines, and resolution statuses"
             />
-            
+
             {loading ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
                 <Skeleton h={380} />
@@ -2698,7 +2916,7 @@ export default function AnalyticsPage() {
             ) : (
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: 24, marginBottom: 24 }}>
-                  
+
                   {/* Inspector Leaderboard */}
                   <div className="saas-card frosted-glass" style={{ padding: 24, borderRadius: 16 }}>
                     <div style={{ marginBottom: 20 }}>
@@ -2708,12 +2926,11 @@ export default function AnalyticsPage() {
                         </svg>
                         Inspector Leaderboard
                       </h3>
-                      <ChartInsightPanel chartId="opsInspectors" chartData={data?.operations?.inspector_stats} insightText={InsightGenerator.inspectorPerformance(data?.operations?.inspector_stats)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                       <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5 }}>
                         {InsightGenerator.inspectorPerformance(data?.operations?.inspector_stats)}
                       </p>
                     </div>
-                    
+
                     <div style={{ maxHeight: 300, overflowY: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                         <thead style={{ position: "sticky", top: 0, background: "var(--color-surface)", zIndex: 10 }}>
@@ -2766,12 +2983,11 @@ export default function AnalyticsPage() {
                         </svg>
                         Inspection Status Breakdown
                       </h3>
-                      <ChartInsightPanel chartId="opsStatusBreakdown" chartData={data?.operations?.status_breakdown} insightText={InsightGenerator.inspectionStatus(data?.operations?.status_breakdown)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                       <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5 }}>
                         {InsightGenerator.inspectionStatus(data?.operations?.status_breakdown)}
                       </p>
                     </div>
-                    
+
                     {data?.operations?.status_breakdown?.length === 0 ? (
                       <EmptyState h={260} title="No Status Data" message="No inspection status data available." />
                     ) : (
@@ -2813,12 +3029,11 @@ export default function AnalyticsPage() {
                       </svg>
                       Inspection Activity Timeline
                     </h3>
-                    <ChartInsightPanel chartId="opsTimeline" chartData={data?.operations?.inspection_timeline} insightText={InsightGenerator.opsTimeline(data?.operations?.inspection_timeline)} expandedInsights={expandedInsights} toggleInsight={toggleInsight} />
                     <p style={{ margin: 0, fontSize: 13, color: "var(--color-muted)", lineHeight: 1.5 }}>
                       {InsightGenerator.opsTimeline(data?.operations?.inspection_timeline)}
                     </p>
                   </div>
-                  
+
                   {data?.operations?.inspection_timeline?.length === 0 ? (
                     <EmptyState h={300} title="No Timeline Data" message="Not enough timeline data available." />
                   ) : (
@@ -2827,8 +3042,8 @@ export default function AnalyticsPage() {
                         <AreaChart data={data?.operations?.inspection_timeline || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                           <defs>
                             <linearGradient id="opsColor" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={COLOR.blue} stopOpacity={0.3}/>
-                              <stop offset="95%" stopColor={COLOR.blue} stopOpacity={0}/>
+                              <stop offset="5%" stopColor={COLOR.blue} stopOpacity={0.3} />
+                              <stop offset="95%" stopColor={COLOR.blue} stopOpacity={0} />
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.6)" />

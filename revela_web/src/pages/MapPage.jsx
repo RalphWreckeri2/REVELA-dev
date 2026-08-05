@@ -181,7 +181,7 @@ const FLAG_COLORS = {
   Yellow: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered" },
   Yellow_Inspector: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered from Inspectors" },
   Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "1st/2nd Warning / 3rd Notice Closure" },
-  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Closed / Nonconforming" },
+  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Nonconforming" },
   Green: { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
 };
 
@@ -315,8 +315,8 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
         : "Official BPLO Registry";
 
   const isInspectorReported = flag.source === "inspector_reported";
-  const mapsUrl = flag.latitude 
-    ? `https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}${flag.placeID ? `&query_place_id=${flag.placeID}` : ''}` 
+  const mapsUrl = flag.latitude
+    ? `https://www.google.com/maps/search/?api=1&query=${flag.latitude},${flag.longitude}${flag.placeID ? `&query_place_id=${flag.placeID}` : ''}`
     : null;
 
   return createPortal(
@@ -1373,8 +1373,8 @@ function DispatchModal({ flag, token, onClose, onSuccess, isClosing }) {
 
   const fc = getFlagColor(flag.color);
 
-  return (
-    <div className="modal-backdrop" style={styles.modalBackdrop} onClick={!loading ? onClose : undefined}>
+  return createPortal(
+    <div className="modal-backdrop" style={{ ...styles.modalBackdrop, zIndex: 10001 }} onClick={!loading ? onClose : undefined}>
       <div className="modal-panel" style={{ ...styles.detailModal, padding: 24, width: 440 }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h3 style={styles.modalTitle}>Dispatch Inspector</h3>
@@ -1394,10 +1394,10 @@ function DispatchModal({ flag, token, onClose, onSuccess, isClosing }) {
         )}
         <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Select Inspector</label>
         {fetching ? (
-          <p style={{ fontSize: 13, color: "var(--color-muted)" }}>Loading inspectorsâ€¦</p>
+          <p style={{ fontSize: 13, color: "var(--color-muted)" }}>Loading inspectors…</p>
         ) : (
           <select style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-modal-bg)", cursor: "pointer", marginBottom: 4 }} value={selectedUID} onChange={e => setSelectedUID(e.target.value)}>
-            <option value="">Choose an inspectorâ€¦</option>
+            <option value="">Choose an inspector…</option>
             {inspectors.map(u => (<option key={u.userID} value={u.userID}>{u.fullName}</option>))}
           </select>
         )}
@@ -1415,7 +1415,8 @@ function DispatchModal({ flag, token, onClose, onSuccess, isClosing }) {
           <button className="primary-btn" style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={handleAssign} disabled={loading || fetching}>{loading ? "Dispatching…" : <><Icon.Send /> Dispatch</>}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1608,7 +1609,7 @@ export default function MapPage() {
       .finally(() => setClustersLoading(false));
   }, [layers.diagnostics, token]);
 
-  // â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ──────────────────────────────────────────────────────────────────────────────────────────────────
   const handleEscalate = async (logId) => {
     setActionLoading(true);
     setActionError("");
@@ -1616,6 +1617,7 @@ export default function MapPage() {
       await escalateFlagToBlackRequest(logId, token);
       await fetchFlags();
       setModalFlag(null);  // close modal after escalation
+      setSelectedFlag(null);
     } catch (err) {
       setActionError(err.message || "Failed to escalate.");
     } finally {
@@ -1630,6 +1632,7 @@ export default function MapPage() {
       await updateFlagColorRequest(logId, color, token);
       await fetchFlags();
       setModalFlag(null); // close modal after color update
+      setSelectedFlag(null);
       Swal.fire({
         icon: "success",
         title: "Flag Updated",
@@ -1754,6 +1757,7 @@ export default function MapPage() {
         Swal.fire({ icon: 'success', title: 'Deleted', text: 'Flag deleted successfully.', timer: 1500, showConfirmButton: false });
         await fetchFlags();
         setModalFlag(null);
+        setSelectedFlag(null);
       } catch (err) {
         setActionError(err.message || "Failed to delete flag.");
       } finally {
@@ -2260,6 +2264,7 @@ export default function MapPage() {
           onSuccess={() => {
             setDispatchTarget(null);
             setModalFlag(null);
+            setSelectedFlag(null);
             fetchFlags();
           }}
         />

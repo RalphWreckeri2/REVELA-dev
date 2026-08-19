@@ -579,7 +579,7 @@ def insert_yellow_flag(business_name, lat, lng, barangay_id, notes=None, flag_co
 
 
 def update_flag_color(log_id, color):
-    """Update a flag's color manually (e.g. to Orange, Yellow, Red, Black, Green)."""
+    """Update a flag's color manually (e.g. to Purple, Orange, Yellow, Red, Black, Green)."""
     try:
         cursor = mysql.connection.cursor()
         cursor.execute("SELECT flagColor, detectedName, barangayID FROM geospatial_logs WHERE logID = %s", (log_id,))
@@ -594,14 +594,14 @@ def update_flag_color(log_id, color):
             WHERE logID = %s
         """, (color, log_id))
         
-        # Propagate changes: if marked Orange, set registry status to Closed
-        if color == 'Orange':
+        # Propagate changes: if marked Purple, set registry status to Closed
+        if color == 'Purple':
             cursor.execute("""
                 UPDATE official_registry
                 SET applicationStatus = 'Closed'
                 WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
             """, (row["detectedName"], row["barangayID"]))
-        elif color == 'Green' and row["flagColor"] == 'Orange':
+        elif color == 'Green' and row["flagColor"] == 'Purple':
             cursor.execute("""
                 UPDATE official_registry
                 SET applicationStatus = 'Active'

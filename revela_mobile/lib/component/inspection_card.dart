@@ -19,6 +19,8 @@ class InspectionCard extends StatelessWidget {
         return const Color(0xFFE65100);
       case 'Black':
         return const Color(0xFF1E293B);
+      case 'Purple':
+        return const Color(0xFF7C3AED);
       default:
         return const Color(0xFF22C55E);
     }
@@ -34,6 +36,8 @@ class InspectionCard extends StatelessWidget {
         return const Color(0xFFFFF3E0);
       case 'Black':
         return const Color(0xFFF1F5F9);
+      case 'Purple':
+        return const Color(0xFFEDE9FE);
       default:
         return const Color(0xFFEDFDF5);
     }
@@ -49,6 +53,8 @@ class InspectionCard extends StatelessWidget {
         return Icons.notification_important_rounded;
       case 'Black':
         return Icons.block_rounded;
+      case 'Purple':
+        return Icons.store_rounded;
       default:
         return Icons.verified_rounded;
     }
@@ -64,6 +70,8 @@ class InspectionCard extends StatelessWidget {
         return 'Warned';
       case 'Black':
         return 'Non-Responsive';
+      case 'Purple':
+        return 'Closed';
       default:
         return 'Compliant';
     }

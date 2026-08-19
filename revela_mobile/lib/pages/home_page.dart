@@ -286,6 +286,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               'Red' => BitmapDescriptor.hueRed,
               'Yellow' => BitmapDescriptor.hueYellow,
               'Orange' => 15.0,  // deep orange hue — distinct from hueYellow (60) and hueOrange (30)
+              'Purple' => BitmapDescriptor.hueViolet, // 270.0 degrees - purple
               _ => BitmapDescriptor.hueGreen,
             });
       markers.add(
@@ -583,10 +584,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 12),
           _buildLegendItem(Colors.red, 'Unregistered'),
-          _buildLegendItem(Colors.orange, 'Pending Action'),
+          _buildLegendItem(Colors.orange, 'Warning / Notice'),
           _buildLegendItem(Colors.yellow, 'Inspector Flagged'),
           _buildLegendItem(Colors.green, 'Verified / Clear'),
-          _buildLegendItem(Colors.black, 'Closed / Inactive'),
+          _buildLegendItem(Colors.black, 'Blacklisted / Non-Responsive'),
+          _buildLegendItem(const Color(0xFF7C3AED), 'Closed Establishment'),
         ],
       ),
     );

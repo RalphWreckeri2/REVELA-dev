@@ -28,7 +28,7 @@ class _InspectionModalState extends State<InspectionModal> {
   bool _submitting = false;
   int _noticeLevel = 0;
 
-  /// API Result options: Green, Yellow, Red, Orange, Black
+  /// API Result options: Green, Yellow, Red, Orange, Black, Purple
   String _inspectionResult = '';
   int _currentStep = 0;
   bool _showResultError = false;
@@ -466,12 +466,22 @@ class _InspectionModalState extends State<InspectionModal> {
                             }),
                           ),
                         _ResultChip(
-                          label: 'Closed / Blacklisted',
+                          label: 'Blacklisted / Non-Responsive',
                           selected: _inspectionResult == 'Black',
                           color: Colors.black,
                           onTap: () => setState(() {
                             _inspectionResult = 'Black';
                             _noticeLevel = widget.task.currentNoticeLevel == 3 ? 4 : 0;
+                            _showResultError = false;
+                          }),
+                        ),
+                        _ResultChip(
+                          label: 'Closed Establishment',
+                          selected: _inspectionResult == 'Purple',
+                          color: const Color(0xFF7C3AED),
+                          onTap: () => setState(() {
+                            _inspectionResult = 'Purple';
+                            _noticeLevel = 0;
                             _showResultError = false;
                           }),
                         ),

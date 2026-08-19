@@ -27,7 +27,8 @@ const formatResult = (val) => {
     case 'Yellow': return 'Suspected / Needs Verification';
     case 'Orange': return 'Warned / Non-Compliant';
     case 'Red': return 'Unregistered';
-    case 'Black': return 'Closed / Blacklisted';
+    case 'Black': return 'Blacklisted / Non-Responsive';
+    case 'Purple': return 'Closed Establishment';
     default: return val;
   }
 };
@@ -111,6 +112,7 @@ const FLAG_COLOR = {
   Green:  { bg: "var(--flag-green-bg)",  text: "var(--flag-green-text)" },
   Black:  { bg: "var(--flag-black-bg)",  text: "var(--flag-black-text)" },
   Orange: { bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)" },
+  Purple: { bg: "var(--flag-purple-bg)", text: "var(--flag-purple-text)" },
   "Given First Notice": { bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)" },
 };
 
@@ -120,7 +122,8 @@ const getFriendlyFlagLabel = (color) => {
     Yellow: "Suspected",
     Red:    "Unregistered",
     Orange: "Warning / Notice",
-    Black:  "Closed / Nonconforming",
+    Black:  "Blacklisted / Non-Responsive",
+    Purple: "Closed",
   }[color] || color;
 };
 

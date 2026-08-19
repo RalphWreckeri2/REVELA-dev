@@ -7,7 +7,8 @@ const FLAG_COLORS = {
   Yellow: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered" },
   Yellow_Inspector: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Inspector Reported" },
   Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "Warning / Notice" },
-  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Closed" },
+  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Blacklisted / Non-Responsive" },
+  Purple: { marker: "#7c3aed", bg: "var(--flag-purple-bg)", text: "var(--flag-purple-text)", label: "Closed" },
   Green: { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
 };
 
@@ -118,7 +119,7 @@ function InspectorReportsModalInner({ isOpen, onClose, flags, inspectors, naviga
           
           {/* Color filter pills */}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {["all", "Green", "Yellow", "Yellow_Inspector", "Orange", "Red", "Black"].map(c => (
+            {["all", "Green", "Yellow", "Yellow_Inspector", "Orange", "Red", "Black", "Purple"].map(c => (
               <button
                 key={c}
                 onClick={() => setFilterColor(c)}

@@ -12,7 +12,7 @@ from api.middleware.decorators import jwt_required, admin_required
 
 flags_bp = Blueprint("flags", __name__)
 
-from api.utils.cancellation import set_cancel
+from api.utils.cancellation import set_cancel 
 
 # ── POST /api/flags/cancel-detection ──────────────────────────────────────────
 @flags_bp.route("/cancel-detection", methods=["POST"])
@@ -124,13 +124,13 @@ def black_flag_route(log_id):
 @flags_bp.route("/<int:log_id>/color", methods=["PATCH"])
 @admin_required()
 def change_flag_color_route(log_id):
-    """Update a flag's color manually (e.g. to Orange, Yellow, Red, Black, Green)."""
+    """Update a flag's color manually (e.g. to Purple, Orange, Yellow, Red, Black, Green)."""
     data = request.get_json()
     if not data or "color" not in data:
         return jsonify({"error": "Missing 'color' parameter"}), 400
 
     color = data["color"]
-    valid_colors = {"Red", "Yellow", "Black", "Green", "Orange"}
+    valid_colors = {"Red", "Yellow", "Black", "Green", "Orange", "Purple"}
     if color not in valid_colors:
         return jsonify({"error": f"Invalid color. Must be one of {valid_colors}"}), 400
 

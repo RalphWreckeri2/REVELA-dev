@@ -125,7 +125,8 @@ def _get_all_analytics_inner(F=None):
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,
-            COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Purple' THEN g.logID END) AS purple_count
         FROM barangays b
         LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
         WHERE 1=1 {brgy_b}
@@ -140,6 +141,7 @@ def _get_all_analytics_inner(F=None):
             "yellow_count": row["yellow_count"] or 0,
             "black_count":  row["black_count"] or 0,
             "orange_count": row["orange_count"] or 0,
+            "purple_count": row["purple_count"] or 0,
         }
         for row in cur.fetchall()
     ]
@@ -280,7 +282,8 @@ def _get_all_analytics_inner(F=None):
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,
-            COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor = 'Purple' THEN g.logID END) AS purple_count
         FROM barangays b
         LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
         WHERE 1=1 {brgy_b}
@@ -296,6 +299,7 @@ def _get_all_analytics_inner(F=None):
             "yellow_count":  row["yellow_count"] or 0,
             "black_count":   row["black_count"] or 0,
             "orange_count":  row["orange_count"] or 0,
+            "purple_count":  row["purple_count"] or 0,
         }
         for row in cur.fetchall()
     ]
@@ -752,7 +756,7 @@ def analytics_filter_metadata():
     cur.close()
 
     return jsonify({
-        "flag_colors": ["Green", "Yellow", "Red", "Black", "Orange"],
+        "flag_colors": ["Green", "Yellow", "Red", "Black", "Orange", "Purple"],
         "application_statuses": application_statuses,
         "lines_of_business": lines_of_business,
         "business_types": business_types,
@@ -1035,6 +1039,7 @@ def analytics_chat():
             "  - Red = Serious violations, requires enforcement action\n"
             "  - Black = Critical / ordered to cease operations\n"
             "  - Orange = Under investigation or special monitoring\n"
+            "  - Purple = Confirmed closed or permanently abandoned establishment\n"
             "- **Compliance Rate**: Percentage of businesses with Active status out of total registered.\n"
             "- **Inspections**: Field inspections conducted by municipal inspectors. A business may have zero inspections "
             "if it has not yet been scheduled — this is normal, especially for newly registered businesses or if the "

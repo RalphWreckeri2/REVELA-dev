@@ -181,7 +181,8 @@ const FLAG_COLORS = {
   Yellow: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered" },
   Yellow_Inspector: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered from Inspectors" },
   Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "1st/2nd Warning / 3rd Notice Closure" },
-  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Nonconforming" },
+  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Blacklisted / Non-Responsive" },
+  Purple: { marker: "#7c3aed", bg: "var(--flag-purple-bg)", text: "var(--flag-purple-text)", label: "Closed Establishment" },
   Green: { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
 };
 
@@ -241,7 +242,7 @@ function getFlagColor(flagColor) {
 }
 
 /** Higher = more severe â€” used so mixed clusters show the worst color, not green. */
-const FLAG_SEVERITY_RANK = { Green: 1, Orange: 2, Yellow: 3, Red: 4, Black: 5 };
+const FLAG_SEVERITY_RANK = { Green: 1, Purple: 2, Orange: 3, Yellow: 4, Red: 5, Black: 6 };
 
 function flagSeverityRank(flagColor) {
   return FLAG_SEVERITY_RANK[flagColor] ?? 0;
@@ -400,16 +401,16 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
 
         {/* Secondary Actions */}
         <div style={{ display: "flex", gap: 12 }}>
-          {isAdmin && flag.color !== "Orange" && (
+          {isAdmin && flag.color !== "Purple" && (
             <button
               style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 44, borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer", border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-ink)", transition: "all 0.2s" }}
               disabled={actionLoading}
-              onClick={() => onUpdateColor(flag.id, "Orange")}
+              onClick={() => onUpdateColor(flag.id, "Purple")}
             >
               Mark as closed
             </button>
           )}
-          {isAdmin && flag.color === "Orange" && (
+          {isAdmin && flag.color === "Purple" && (
             <button
               style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 44, borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer", border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-ink)", transition: "all 0.2s" }}
               disabled={actionLoading}
@@ -1876,6 +1877,7 @@ export default function MapPage() {
     Black: flags.filter(f => f.color === "Black").length,
     Green: flags.filter(f => f.color === "Green").length,
     Orange: flags.filter(f => f.color === "Orange").length,
+    Purple: flags.filter(f => f.color === "Purple").length,
   };
 
   return (
@@ -2061,9 +2063,10 @@ export default function MapPage() {
             {[
               { label: "Total Flags", value: flags.length, color: "var(--color-ink)" },
               { label: "Active Businesses", value: counts.Green, color: "#22c55e" },
-              { label: "1st/2nd Warning / Closure", value: counts.Orange, color: "#e65100" },
+              { label: "1st/2nd Warning / Notice", value: counts.Orange, color: "#e65100" },
               { label: "Detected Unregistered", value: counts.Red, color: "#ef4444" },
               { label: "Suspected Unregistered", value: counts.Yellow, color: "#f59e0b" },
+              { label: "Closed Establishments", value: counts.Purple, color: "#7c3aed" },
               { label: "Critical Violations", value: counts.Black, color: "var(--color-ink)" },
             ].map(s => (
               <div key={s.label} className="frosted-glass saas-card" style={styles.statCard}>
@@ -2098,7 +2101,7 @@ export default function MapPage() {
 
             {/* Legend / Filter List */}
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {["all", "Green", "Yellow", "Yellow_Inspector", "Orange", "Red", "Black"].map(c => {
+              {["all", "Green", "Yellow", "Yellow_Inspector", "Orange", "Red", "Black", "Purple"].map(c => {
                 const isSelected = filterColor === c;
                 const dotColor = c === "all" ? "var(--color-ink)" : (FLAG_COLORS[c]?.marker ?? "var(--color-ink)");
                 const label = c === "all" ? "All Locations" : (FLAG_COLORS[c]?.label ?? c);

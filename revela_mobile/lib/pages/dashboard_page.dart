@@ -155,6 +155,9 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
     final int blackFlagsCount = _activeTasks
         .where((t) => t.flagColor.toLowerCase() == 'black')
         .length;
+    final int purpleFlagsCount = _activeTasks
+        .where((t) => t.flagColor.toLowerCase() == 'purple')
+        .length;
     final int submittedCount = _historyTasks
         .where((t) => t.verificationStatus.toLowerCase() == 'submitted')
         .length;
@@ -739,6 +742,22 @@ class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserv
                                               )
                                               .animate()
                                               .fadeIn(delay: 500.ms)
+                                              .scale(
+                                                begin: const Offset(0.95, 0.95),
+                                              ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child:
+                                          _buildGlassMetricCard(
+                                                'Purple',
+                                                '$purpleFlagsCount',
+                                                Icons.store_rounded,
+                                                const Color(0xFF7C3AED),
+                                                isZero: purpleFlagsCount == 0,
+                                              )
+                                              .animate()
+                                              .fadeIn(delay: 550.ms)
                                               .scale(
                                                 begin: const Offset(0.95, 0.95),
                                               ),

@@ -82,7 +82,8 @@ class _InspectionPageState extends State<InspectionPage>
       case 'Yellow': return 'Suspected / Needs Verification';
       case 'Orange': return 'Warned / Non-Compliant';
       case 'Red': return 'Unregistered';
-      case 'Black': return 'Closed / Blacklisted';
+      case 'Black': return 'Blacklisted / Non-Responsive';
+      case 'Purple': return 'Closed Establishment';
       default: return result;
     }
   }

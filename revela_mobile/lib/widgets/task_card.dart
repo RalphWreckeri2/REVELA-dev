@@ -28,6 +28,10 @@ class TaskCard extends StatelessWidget {
         return const Color(0xFFE65100);
       case 'green':
         return const Color(0xFF10B981);
+      case 'black':
+        return const Color(0xFF1E293B);
+      case 'purple':
+        return const Color(0xFF7C3AED);
       default:
         return Colors.grey;
     }

@@ -81,6 +81,8 @@
   --flag-black-text: #1a1a1a;
   --flag-green-bg: #dcfce7;
   --flag-green-text: #15803d;
+  --flag-purple-bg: #ede9fe;
+  --flag-purple-text: #6d28d9;
   --flag-default-bg: #f1f5f9;
   --flag-default-text: #64748b;
 }
@@ -210,6 +212,10 @@ body {
 .badge--black {
   background: #f3f4f6;
   color: #1f2937;
+}
+.badge--purple {
+  background: #ede9fe;
+  color: #6d28d9;
 }
 
 /* Dot indicator */
@@ -729,6 +735,8 @@ html.theme-dark {
   --flag-black-text: #f3f4f6;
   --flag-green-bg: rgba(34, 197, 94, 0.15);
   --flag-green-text: #86efac;
+  --flag-purple-bg: rgba(124, 58, 237, 0.15);
+  --flag-purple-text: #c4b5fd;
   --flag-default-bg: rgba(255, 255, 255, 0.1);
   --flag-default-text: #cbd5e1;
 
@@ -837,6 +845,10 @@ html.theme-dark .badge--orange {
 html.theme-dark .badge--black {
   background: rgba(255, 255, 255, 0.1);
   color: #e2e8f0;
+}
+html.theme-dark .badge--purple {
+  background: rgba(124, 58, 237, 0.18);
+  color: #c4b5fd;
 }
 
 /* ── Dark: Form elements ── */

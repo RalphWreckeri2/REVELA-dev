@@ -26,6 +26,7 @@ const COLOR = {
   blue: "#3b82f6",
   muted: "var(--color-muted)",
   orange: "#f97316",
+  purple: "#7c3aed",
   slate: "#64748b",
   greenLight: "rgba(16, 185, 129, 0.15)",
   redLight: "rgba(244, 63, 94, 0.15)",
@@ -39,6 +40,7 @@ const FLAG_COLORS = {
   Yellow: COLOR.yellow,
   Black: COLOR.slate,
   Orange: COLOR.orange,
+  Purple: COLOR.purple,
 };
 
 // ── Tiny helpers ──────────────────────────────────────────────────────────────
@@ -1019,15 +1021,16 @@ export default function AnalyticsPage() {
 
   const flagCounts = useMemo(() => {
     const progress = desc?.enforcement_progress || [];
-    let green = 0, red = 0, yellow = 0, black = 0, orange = 0;
+    let green = 0, red = 0, yellow = 0, black = 0, orange = 0, purple = 0;
     progress.forEach(row => {
       green += row.green_count || 0;
       red += row.red_count || 0;
       yellow += row.yellow_count || 0;
       black += row.black_count || 0;
       orange += row.orange_count || 0;
+      purple += row.purple_count || 0;
     });
-    return { green, red, yellow, black, orange, total: green + red + yellow + black + orange };
+    return { green, red, yellow, black, orange, purple, total: green + red + yellow + black + orange + purple };
   }, [desc?.enforcement_progress]);
 
   const funnelData = [
@@ -1129,7 +1132,8 @@ export default function AnalyticsPage() {
       case 'Yellow': return 'Suspected (Needs Verification)';
       case 'Orange': return 'Warned / Non-Compliant';
       case 'Red': return 'Unregistered';
-      case 'Black': return 'Closed / Blacklisted';
+      case 'Black': return 'Blacklisted / Non-Responsive';
+      case 'Purple': return 'Closed Establishment';
       default: return val;
     }
   };
@@ -1617,7 +1621,8 @@ export default function AnalyticsPage() {
                     <option value="Yellow">Suspected</option>
                     <option value="Red">Unregistered</option>
                     <option value="Orange">1st/2nd Warning / 3rd Notice Closure</option>
-                    <option value="Black">3rd Warning / Closed / Nonconforming</option>
+                    <option value="Black">Blacklisted / Non-Responsive</option>
+                    <option value="Purple">Closed Establishment</option>
                   </select>
                 </div>
 

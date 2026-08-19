@@ -250,6 +250,31 @@ def submit_inspection(log_id, user_id, inspection_result,
             resolution_mins,
             report["reportID"],
         ))
+
+        # If the inspector selected "Closed / Abandoned" (Purple),
+        # automatically update the geospatial log flag color to 'Purple'.
+        if inspection_result == 'Purple':
+            cursor.execute("""
+                UPDATE geospatial_logs
+                SET flagColor = 'Purple'
+                WHERE logID = %s
+            """, (log_id,))
+
+            # Fetch detectedName and barangayID to propagate to official_registry
+            cursor.execute("SELECT detectedName, barangayID FROM geospatial_logs WHERE logID = %s", (log_id,))
+            geo_row = cursor.fetchone()
+            if geo_row and geo_row["detectedName"]:
+                cursor.execute("""
+                    UPDATE official_registry
+                    SET applicationStatus = 'Closed'
+                    WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
+                """, (geo_row["detectedName"], geo_row["barangayID"]))
+
+        # Retrieve the current flagColor to return in the backend payload
+        cursor.execute("SELECT flagColor FROM geospatial_logs WHERE logID = %s", (log_id,))
+        geo_log = cursor.fetchone()
+        flag_color = geo_log["flagColor"] if geo_log else "Red"
+
         mysql.connection.commit()
         cursor.close()
 
@@ -258,6 +283,7 @@ def submit_inspection(log_id, user_id, inspection_result,
             "inspectionResult": inspection_result,
             "status":           "Submitted",
             "resolutionMins":   resolution_mins,
+            "flagColor":        flag_color,
         }, None
 
     except Exception as e:

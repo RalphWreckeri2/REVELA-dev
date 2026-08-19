@@ -145,7 +145,7 @@ def submit():
     if not data or not all(k in data for k in required):
         return jsonify({"error": f"Required fields: {required}"}), 400
 
-    valid_results = ("Red", "Yellow", "Green", "Orange", "Black")
+    valid_results = ("Red", "Yellow", "Green", "Orange", "Black", "Purple")
     if data["inspectionResult"] not in valid_results:
         return jsonify({"error": f"inspectionResult must be one of {valid_results}"}), 400
 

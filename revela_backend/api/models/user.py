@@ -76,6 +76,27 @@ def get_all_users():
     return users
 
 
+def get_users_by_role(role):
+    """Fetch all users by role (case-insensitive), excluding passwords."""
+    cur = mysql.connection.cursor()
+    cur.execute("""
+        SELECT userID, fullName, email, phone, userRole, 
+               createdAt, lastLoginAt, mustChangePassword, resetRequested, isActive
+        FROM USERS
+        WHERE LOWER(userRole) = LOWER(%s)
+        ORDER BY createdAt DESC
+    """, (role,))
+    users = cur.fetchall()
+    cur.close()
+    # Serialise datetimes
+    for u in users:
+        for field in ("createdAt", "lastLoginAt"):
+            if u.get(field):
+                u[field] = str(u[field])
+    return users
+
+
+
 def create_user(full_name, email, hashed_password, role, phone=None, must_change_password=True):
     """Insert a new user."""
     cur = mysql.connection.cursor()

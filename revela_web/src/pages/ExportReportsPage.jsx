@@ -123,7 +123,7 @@ export default function ExportReportsPage() {
       { Metric: "Active Registrations", Value: kpis?.active_count || 0 },
       { Metric: "Pending Registrations", Value: kpis?.pending_count || 0 },
       { Metric: "Expired Permits", Value: kpis?.expired_count || 0 },
-      { Metric: "Closed Establishments", Value: kpis?.closed_count || 0 },
+      { Metric: "Closed / Abandoned", Value: kpis?.closed_count || 0 },
       { Metric: "Registrations/Renewals in Current Year", Value: kpis?.current_year_count || 0 },
       { Metric: "Total Flagged Entities", Value: kpis?.total_flagged || 0 },
       { Metric: "Overall Compliance Rate", Value: `${kpis?.compliance_rate || 0}%` },

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
 from api.middleware.decorators import admin_required
-from api.models.user import (get_all_users, find_user_by_email,
+from api.models.user import (get_all_users, get_users_by_role, find_user_by_email,
                              find_user_by_id, create_user, update_user,
                              delete_user, update_password, set_reset_requested)
 import bcrypt
@@ -44,8 +44,12 @@ def _normalize_phone(phone):
 @users_bp.route("/", methods=["GET"])
 @admin_required()
 def list_users():
-    """Return all users. SUPER_ADMIN only."""
-    users = get_all_users()
+    """Return all users or filter by role. SUPER_ADMIN only."""
+    role = request.args.get("role")
+    if role:
+        users = get_users_by_role(role)
+    else:
+        users = get_all_users()
     return jsonify(users), 200
 
 

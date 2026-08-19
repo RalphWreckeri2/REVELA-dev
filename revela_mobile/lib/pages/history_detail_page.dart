@@ -15,7 +15,7 @@ class HistoryDetailPage extends StatelessWidget {
       case 'Orange': return 'Warned / Non-Compliant';
       case 'Red': return 'Unregistered';
       case 'Black': return 'Blacklisted / Non-Responsive';
-      case 'Purple': return 'Closed Establishment';
+      case 'Purple': return 'Closed / Abandoned';
       default: return result;
     }
   }

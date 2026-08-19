@@ -897,7 +897,7 @@ export default function AnalyticsPage() {
         ]);
         if (!cancelled) {
           setFilterMeta(meta);
-          setBarangaysList(Array.isArray(brgy) ? brgy : []);
+          setBarangaysList(Array.isArray(brgy) ? brgy : (Array.isArray(brgy?.data) ? brgy.data : []));
         }
       } catch (e) {
         console.error(e);
@@ -1133,7 +1133,7 @@ export default function AnalyticsPage() {
       case 'Orange': return 'Warned / Non-Compliant';
       case 'Red': return 'Unregistered';
       case 'Black': return 'Blacklisted / Non-Responsive';
-      case 'Purple': return 'Closed Establishment';
+      case 'Purple': return 'Closed / Abandoned';
       default: return val;
     }
   };
@@ -1580,7 +1580,9 @@ export default function AnalyticsPage() {
                     value={draftFilters.barangay_ids[0] || ""}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setDraftFilters((d) => ({ ...d, barangay_ids: val ? [parseInt(val, 10)] : [] }));
+                      const newIds = val ? [parseInt(val, 10)] : [];
+                      setDraftFilters((d) => ({ ...d, barangay_ids: newIds }));
+                      setAppliedFilters((a) => ({ ...a, barangay_ids: newIds }));
                     }}
                     style={filterInputStyle}
                   >
@@ -1622,7 +1624,7 @@ export default function AnalyticsPage() {
                     <option value="Red">Unregistered</option>
                     <option value="Orange">1st/2nd Warning / 3rd Notice Closure</option>
                     <option value="Black">Blacklisted / Non-Responsive</option>
-                    <option value="Purple">Closed Establishment</option>
+                    <option value="Purple">Closed / Abandoned</option>
                   </select>
                 </div>
 

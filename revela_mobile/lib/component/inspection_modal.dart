@@ -476,7 +476,7 @@ class _InspectionModalState extends State<InspectionModal> {
                           }),
                         ),
                         _ResultChip(
-                          label: 'Closed Establishment',
+                          label: 'Closed / Abandoned',
                           selected: _inspectionResult == 'Purple',
                           color: const Color(0xFF7C3AED),
                           onTap: () => setState(() {

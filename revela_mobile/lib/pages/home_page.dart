@@ -588,7 +588,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _buildLegendItem(Colors.yellow, 'Inspector Flagged'),
           _buildLegendItem(Colors.green, 'Verified / Clear'),
           _buildLegendItem(Colors.black, 'Blacklisted / Non-Responsive'),
-          _buildLegendItem(const Color(0xFF7C3AED), 'Closed Establishment'),
+          _buildLegendItem(const Color(0xFF7C3AED), 'Closed / Abandoned'),
         ],
       ),
     );

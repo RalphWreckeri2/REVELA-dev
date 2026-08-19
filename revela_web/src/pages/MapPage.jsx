@@ -182,7 +182,7 @@ const FLAG_COLORS = {
   Yellow_Inspector: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered from Inspectors" },
   Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "1st/2nd Warning / 3rd Notice Closure" },
   Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Blacklisted / Non-Responsive" },
-  Purple: { marker: "#7c3aed", bg: "var(--flag-purple-bg)", text: "var(--flag-purple-text)", label: "Closed Establishment" },
+  Purple: { marker: "#7c3aed", bg: "var(--flag-purple-bg)", text: "var(--flag-purple-text)", label: "Closed / Abandoned" },
   Green: { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
 };
 
@@ -1334,11 +1334,17 @@ function DispatchModal({ flag, token, onClose, onSuccess, isClosing }) {
     })
       .then(r => r.json())
       .then(data => {
-        const list = Array.isArray(data) ? data : (data.data ?? []);
-        setInspectors(list.filter(u => u.isActive !== 0 && u.isActive !== false && u.userRole === 'Inspector'));
+        console.log("Inspectors API Response:", data);
+        const list = Array.isArray(data) ? data : (data.data ?? data.users ?? []);
+        console.log("Filtered inspectors list:", list);
+        setInspectors(list);
         setFetching(false);
       })
-      .catch(() => { setFetching(false); setError("Could not load inspectors."); });
+      .catch(err => {
+        console.error("Error loading inspectors:", err);
+        setFetching(false);
+        setError("Could not load inspectors.");
+      });
   }, [token]);
 
   const handleAssign = async () => {
@@ -2066,7 +2072,7 @@ export default function MapPage() {
               { label: "1st/2nd Warning / Notice", value: counts.Orange, color: "#e65100" },
               { label: "Detected Unregistered", value: counts.Red, color: "#ef4444" },
               { label: "Suspected Unregistered", value: counts.Yellow, color: "#f59e0b" },
-              { label: "Closed Establishments", value: counts.Purple, color: "#7c3aed" },
+              { label: "Closed / Abandoned", value: counts.Purple, color: "#7c3aed" },
               { label: "Critical Violations", value: counts.Black, color: "var(--color-ink)" },
             ].map(s => (
               <div key={s.label} className="frosted-glass saas-card" style={styles.statCard}>

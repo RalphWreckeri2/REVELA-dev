@@ -43,6 +43,7 @@ def _get_all_analytics_inner(F=None):
         "official_registry", filters_without(Fx, "application_status"))
     reg_o, reg_o_p = registry_sql("o", Fx)
     geo_g, geo_g_p = geo_sql("g", Fx)
+    geo_g2, geo_g2_p = geo_sql("g2", Fx)
     geo_on_g, geo_on_g_p = geo_on_extra("g", Fx)
     brgy_b, brgy_b_p = barangay_b_sql(Fx)
     insp_ir, insp_ir_p = inspection_sql("ir", Fx)
@@ -164,10 +165,10 @@ def _get_all_analytics_inner(F=None):
         SELECT COALESCE(b.barangayName, 'Unknown') AS barangayName, COALESCE(o.lineOfBusiness, 'Unclassified') AS nature, COUNT(*) AS count
         FROM official_registry o
         LEFT JOIN barangays b ON o.barangayID = b.barangayID
-        WHERE 1=1 {reg_all}
+        WHERE 1=1 {reg_o}
         GROUP BY b.barangayName, nature
         ORDER BY b.barangayName ASC, count DESC
-    """, reg_all_p)
+    """, reg_o_p)
     
     nature_per_barangay_raw = cur.fetchall()
     
@@ -600,13 +601,14 @@ def _get_all_analytics_inner(F=None):
             COUNT(ir.reportID) as total_assigned, 
             SUM(CASE WHEN ir.verificationStatus IN ('Verified', 'Submitted') THEN 1 ELSE 0 END) as total_completed, 
             AVG(ir.resolutionTime) as avg_resolution_time,
-            (SELECT COUNT(*) FROM geospatial_logs g2 WHERE g2.reportedByUserID = u.userID AND g2.flagColor = 'Yellow') as yellow_flags_reported
+            (SELECT COUNT(*) FROM geospatial_logs g2 WHERE g2.reportedByUserID = u.userID AND g2.flagColor = 'Yellow'{geo_g2}) as yellow_flags_reported
         FROM inspection_reports ir 
         JOIN users u ON ir.userID = u.userID 
-        WHERE 1=1 {insp_ir}
+        LEFT JOIN geospatial_logs g ON ir.targetID = g.logID
+        WHERE 1=1 {insp_ir} {geo_g}
         GROUP BY u.userID
         ORDER BY total_completed DESC
-    """, insp_ir_p)
+    """, geo_g2_p + insp_ir_p + geo_g_p)
     inspector_stats = list(cur.fetchall())
     for stat in inspector_stats:
         if stat["avg_resolution_time"] is not None:
@@ -618,19 +620,21 @@ def _get_all_analytics_inner(F=None):
     cur.execute(f"""
         SELECT COALESCE(ir.verificationStatus, 'Unassigned') as status, COUNT(ir.reportID) as count
         FROM inspection_reports ir
-        WHERE 1=1 {insp_ir}
+        LEFT JOIN geospatial_logs g ON ir.targetID = g.logID
+        WHERE 1=1 {insp_ir} {geo_g}
         GROUP BY ir.verificationStatus
-    """, insp_ir_p)
+    """, insp_ir_p + geo_g_p)
     status_breakdown = list(cur.fetchall())
 
     # 3. Inspection Timeline
     cur.execute(f"""
         SELECT DATE(ir.irTimestamp) as date, COUNT(ir.reportID) as count
         FROM inspection_reports ir
-        WHERE 1=1 {insp_ir}
+        LEFT JOIN geospatial_logs g ON ir.targetID = g.logID
+        WHERE 1=1 {insp_ir} {geo_g}
         GROUP BY DATE(ir.irTimestamp)
         ORDER BY date ASC
-    """, insp_ir_p)
+    """, insp_ir_p + geo_g_p)
     timeline_rows = list(cur.fetchall())
     inspection_timeline = []
     for row in timeline_rows:

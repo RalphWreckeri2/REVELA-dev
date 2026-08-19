@@ -28,7 +28,7 @@ const formatResult = (val) => {
     case 'Orange': return 'Warned / Non-Compliant';
     case 'Red': return 'Unregistered';
     case 'Black': return 'Blacklisted / Non-Responsive';
-    case 'Purple': return 'Closed Establishment';
+    case 'Purple': return 'Closed / Abandoned';
     default: return val;
   }
 };
@@ -123,7 +123,7 @@ const getFriendlyFlagLabel = (color) => {
     Red:    "Unregistered",
     Orange: "Warning / Notice",
     Black:  "Blacklisted / Non-Responsive",
-    Purple: "Closed",
+    Purple: "Closed / Abandoned",
   }[color] || color;
 };
 

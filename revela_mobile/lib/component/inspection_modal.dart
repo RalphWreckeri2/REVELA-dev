@@ -33,10 +33,22 @@ class _InspectionModalState extends State<InspectionModal> {
   int _currentStep = 0;
   bool _showResultError = false;
 
+  /// Pre-warmed GPS position (fetched when entering the Review step)
+  Future<Position>? _locationFuture;
+
   @override
   void dispose() {
     _remarksController.dispose();
     super.dispose();
+  }
+
+  /// Pre-warm GPS so it's ready when the user taps Submit.
+  void _preWarmLocation() {
+    _locationFuture ??= Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        timeLimit: Duration(seconds: 10),
+      ),
+    );
   }
 
   Future<void> _onSubmit() async {
@@ -52,14 +64,14 @@ class _InspectionModalState extends State<InspectionModal> {
       double? vLat;
       double? vLng;
       try {
-        final p = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            timeLimit: Duration(seconds: 5),
-          ),
-        );
+        // Use pre-warmed location if available, otherwise fetch now
+        _preWarmLocation();
+        final p = await _locationFuture!;
         vLat = p.latitude;
         vLng = p.longitude;
       } catch (e) {
+        // Reset so next attempt gets a fresh fix
+        _locationFuture = null;
         if (mounted) {
           setState(() => _submitting = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -236,6 +248,8 @@ class _InspectionModalState extends State<InspectionModal> {
       _showResultError = false;
       if (_currentStep < 2) _currentStep++;
     });
+    // Pre-warm GPS when entering the Review step
+    if (_currentStep == 2) _preWarmLocation();
   }
 
   void _prevStep() {
@@ -503,50 +517,63 @@ class _InspectionModalState extends State<InspectionModal> {
                       ),
                     SizedBox(height: 24),
 
-                    const _SectionLabel(label: 'Administrative Notice', icon: Icons.gavel_outlined, isRequired: true),
-                    SizedBox(height: 8),
-                    Text(
-                      'Select the non-compliance notice level. Enforces sequential escalation.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: context.adaptiveSurface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int>(
-                          value: _noticeLevel,
-                          isExpanded: true,
-                          dropdownColor: context.adaptiveSurface,
-                          items: [
-                            DropdownMenuItem(value: 0, child: Text('No Notice Issued', style: TextStyle(color: context.adaptiveTextDark))),
-                            if (widget.task.currentNoticeLevel == 0)
-                              DropdownMenuItem(value: 1, child: Text('1st Notice: Warning', style: TextStyle(color: const Color(0xFFE65100), fontWeight: FontWeight.bold))),
-                            if (widget.task.currentNoticeLevel == 1)
-                              DropdownMenuItem(value: 2, child: Text('2nd Notice: Warning for Closure', style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold))),
-                            if (widget.task.currentNoticeLevel == 2)
-                              DropdownMenuItem(value: 3, child: Text('3rd Notice: Closure', style: TextStyle(color: const Color(0xFFBF360C), fontWeight: FontWeight.bold))),
-                            if (widget.task.currentNoticeLevel == 3)
-                              DropdownMenuItem(value: 4, child: Text('Escalate to Black (Final)', style: TextStyle(color: context.isDarkMode ? Colors.white : Colors.black, fontWeight: FontWeight.bold))),
+                    IgnorePointer(
+                      ignoring: _inspectionResult != 'Orange',
+                      child: Opacity(
+                        opacity: _inspectionResult == 'Orange' ? 1.0 : 0.4,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _SectionLabel(label: 'Administrative Notice', icon: Icons.gavel_outlined, isRequired: true),
+                            SizedBox(height: 8),
+                            Text(
+                              _inspectionResult == 'Orange'
+                                  ? 'Select the non-compliance notice level. Enforces sequential escalation.'
+                                  : 'Only available when result is "Warned / Non-Compliant".',
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                            SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: context.adaptiveSurface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<int>(
+                                  value: _noticeLevel,
+                                  isExpanded: true,
+                                  dropdownColor: context.adaptiveSurface,
+                                  items: [
+                                    DropdownMenuItem(value: 0, child: Text('No Notice Issued', style: TextStyle(color: context.adaptiveTextDark))),
+                                    if (widget.task.currentNoticeLevel == 0)
+                                      DropdownMenuItem(value: 1, child: Text('1st Notice: Warning', style: TextStyle(color: const Color(0xFFE65100), fontWeight: FontWeight.bold))),
+                                    if (widget.task.currentNoticeLevel == 1)
+                                      DropdownMenuItem(value: 2, child: Text('2nd Notice: Warning for Closure', style: TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold))),
+                                    if (widget.task.currentNoticeLevel == 2)
+                                      DropdownMenuItem(value: 3, child: Text('3rd Notice: Closure', style: TextStyle(color: const Color(0xFFBF360C), fontWeight: FontWeight.bold))),
+                                    if (widget.task.currentNoticeLevel == 3)
+                                      DropdownMenuItem(value: 4, child: Text('Escalate to Black (Final)', style: TextStyle(color: context.isDarkMode ? Colors.white : Colors.black, fontWeight: FontWeight.bold))),
+                                  ],
+                                  onChanged: (val) {
+                                    if (val != null) {
+                                      setState(() {
+                                        _noticeLevel = val;
+                                        if (val >= 1 && val <= 3) {
+                                          _inspectionResult = 'Orange';
+                                        } else if (val == 4) {
+                                          _inspectionResult = 'Black';
+                                        } else if (_inspectionResult == 'Orange' || _inspectionResult == 'Black') {
+                                          _inspectionResult = 'Red';
+                                        }
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
                           ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() {
-                                _noticeLevel = val;
-                                if (val >= 1 && val <= 3) {
-                                  _inspectionResult = 'Orange';
-                                } else if (val == 4) {
-                                  _inspectionResult = 'Black';
-                                } else if (_inspectionResult == 'Orange' || _inspectionResult == 'Black') {
-                                  _inspectionResult = 'Red';
-                                }
-                              });
-                            }
-                          },
                         ),
                       ),
                     ),

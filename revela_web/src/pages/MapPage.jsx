@@ -1189,11 +1189,10 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
     }
   };
 
-  const isOrange = form.flagColor === "Orange";
-  const dotBg = isOrange ? "var(--color-danger)" : "var(--color-warning)";
-  const headerLabel = isOrange ? "Flag 1st/2nd Warning / Closure" : "Flag Suspected Business";
-  const btnBg = isOrange ? "var(--color-danger)" : "var(--color-warning)";
-  const btnLabel = loading ? "Saving…" : (isOrange ? "+ Flag 1st/2nd Warning / Closure" : "+ Flag Suspected Business");
+  const dotBg = "var(--color-warning)";
+  const headerLabel = "Flag Suspected Business";
+  const btnBg = "var(--color-warning)";
+  const btnLabel = loading ? "Saving…" : "+ Flag Suspected Business";
 
   return createPortal(
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} onClick={!loading ? onClose : undefined} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1257,20 +1256,6 @@ function YellowFlagModal({ token, barangays, draft, onPickLocation, onClose, onS
               />
             </div>
           ))}
-
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Flag Color / Type *
-            </label>
-            <select
-              style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--color-border)", borderRadius: 8, fontSize: 14, fontFamily: "var(--font-base)", color: "var(--color-ink)", background: "var(--color-input-bg)", cursor: "pointer" }}
-              value={form.flagColor}
-              onChange={e => set("flagColor", e.target.value)}
-            >
-              <option value="Yellow">Suspected Unregistered Business</option>
-              <option value="Orange">1st/2nd Warning / 3rd Notice Closure</option>
-            </select>
-          </div>
 
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--color-ink)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>

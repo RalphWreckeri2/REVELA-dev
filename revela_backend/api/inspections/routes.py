@@ -1,7 +1,8 @@
 import os
 import uuid
+import threading
 
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify, send_from_directory, current_app
 from flask_jwt_extended import get_jwt_identity
 from werkzeug.utils import secure_filename
 
@@ -165,16 +166,29 @@ def submit():
         return jsonify({"error": error}), 500
 
     has_photo = bool(data.get("photoURL"))
-    try:
-        notify_inspection_submitted(
-            report_id=result["reportID"],
-            log_id=data["logID"],
-            inspector_user_id=int(user_id),
-            inspection_result=data["inspectionResult"],
-            has_evidence_photo=has_photo,
-        )
-    except (TypeError, ValueError, KeyError) as exc:
-        print(f"notify_inspection_submitted skipped: {exc}")
+
+    # Fire notification in background so the inspector gets an immediate response
+    app_instance = current_app._get_current_object()
+    notif_args = {
+        "report_id": result["reportID"],
+        "log_id": data["logID"],
+        "inspector_user_id": int(user_id),
+        "inspection_result": data["inspectionResult"],
+        "has_evidence_photo": has_photo,
+    }
+
+    def _bg_notify(app, kwargs):
+        with app.app_context():
+            try:
+                notify_inspection_submitted(**kwargs)
+            except Exception as exc:
+                print(f"notify_inspection_submitted bg error: {exc}")
+
+    threading.Thread(
+        target=_bg_notify,
+        args=(app_instance, notif_args),
+        daemon=True,
+    ).start()
 
     return jsonify(result), 200
 

@@ -397,8 +397,9 @@ function VerifyModal({ report, token, onClose, onSuccess, isClosing }) {
 function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose, isClosing }) {
   const [enlargedImage, setEnlargedImage] = useState(null);
   
-  const flagMeta   = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
-  const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
+  const flagMeta    = FLAG_COLOR[report.flagColor]   ?? FLAG_COLOR.Red;
+  const resultMeta  = FLAG_COLOR[report.inspectionResult] ?? null;
+  const statusMeta  = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
 
   return createPortal(
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={s.backdrop} onClick={onClose}>
@@ -420,7 +421,7 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose, i
         <div style={{ border: "1px solid var(--color-border)", borderRadius: 12, marginBottom: 24, overflow: "hidden" }}>
           <div style={{ display: "flex" }}>
             <div style={{ flex: 1, padding: "12px 16px", borderRight: "1px solid var(--color-border)", borderBottom: report.inspectionResult || report.noticeLevel > 0 ? "1px solid var(--color-border)" : "none" }}>
-              <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Flag Color</span>
+              <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Current Flag Color</span>
               <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, color: flagMeta.text }}>
                 <Icon.Flag size={14} /> {report.flagColor}
               </span>
@@ -437,7 +438,7 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose, i
               {report.inspectionResult && (
                 <div style={{ flex: 1, padding: "12px 16px", borderRight: report.noticeLevel > 0 ? "1px solid var(--color-border)" : "none" }}>
                   <span style={{ display: "block", fontSize: 10, color: "var(--color-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Result</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, color: "var(--color-ink)" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, color: resultMeta?.text ?? "var(--color-ink)" }}>
                     {formatResult(report.inspectionResult)}
                   </span>
                 </div>

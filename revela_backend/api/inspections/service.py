@@ -251,25 +251,6 @@ def submit_inspection(log_id, user_id, inspection_result,
             report["reportID"],
         ))
 
-        # If the inspector selected "Closed / Abandoned" (Purple),
-        # automatically update the geospatial log flag color to 'Purple'.
-        if inspection_result == 'Purple':
-            cursor.execute("""
-                UPDATE geospatial_logs
-                SET flagColor = 'Purple'
-                WHERE logID = %s
-            """, (log_id,))
-
-            # Fetch detectedName and barangayID to propagate to official_registry
-            cursor.execute("SELECT detectedName, barangayID FROM geospatial_logs WHERE logID = %s", (log_id,))
-            geo_row = cursor.fetchone()
-            if geo_row and geo_row["detectedName"]:
-                cursor.execute("""
-                    UPDATE official_registry
-                    SET applicationStatus = 'Closed'
-                    WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
-                """, (geo_row["detectedName"], geo_row["barangayID"]))
-
         # Retrieve the current flagColor to return in the backend payload
         cursor.execute("SELECT flagColor FROM geospatial_logs WHERE logID = %s", (log_id,))
         geo_log = cursor.fetchone()
@@ -408,6 +389,18 @@ def verify_inspection(report_id):
                 noticeLevel = %s
             WHERE logID = %s
         """, (report["inspectionResult"], report["noticeLevel"], report["targetID"]))
+
+        # If verified result is Purple (Closed / Abandoned),
+        # also mark the official_registry entry as 'Closed'.
+        if report["inspectionResult"] == "Purple":
+            cursor.execute("SELECT detectedName, barangayID FROM geospatial_logs WHERE logID = %s", (report["targetID"],))
+            geo_row = cursor.fetchone()
+            if geo_row and geo_row["detectedName"]:
+                cursor.execute("""
+                    UPDATE official_registry
+                    SET applicationStatus = 'Closed'
+                    WHERE LOWER(businessName) = LOWER(%s) AND barangayID = %s
+                """, (geo_row["detectedName"], geo_row["barangayID"]))
 
         mysql.connection.commit()
         cursor.close()

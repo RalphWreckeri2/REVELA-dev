@@ -492,11 +492,19 @@ def _get_all_analytics_inner(F=None):
     # TIER 3 — PRESCRIPTIVE (WLC / OPS)
     # ══════════════════════════════════════════════════════════════════════════
 
+    # NOTE: Per the manuscript (§3.1 Prescriptive Analytics), only Red, Yellow,
+    # and Black flags are weighed in the WLC/OPS model. Green (compliant),
+    # Orange (under monitoring via warning letters), and Purple (permanently
+    # closed/abandoned) establishments are excluded from this computation, as
+    # they no longer represent active compliance risks requiring field
+    # deployment. flagged_count therefore counts ONLY Red/Yellow/Black logs,
+    # which drives the risk-score scaling term, the non-compliance rate, and
+    # the proportional inspector allocation in dispatch recommendations.
     cur.execute(f"""
         SELECT
             b.barangayID,
             b.barangayName,
-            COUNT(DISTINCT CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
+            COUNT(DISTINCT CASE WHEN g.flagColor IN ('Red', 'Yellow', 'Black') THEN g.logID END) AS flagged_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,
@@ -787,11 +795,13 @@ def get_ops_rankings_only():
         bplo_lng = config.get("bplo_lng", 121.1167)
         sector_scores = config.get("sectors", {})
 
+        # Same exclusion rule as the main analytics endpoint: only Red/Yellow/
+        # Black flags feed the OPS ranking shown in the Priority Dispatch Queue.
         cur.execute("""
             SELECT
                 b.barangayID,
                 b.barangayName,
-                COUNT(DISTINCT CASE WHEN g.flagColor != 'Green' THEN g.logID END) AS flagged_count,
+                COUNT(DISTINCT CASE WHEN g.flagColor IN ('Red', 'Yellow', 'Black') THEN g.logID END) AS flagged_count,
                 COUNT(DISTINCT CASE WHEN g.flagColor = 'Red'    THEN g.logID END) AS red_count,
                 COUNT(DISTINCT CASE WHEN g.flagColor = 'Yellow' THEN g.logID END) AS yellow_count,
                 COUNT(DISTINCT CASE WHEN g.flagColor = 'Black'  THEN g.logID END) AS black_count,

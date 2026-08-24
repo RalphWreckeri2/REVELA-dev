@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
@@ -15,10 +16,13 @@ enum LoginResult {
   canceled,
 }
 
-class AuthService {
+class AuthService extends ChangeNotifier {
   late final Dio _dio;
+  Map<String, dynamic>? _currentUser;
 
   Dio get dio => _dio;
+  Map<String, dynamic>? get currentUser => _currentUser;
+  bool get isAuthenticated => _currentUser != null;
 
   static String get apiBase => ApiConfig.apiBase;
 
@@ -112,7 +116,8 @@ class AuthService {
         if (response.data['access_token'] != null) {
           final user = response.data['user'];
 
-          final String userRole = user?['userRole']?.toString() ?? '';
+          final String userRole =
+              user?['userRole']?.toString() ?? user?['role']?.toString() ?? '';
           if (userRole != 'Inspector') {
             return LoginResult.notInspector;
           }
@@ -126,6 +131,12 @@ class AuthService {
 
           bool mustChange = false;
           if (user != null && user is Map) {
+            // Persist per-user profile under a user-scoped key so offline restore
+            // and multi-user flows won't collide.
+            final String userId =
+                (user['userID'] ?? user['userId'] ?? user['id'] ?? '')
+                    .toString();
+
             await _storage.write(
               key: 'user_fullName',
               value: user['fullName']?.toString() ?? '',
@@ -136,6 +147,28 @@ class AuthService {
               key: 'must_change_password',
               value: mustChange ? 'true' : 'false',
             );
+
+            // Cache the full user object (including token) under a user-scoped key.
+            if (userId.isNotEmpty) {
+              await _cacheUserProfile(
+                userId,
+                fullName: user['fullName']?.toString() ?? '',
+                role: userRole,
+                token: token,
+              );
+              await _persistAuthenticatedUserState(
+                userId,
+                user['fullName']?.toString() ?? '',
+                userRole,
+              );
+              _currentUser = {
+                'id': userId,
+                'fullName': user['fullName']?.toString() ?? '',
+                'role': userRole,
+                'token': token,
+              };
+              notifyListeners();
+            }
           }
 
           if (mustChange) {
@@ -207,19 +240,51 @@ class AuthService {
           if (userRole != 'Inspector') {
             return LoginResult.notInspector;
           }
+
+          // Persist profile locally, user-scoped
+          final String userId =
+              (profile['userID'] ?? profile['userId'] ?? profile['id'] ?? '')
+                  .toString();
           await _storage.write(
             key: 'user_fullName',
             value: profile['fullName']?.toString() ?? '',
           );
           await _storage.write(key: 'user_role', value: userRole);
-          
-          final tempEmail = await _storage.read(key: 'temp_email');
-          final tempPassword = await _storage.read(key: 'temp_password');
-          if (tempEmail != null && tempPassword != null) {
-            await _storage.write(key: 'saved_email', value: tempEmail);
-            await _storage.write(key: 'saved_password', value: tempPassword);
-            await _storage.delete(key: 'temp_email');
-            await _storage.delete(key: 'temp_password');
+
+          try {
+            if (userId.isNotEmpty) {
+              await _cacheUserProfile(
+                userId,
+                fullName: profile['fullName']?.toString() ?? '',
+                role: userRole,
+                token: token,
+              );
+              await _persistAuthenticatedUserState(
+                userId,
+                profile['fullName']?.toString() ?? '',
+                userRole,
+              );
+              _currentUser = {
+                'id': userId,
+                'fullName': profile['fullName']?.toString() ?? '',
+                'role': userRole,
+                'token': token,
+              };
+              notifyListeners();
+            }
+
+            // If the temporary credentials were saved for 2FA flow, persist them
+            // as saved credentials and associate biometric with this user.
+            final tempEmail = await _storage.read(key: 'temp_email');
+            final tempPassword = await _storage.read(key: 'temp_password');
+            if (tempEmail != null && tempPassword != null) {
+              await _storage.write(key: 'saved_email', value: tempEmail);
+              await _storage.write(key: 'saved_password', value: tempPassword);
+              await _storage.delete(key: 'temp_email');
+              await _storage.delete(key: 'temp_password');
+            }
+          } catch (e) {
+            debugPrint('Failed to cache profile after 2FA: $e');
           }
 
           if (profile['mustChangePassword'] == true) {
@@ -298,19 +363,200 @@ class AuthService {
       if (response.statusCode == 200) {
         await _storage.write(key: 'user_fullName', value: name);
         await _storage.write(key: 'saved_email', value: email);
-        return {'success': true, 'message': response.data['message'] ?? 'Profile updated successfully'};
+        return {
+          'success': true,
+          'message': response.data['message'] ?? 'Profile updated successfully',
+        };
       }
       return {
         'success': false,
-        'error': response.data?['error'] ?? 'Failed to update profile'
+        'error': response.data?['error'] ?? 'Failed to update profile',
       };
     } on DioException catch (e) {
-      debugPrint('updateProfile API failed or hung: ${e.message}. Mocking success.');
-      // Since the exact endpoint wasn't confirmed, we'll mock the success locally 
+      debugPrint(
+        'updateProfile API failed or hung: ${e.message}. Mocking success.',
+      );
+      // Since the exact endpoint wasn't confirmed, we'll mock the success locally
       // so the app UI updates immediately without freezing.
       await _storage.write(key: 'user_fullName', value: name);
       await _storage.write(key: 'saved_email', value: email);
       return {'success': true, 'message': 'Profile updated locally'};
+    }
+  }
+
+  // ----- Local profile helpers for offline-first, account-scoped storage -----
+  String _profileKey(String userId) => 'user_profile_$userId';
+
+  Future<Map<String, dynamic>?> getCachedUserProfile(String userId) async {
+    if (userId.isEmpty) return null;
+    final raw = await _storage.read(key: _profileKey(userId));
+    if (raw == null) return null;
+    try {
+      if (raw.trim().startsWith('{')) {
+        try {
+          return Map<String, dynamic>.from(jsonDecode(raw));
+        } catch (e) {
+          debugPrint('Cached profile JSON decode failed for $userId: $e');
+        }
+      }
+
+      // Fallback: simple parsing of legacy `'{key: value, ...}'` strings.
+      final cleaned = raw
+          .trim()
+          .replaceAll(RegExp(r'^[{]'), '')
+          .replaceAll(RegExp(r'[}]$'), '');
+      final parts = cleaned.split(',');
+      final m = <String, dynamic>{};
+      for (var p in parts) {
+        final idx = p.indexOf(':');
+        if (idx <= 0) continue;
+        final k = p
+            .substring(0, idx)
+            .trim()
+            .replaceAll("'", '')
+            .replaceAll('"', '');
+        var v = p.substring(idx + 1).trim();
+        v = v.replaceAll("'", '');
+        v = v.replaceAll('"', '');
+        m[k] = v;
+      }
+      return m;
+    } catch (e) {
+      debugPrint('Failed to parse cached profile: $e');
+      return null;
+    }
+  }
+
+  /// Returns the currently authenticated user id persisted in secure storage (if any).
+  Future<String?> getAuthenticatedUserId() async {
+    return await _storage.read(key: 'authenticated_user_id');
+  }
+
+  /// Returns the cached profile associated with the active biometric credential (if any).
+  Future<Map<String, dynamic>?> getActiveBiometricProfile() async {
+    final uid = await _storage.read(key: 'active_biometric_user_id');
+    if (uid != null && uid.isNotEmpty) {
+      final profile = await getCachedUserProfile(uid);
+      if (profile != null) return profile;
+    }
+
+    final profiles = await listCachedProfiles();
+    if (profiles.isNotEmpty) {
+      debugPrint(
+        'getActiveBiometricProfile: no active biometric user id; falling back to first cached profile',
+      );
+      return profiles.first;
+    }
+    return null;
+  }
+
+  /// Lists all locally cached user profiles (keys starting with `user_profile_`).
+  Future<List<Map<String, dynamic>>> listCachedProfiles() async {
+    final all = await _storage.readAll();
+    final profiles = <Map<String, dynamic>>[];
+    for (final entry in all.entries) {
+      if (entry.key.startsWith('user_profile_')) {
+        final id = entry.key.substring('user_profile_'.length);
+        final p = await getCachedUserProfile(id);
+        if (p != null) profiles.add(p);
+      }
+    }
+    return profiles;
+  }
+
+  /// Verifies a stored PIN for a given user id. PINs must be previously saved
+  /// under key `user_pin_<userId>`. Returns true when PIN matches stored value.
+  Future<bool> verifyPin(String userId, String pin) async {
+    if (userId.isEmpty) return false;
+    final key = 'user_pin_\$userId';
+    final stored = await _storage.read(key: key);
+    if (stored == null) return false;
+    return stored == pin;
+  }
+
+  /// Hydrate local runtime storage for [userId] using cached profile data.
+  /// Returns true if hydration succeeded (profile found and values written).
+  Future<bool> hydrateLocalSessionForUserId(String userId) async {
+    if (userId.isEmpty) return false;
+    final profile = await getCachedUserProfile(userId);
+    if (profile == null) return false;
+    try {
+      await _storage.write(
+        key: 'user_fullName',
+        value: profile['fullName']?.toString() ?? '',
+      );
+      await _storage.write(
+        key: 'user_role',
+        value: profile['role']?.toString() ?? '',
+      );
+      await _storage.write(key: 'authenticated_user_id', value: userId);
+      await _storage.write(key: 'active_biometric_user_id', value: userId);
+      // Also persist a last_logged_in_user_id to help fallback restores
+      await _storage.write(key: 'last_logged_in_user_id', value: userId);
+      _currentUser = profile;
+      notifyListeners();
+      debugPrint('hydrateLocalSessionForUserId: hydrated user $userId');
+      if (profile.containsKey('token') &&
+          (profile['token']?.toString().isNotEmpty ?? false)) {
+        await _storage.write(
+          key: 'jwt_token',
+          value: profile['token']?.toString(),
+        );
+      }
+      return true;
+    } catch (e) {
+      debugPrint('hydrateLocalSessionForUserId failed: $e');
+      return false;
+    }
+  }
+
+  /// Restores an account-scoped offline session using cached biometric profile data.
+  /// Returns true when a user profile was successfully hydrated from local storage.
+  Future<bool> restoreOfflineBiometricUser() async {
+    try {
+      String? activeUserId = await _storage.read(
+        key: 'active_biometric_user_id',
+      );
+      if (activeUserId == null || activeUserId.isEmpty) {
+        activeUserId =
+            await _storage.read(key: 'authenticated_user_id') ??
+            await _storage.read(key: 'last_logged_in_user_id');
+        debugPrint(
+          'restoreOfflineBiometricUser: active_biometric_user_id missing, fallback to $activeUserId',
+        );
+      }
+
+      if (activeUserId != null && activeUserId.isNotEmpty) {
+        final profile = await getCachedUserProfile(activeUserId);
+        if (profile != null) {
+          return await hydrateLocalSessionForUserId(activeUserId);
+        }
+      }
+
+      final cachedProfiles = await listCachedProfiles();
+      if (cachedProfiles.isNotEmpty) {
+        final fallbackProfile = cachedProfiles.first;
+        final fallbackUserId =
+            (fallbackProfile['id'] ??
+                    fallbackProfile['userID'] ??
+                    fallbackProfile['userId'] ??
+                    '')
+                .toString();
+        if (fallbackUserId.isNotEmpty) {
+          debugPrint(
+            'restoreOfflineBiometricUser: falling back to any cached profile id $fallbackUserId',
+          );
+          return await hydrateLocalSessionForUserId(fallbackUserId);
+        }
+      }
+
+      debugPrint(
+        'restoreOfflineBiometricUser: no cached profile found for offline restore',
+      );
+      return false;
+    } catch (e) {
+      debugPrint('Offline biometric restore failed: $e');
+      return false;
     }
   }
 
@@ -350,23 +596,41 @@ class AuthService {
 
   Future<LoginResult> biometricLogin() async {
     try {
-      final email = await _storage.read(key: 'saved_email');
-      final password = await _storage.read(key: 'saved_password');
-      if (email == null || password == null) return LoginResult.failed;
-
       final canCheck = await canUseBiometrics();
       if (!canCheck) return LoginResult.failed;
 
+      final reachable = await ApiConfig.ensureReachable();
+      final isOffline = reachable == null;
+      final localizedReason = isOffline
+          ? 'Authenticate to unlock your account (offline)'
+          : 'Please authenticate to log in';
+
       final didAuthenticate = await _localAuth.authenticate(
-        localizedReason: 'Please authenticate to log in',
+        localizedReason: localizedReason,
         persistAcrossBackgrounding: true,
         biometricOnly: false,
       );
 
-      if (didAuthenticate) {
-        return await loginWithRole(email, password);
+      if (!didAuthenticate) return LoginResult.canceled;
+
+      if (isOffline) {
+        final restored = await restoreOfflineBiometricUser();
+        return restored ? LoginResult.success : LoginResult.networkError;
       }
-      return LoginResult.canceled;
+
+      // When online, prefer local restore if a cached biometric profile exists.
+      final activeUserId = await _storage.read(key: 'active_biometric_user_id');
+      if (activeUserId != null && activeUserId.isNotEmpty) {
+        final hydrated = await hydrateLocalSessionForUserId(activeUserId);
+        if (hydrated) return LoginResult.success;
+      }
+
+      // No cached local profile available, continue with saved credentials.
+      final email = await _storage.read(key: 'saved_email');
+      final password = await _storage.read(key: 'saved_password');
+      if (email == null || password == null) return LoginResult.failed;
+
+      return await loginWithRole(email, password);
     } catch (e) {
       debugPrint('Biometric error: $e');
       return LoginResult.canceled;
@@ -429,6 +693,60 @@ class AuthService {
     }
   }
 
+  Future<bool> authenticateOfflineBiometric() async {
+    final canCheck = await canUseBiometrics();
+    if (!canCheck) return false;
+
+    try {
+      final didAuthenticate = await _localAuth.authenticate(
+        localizedReason: 'Authenticate to unlock your account (offline)',
+        persistAcrossBackgrounding: true,
+        biometricOnly: false,
+      );
+      return didAuthenticate;
+    } catch (e) {
+      debugPrint('Offline biometric authentication failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> _cacheUserProfile(
+    String userId, {
+    required String fullName,
+    required String role,
+    required String token,
+  }) async {
+    final profile = {
+      'id': userId,
+      'fullName': fullName,
+      'role': role,
+      'token': token,
+    };
+
+    try {
+      await _storage.write(
+        key: _profileKey(userId),
+        value: jsonEncode(profile),
+      );
+      debugPrint('CACHE SUCCESS: Saved profile for user: $userId');
+    } catch (e) {
+      debugPrint('CACHE FAILED: Could not save profile for user $userId: $e');
+    }
+  }
+
+  Future<void> _persistAuthenticatedUserState(
+    String userId,
+    String fullName,
+    String role,
+  ) async {
+    if (userId.isEmpty) return;
+    await _storage.write(key: 'authenticated_user_id', value: userId);
+    await _storage.write(key: 'active_biometric_user_id', value: userId);
+    await _storage.write(key: 'user_fullName', value: fullName);
+    await _storage.write(key: 'user_role', value: role);
+    await _storage.write(key: 'last_logged_in_user_id', value: userId);
+  }
+
   /// Clears only the saved password, typically after a biometric login fails.
   Future<void> clearSavedPassword() async {
     await _storage.delete(key: 'saved_password');
@@ -449,6 +767,8 @@ class AuthService {
 
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
+    _currentUser = null;
+    notifyListeners();
 
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),

@@ -220,7 +220,10 @@ function MiniMapWidget({ flags, isDark, onOpenMap, isLoaded, loadError }) {
         {loadError ? (
           <div style={miniMapFallback}>
             <span>⚠ Google Maps failed to load.</span>
-            <small>Check VITE_GOOGLE_MAPS_API_KEY in your .env</small>
+            <small>{googleMapsApiKey
+              ? `Google Maps error: ${loadError?.message || String(loadError)}`
+              : "No VITE_GOOGLE_MAPS_API_KEY configured in .env"
+            }</small>
           </div>
         ) : !isLoaded ? (
           <div style={miniMapFallback}>Loading map…</div>

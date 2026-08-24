@@ -30,9 +30,13 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
 
   final TextEditingController _ownerNameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _natureOfBusinessController = TextEditingController();
-  final TextEditingController _signatoryNameController = TextEditingController(text: 'MIAN S. CASTIILO');
-  final TextEditingController _signatoryPositionController = TextEditingController(text: 'Licensing Officer II');
+  final TextEditingController _natureOfBusinessController =
+      TextEditingController();
+  final TextEditingController _signatoryNameController = TextEditingController(
+    text: 'MIAN S. CASTIILO',
+  );
+  final TextEditingController _signatoryPositionController =
+      TextEditingController(text: 'Licensing Officer II');
 
   @override
   void dispose() {
@@ -47,8 +51,18 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
   String get _formattedDate {
     final now = DateTime.now();
     const months = [
-      'Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo',
-      'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre'
+      'Enero',
+      'Pebrero',
+      'Marso',
+      'Abril',
+      'Mayo',
+      'Hunyo',
+      'Hulyo',
+      'Agosto',
+      'Setyembre',
+      'Oktubre',
+      'Nobyembre',
+      'Disyembre',
     ];
     return '${months[now.month - 1]} ${now.day}, ${now.year}';
   }
@@ -83,7 +97,10 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
 
   Future<void> _pickSignature() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800);
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+    );
     if (pickedFile != null) {
       final bytes = await pickedFile.readAsBytes();
       final base64String = base64Encode(bytes);
@@ -115,7 +132,8 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
           onSelected: (task) {
             setState(() {
               _selectedTask = task;
-              _addressController.text = 'Brgy. ${task.barangayName}, Mataasnakahoy Batangas';
+              _addressController.text =
+                  'Brgy. ${task.barangayName}, Mataasnakahoy Batangas';
             });
           },
         );
@@ -129,7 +147,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
       final active = await _inspectionService.getMyTasks();
       final history = await _inspectionService.getMyReportHistory();
       final combined = [...active, ...history];
-      
+
       final uniqueTasks = <int, InspectionTask>{};
       for (final t in combined) {
         uniqueTasks[t.reportID] = t;
@@ -140,10 +158,10 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
         setState(() {
           _allTasks = deduped;
           _selectedTask =
-              widget.initialTask ??
-              (deduped.isNotEmpty ? deduped.first : null);
+              widget.initialTask ?? (deduped.isNotEmpty ? deduped.first : null);
           if (_selectedTask != null) {
-            _addressController.text = 'Brgy. ${_selectedTask!.barangayName}, Mataasnakahoy Batangas';
+            _addressController.text =
+                'Brgy. ${_selectedTask!.barangayName}, Mataasnakahoy Batangas';
           }
           _isLoading = false;
         });
@@ -309,7 +327,9 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                       ),
                       pw.SizedBox(height: 6),
                       pw.Text(
-                        _ownerNameController.text.trim().isEmpty ? '______________________' : _ownerNameController.text.trim(),
+                        _ownerNameController.text.trim().isEmpty
+                            ? '______________________'
+                            : _ownerNameController.text.trim(),
                         style: pw.TextStyle(
                           fontSize: 10,
                           fontWeight: pw.FontWeight.bold,
@@ -317,7 +337,9 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                       ),
                       pw.SizedBox(height: 2),
                       pw.Text(
-                        _addressController.text.trim().isEmpty ? '______________________' : _addressController.text.trim(),
+                        _addressController.text.trim().isEmpty
+                            ? '______________________'
+                            : _addressController.text.trim(),
                         style: pw.TextStyle(fontSize: 10),
                       ),
                     ],
@@ -337,14 +359,20 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                   ),
                 ),
                 pw.SizedBox(height: 12),
-                pw.Text('Maraming salamat po.', style: pw.TextStyle(fontSize: 10)),
+                pw.Text(
+                  'Maraming salamat po.',
+                  style: pw.TextStyle(fontSize: 10),
+                ),
                 pw.SizedBox(height: 12),
                 pw.Align(
                   alignment: pw.Alignment.centerRight,
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
-                      pw.Text('Lubos na gumagalang,', style: pw.TextStyle(fontSize: 10)),
+                      pw.Text(
+                        'Lubos na gumagalang,',
+                        style: pw.TextStyle(fontSize: 10),
+                      ),
                       pw.SizedBox(height: 24),
                       pw.Stack(
                         alignment: pw.Alignment.bottomCenter,
@@ -354,14 +382,21 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                               bottom: 12,
                               child: pw.Container(
                                 height: 60,
-                                child: pw.Image(pw.MemoryImage(base64Decode(_signatureBase64!)), fit: pw.BoxFit.contain),
+                                child: pw.Image(
+                                  pw.MemoryImage(
+                                    base64Decode(_signatureBase64!),
+                                  ),
+                                  fit: pw.BoxFit.contain,
+                                ),
                               ),
                             ),
                           pw.Column(
                             crossAxisAlignment: pw.CrossAxisAlignment.center,
                             children: [
                               pw.Text(
-                                _signatoryNameController.text.trim().isEmpty ? '______________________' : _signatoryNameController.text.trim(),
+                                _signatoryNameController.text.trim().isEmpty
+                                    ? '______________________'
+                                    : _signatoryNameController.text.trim(),
                                 style: pw.TextStyle(
                                   fontSize: 10,
                                   fontWeight: pw.FontWeight.bold,
@@ -369,7 +404,9 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                               ),
                               pw.SizedBox(height: 2),
                               pw.Text(
-                                _signatoryPositionController.text.trim().isEmpty ? '______________________' : _signatoryPositionController.text.trim(),
+                                _signatoryPositionController.text.trim().isEmpty
+                                    ? '______________________'
+                                    : _signatoryPositionController.text.trim(),
                                 style: pw.TextStyle(
                                   fontSize: 10,
                                   fontWeight: pw.FontWeight.normal,
@@ -394,7 +431,12 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
 
   void _handlePrint() async {
     if (_selectedTask == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an establishment first.'), backgroundColor: Colors.redAccent));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an establishment first.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
       return;
     }
     await Printing.layoutPdf(
@@ -405,7 +447,12 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
 
   void _handleExportPdf() async {
     if (_selectedTask == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an establishment first.'), backgroundColor: Colors.redAccent));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an establishment first.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
       return;
     }
     try {
@@ -478,7 +525,9 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                                     ? '${_selectedTask!.detectedName} (${_selectedTask!.barangayName})'
                                     : 'Tap to search...',
                                 style: TextStyle(
-                                  color: _selectedTask != null ? context.adaptiveTextDark : context.adaptiveTextMid,
+                                  color: _selectedTask != null
+                                      ? context.adaptiveTextDark
+                                      : context.adaptiveTextMid,
                                   fontSize: 16,
                                 ),
                                 overflow: TextOverflow.ellipsis,
@@ -488,23 +537,38 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                           if (_selectedTask != null) ...[
                             SizedBox(height: 12),
                             Container(
-                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
-                                color: _selectedTask!.currentNoticeLevel == 0 ? Colors.blue.withOpacity(0.1) : 
-                                       _selectedTask!.currentNoticeLevel == 1 ? Colors.orange.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                                color: _selectedTask!.currentNoticeLevel == 0
+                                    ? Colors.blue.withOpacity(0.1)
+                                    : _selectedTask!.currentNoticeLevel == 1
+                                    ? Colors.orange.withOpacity(0.1)
+                                    : Colors.red.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: _selectedTask!.currentNoticeLevel == 0 ? Colors.blue : 
-                                         _selectedTask!.currentNoticeLevel == 1 ? Colors.orange : Colors.red,
+                                  color: _selectedTask!.currentNoticeLevel == 0
+                                      ? Colors.blue
+                                      : _selectedTask!.currentNoticeLevel == 1
+                                      ? Colors.orange
+                                      : Colors.red,
                                 ),
                               ),
                               child: Text(
-                                _selectedTask!.currentNoticeLevel == 0 ? 'Generating: FIRST NOTICE' :
-                                _selectedTask!.currentNoticeLevel == 1 ? 'Generating: SECOND NOTICE' : 'Generating: FINAL NOTICE (CLOSURE ORDER)',
+                                _selectedTask!.currentNoticeLevel == 0
+                                    ? 'Generating: FIRST NOTICE'
+                                    : _selectedTask!.currentNoticeLevel == 1
+                                    ? 'Generating: SECOND NOTICE'
+                                    : 'Generating: FINAL NOTICE (CLOSURE ORDER)',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: _selectedTask!.currentNoticeLevel == 0 ? Colors.blue : 
-                                         _selectedTask!.currentNoticeLevel == 1 ? Colors.orange : Colors.red,
+                                  color: _selectedTask!.currentNoticeLevel == 0
+                                      ? Colors.blue
+                                      : _selectedTask!.currentNoticeLevel == 1
+                                      ? Colors.orange
+                                      : Colors.red,
                                   fontSize: 12,
                                 ),
                               ),
@@ -515,7 +579,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                     ),
                   ),
                   SizedBox(height: 16),
-                  
+
                   // ── Edit Notice Details Card ──
                   Card(
                     shape: RoundedRectangleBorder(
@@ -539,9 +603,15 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                                 ),
                               ),
                               IconButton(
-                                icon: Icon(_showEditForm ? Icons.expand_less : Icons.edit),
+                                icon: Icon(
+                                  _showEditForm
+                                      ? Icons.expand_less
+                                      : Icons.edit,
+                                ),
                                 onPressed: () {
-                                  setState(() => _showEditForm = !_showEditForm);
+                                  setState(
+                                    () => _showEditForm = !_showEditForm,
+                                  );
                                 },
                               ),
                             ],
@@ -550,7 +620,10 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             SizedBox(height: 16),
                             TextField(
                               controller: _ownerNameController,
-                              decoration: InputDecoration(labelText: 'Owner/Representative Name', hintText: 'Leave blank for line'),
+                              decoration: InputDecoration(
+                                labelText: 'Owner/Representative Name',
+                                hintText: 'Leave blank for line',
+                              ),
                               onChanged: (_) => setState(() {}),
                             ),
                             SizedBox(height: 12),
@@ -562,43 +635,76 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                             SizedBox(height: 12),
                             TextField(
                               controller: _natureOfBusinessController,
-                              decoration: InputDecoration(labelText: 'Nature of Business', hintText: 'Leave blank for (NATURE OF BUSINESS)'),
+                              decoration: InputDecoration(
+                                labelText: 'Nature of Business',
+                                hintText:
+                                    'Leave blank for (NATURE OF BUSINESS)',
+                              ),
                               onChanged: (_) => setState(() {}),
                             ),
                             SizedBox(height: 12),
                             TextField(
                               controller: _signatoryNameController,
-                              decoration: InputDecoration(labelText: 'Signatory Name'),
+                              decoration: InputDecoration(
+                                labelText: 'Signatory Name',
+                              ),
                               onChanged: (_) => setState(() {}),
                             ),
                             SizedBox(height: 12),
                             TextField(
                               controller: _signatoryPositionController,
-                              decoration: InputDecoration(labelText: 'Signatory Position'),
+                              decoration: InputDecoration(
+                                labelText: 'Signatory Position',
+                              ),
                               onChanged: (_) => setState(() {}),
                             ),
                             SizedBox(height: 16),
-                            Text('E-Signature', style: TextStyle(fontWeight: FontWeight.bold, color: context.adaptiveTextDark)),
+                            Text(
+                              'E-Signature',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: context.adaptiveTextDark,
+                              ),
+                            ),
                             SizedBox(height: 4),
-                            Text('(Please upload an image with a transparent background or no background for best results, to prevent covering the name text)', style: TextStyle(fontSize: 12, color: context.adaptiveTextMid)),
+                            Text(
+                              '(Please upload an image with a transparent background or no background for best results, to prevent covering the name text)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.adaptiveTextMid,
+                              ),
+                            ),
                             SizedBox(height: 8),
                             _signatureBase64 != null
                                 ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Container(
                                         height: 60,
                                         padding: const EdgeInsets.all(4),
                                         decoration: BoxDecoration(
-                                          border: Border.all(color: context.adaptiveBorder),
-                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: context.adaptiveBorder,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
-                                        child: Image.memory(base64Decode(_signatureBase64!)),
+                                        child: Image.memory(
+                                          base64Decode(_signatureBase64!),
+                                        ),
                                       ),
                                       TextButton.icon(
                                         onPressed: _removeSignature,
-                                        icon: Icon(Icons.delete, color: Colors.red),
-                                        label: Text('Remove Signature', style: TextStyle(color: Colors.red)),
+                                        icon: Icon(
+                                          Icons.delete,
+                                          color: Colors.red,
+                                        ),
+                                        label: Text(
+                                          'Remove Signature',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
                                       ),
                                     ],
                                   )
@@ -626,258 +732,291 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                   ),
                   SizedBox(height: 10),
                   AspectRatio(
-                      aspectRatio: 8.5 / 11,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: context.adaptiveSurface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: context.adaptiveBorder,
-                        width: 1.5,
+                    aspectRatio: 8.5 / 11,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: context.adaptiveSurface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: context.adaptiveBorder,
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Header Seals & Title
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
+                      child: SingleChildScrollView(
+                        child: Column(
                           children: [
-                            Image.asset(
-                              'assets/images/seal.png',
-                              width: 42,
-                              height: 42,
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text(
-                                    'Republika ng Pilipinas',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Lalawigan ng Batangas',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Bayan ng Mataasnakahoy',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                                  ),
-                                  Text(
-                                    'TANGGAPAN NG PUNUMBAYAN',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Telepono #: 461-2374',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.normal,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Email: licensingoffice2374@yahoo.com',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.normal,
-                                      color: Colors.blue,
-                                      decoration: TextDecoration.underline,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Image.asset(
-                              'assets/images/bagongpilipinas.png',
-                              width: 42,
-                              height: 42,
-                            ),
-                          ],
-                        ),
-                        Divider(height: 20, thickness: 1.2),
-
-                        Text(
-                          'SEKSYON NG PANGKALAKALANG KAPAHINTULUTAN AT LISENSYA',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            _formattedDate,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 12),
-
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            // Header Seals & Title
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Text(
-                                  'To the Owner/Representative:',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: context.adaptiveTextDark,
-                                  ),
+                                Image.asset(
+                                  'assets/images/seal.png',
+                                  width: 42,
+                                  height: 42,
                                 ),
-                                SizedBox(height: 6),
-                                Text(
-                                  _ownerNameController.text.trim().isEmpty ? '______________________' : _ownerNameController.text.trim(),
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: context.adaptiveTextDark,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  _addressController.text.trim().isEmpty ? '______________________' : _addressController.text.trim(),
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    color: context.adaptiveTextMid,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 8),
-
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: context.adaptiveBackground,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            _certificationText,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: context.adaptiveTextMid,
-                              height: 1.35,
-                            ),
-                            textAlign: TextAlign.justify,
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text('Maraming salamat po.', style: TextStyle(fontSize: 10, color: context.adaptiveTextMid)),
-                        ),
-                        SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text('Lubos na gumagalang,', style: TextStyle(fontSize: 10, color: context.adaptiveTextMid)),
-                              SizedBox(height: 24),
-                              Stack(
-                                alignment: Alignment.bottomCenter,
-                                clipBehavior: Clip.none,
-                                children: [
-                                  if (_signatureBase64 != null)
-                                    Positioned(
-                                      bottom: 12,
-                                      child: Container(
-                                        height: 60,
-                                        child: Image.memory(base64Decode(_signatureBase64!), fit: BoxFit.contain),
-                                      ),
-                                    ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                Expanded(
+                                  child: Column(
                                     children: [
                                       Text(
-                                        _signatoryNameController.text.trim().isEmpty ? '______________________' : _signatoryNameController.text.trim(),
+                                        'Republika ng Pilipinas',
+                                        textAlign: TextAlign.center,
                                         style: TextStyle(
-                                          fontSize: 10,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.normal,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Lalawigan ng Batangas',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.normal,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Bayan ng Mataasnakahoy',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.normal,
+                                        ),
+                                      ),
+                                      Text(
+                                        'TANGGAPAN NG PUNUMBAYAN',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 9,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      SizedBox(height: 2),
                                       Text(
-                                        _signatoryPositionController.text.trim().isEmpty ? '______________________' : _signatoryPositionController.text.trim(),
+                                        'Telepono #: 461-2374',
+                                        textAlign: TextAlign.center,
                                         style: TextStyle(
-                                          fontSize: 10,
+                                          fontSize: 9,
                                           fontWeight: FontWeight.normal,
                                         ),
+                                      ),
+                                      Text(
+                                        'Email: licensingoffice2374@yahoo.com',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.normal,
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Image.asset(
+                                  'assets/images/bagongpilipinas.png',
+                                  width: 42,
+                                  height: 42,
+                                ),
+                              ],
+                            ),
+                            Divider(height: 20, thickness: 1.2),
+
+                            Text(
+                              'SEKSYON NG PANGKALAKALANG KAPAHINTULUTAN AT LISENSYA',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                _formattedDate,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 12),
+
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'To the Owner/Representative:',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.adaptiveTextDark,
+                                      ),
+                                    ),
+                                    SizedBox(height: 6),
+                                    Text(
+                                      _ownerNameController.text.trim().isEmpty
+                                          ? '______________________'
+                                          : _ownerNameController.text.trim(),
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: context.adaptiveTextDark,
+                                      ),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      _addressController.text.trim().isEmpty
+                                          ? '______________________'
+                                          : _addressController.text.trim(),
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        color: context.adaptiveTextMid,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 8),
+
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: context.adaptiveBackground,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _certificationText,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: context.adaptiveTextMid,
+                                  height: 1.35,
+                                ),
+                                textAlign: TextAlign.justify,
+                              ),
+                            ),
+                            SizedBox(height: 12),
+
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Maraming salamat po.',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: context.adaptiveTextMid,
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Lubos na gumagalang,',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: context.adaptiveTextMid,
+                                    ),
+                                  ),
+                                  SizedBox(height: 24),
+                                  Stack(
+                                    alignment: Alignment.bottomCenter,
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      if (_signatureBase64 != null)
+                                        Positioned(
+                                          bottom: 12,
+                                          child: Container(
+                                            height: 60,
+                                            child: Image.memory(
+                                              base64Decode(_signatureBase64!),
+                                              fit: BoxFit.contain,
+                                            ),
+                                          ),
+                                        ),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            _signatoryNameController.text
+                                                    .trim()
+                                                    .isEmpty
+                                                ? '______________________'
+                                                : _signatoryNameController.text
+                                                      .trim(),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          SizedBox(height: 2),
+                                          Text(
+                                            _signatoryPositionController.text
+                                                    .trim()
+                                                    .isEmpty
+                                                ? '______________________'
+                                                : _signatoryPositionController
+                                                      .text
+                                                      .trim(),
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.normal,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
 
-                        // Document branding footer
-                        const Spacer(),
-                        Container(
-                          height: 1,
-                          color: Colors.grey.shade300,
+                            // Keep the footer after the signature without forcing
+                            // the fixed-ratio preview column beyond its bounds.
+                            const SizedBox(height: 24),
+                            Container(height: 1, color: Colors.grey.shade300),
+                            SizedBox(height: 8),
+                            Text(
+                              'Health | Opportunity | Peace & Order | Education & Economy',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade900,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'L O V E M A T A A S N A K A H O Y',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.montserrat(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade900,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ],
                         ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Health | Opportunity | Peace & Order | Education & Economy',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade900,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'L O V E M A T A A S N A K A H O Y',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.montserrat(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade900,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
                   ),
                   SizedBox(height: 24),
 
@@ -886,37 +1025,37 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                     children: [
                       Expanded(
                         child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.darkGreen,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.darkGreen,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            icon: Icon(Icons.print_rounded),
-                            label: Text('Print Notice'),
-                            onPressed: _handlePrint,
                           ),
+                          icon: Icon(Icons.print_rounded),
+                          label: Text('Print Notice'),
+                          onPressed: _handlePrint,
+                        ),
                       ),
                       SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: context.adaptivePrimary,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: BorderSide(
-                                color: context.adaptivePrimary,
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: context.adaptivePrimary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(
+                              color: context.adaptivePrimary,
+                              width: 1.5,
                             ),
-                            icon: Icon(Icons.picture_as_pdf),
-                            label: Text('Export PDF Notice'),
-                            onPressed: _handleExportPdf,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
+                          icon: Icon(Icons.picture_as_pdf),
+                          label: Text('Export PDF Notice'),
+                          onPressed: _handleExportPdf,
+                        ),
                       ),
                     ],
                   ),
@@ -924,7 +1063,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                 ],
               ),
             ),
-          );
+    );
   }
 }
 
@@ -946,7 +1085,7 @@ class _SearchModalState extends State<_SearchModal> {
     final filtered = widget.tasks.where((t) {
       final q = _query.toLowerCase();
       return t.detectedName.toLowerCase().contains(q) ||
-             t.barangayName.toLowerCase().contains(q);
+          t.barangayName.toLowerCase().contains(q);
     }).toList();
 
     return Container(
@@ -979,7 +1118,10 @@ class _SearchModalState extends State<_SearchModal> {
                 final t = filtered[index];
                 return ListTile(
                   leading: const Icon(Icons.storefront),
-                  title: Text(t.detectedName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(
+                    t.detectedName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(t.barangayName),
                   onTap: () {
                     widget.onSelected(t);

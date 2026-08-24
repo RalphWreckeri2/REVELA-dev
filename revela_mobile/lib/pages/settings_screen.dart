@@ -235,8 +235,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       await SharedPreferences.getInstance();
 
                                   if (value) {
+                                    final authService = AuthService();
+                                    final hasCreds = await authService
+                                        .hasSavedCredentials();
+                                    if (!hasCreds) {
+                                      _showSnackBar(
+                                        'Cannot enable biometric login: no saved credentials found. Please log in at least once with your email and password first.',
+                                        isError: true,
+                                      );
+                                      return;
+                                    }
+
+                                    final canUse = await authService
+                                        .canUseBiometrics();
+                                    if (!canUse) {
+                                      _showSnackBar(
+                                        'Cannot enable biometric login: this device does not support biometrics or none are enrolled.',
+                                        isError: true,
+                                      );
+                                      return;
+                                    }
+
                                     // User is trying to enable biometrics
-                                    final authSuccess = await AuthService()
+                                    final authSuccess = await authService
                                         .authenticateForSetup();
                                     if (!authSuccess) {
                                       // If they cancel or fail, don't enable it
@@ -401,6 +422,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           description:
                               'Access app instructions, view terms & conditions, and sign out.',
                           targetPadding: const EdgeInsets.all(4),
+                          // This is the final item in the settings tour on
+                          // compact devices, so keep it in the viewport.
+                          enableAutoScroll: true,
+                          scrollAlignment: 0.2,
                           child: Column(
                             children: [
                               _SettingsCard(

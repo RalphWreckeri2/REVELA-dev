@@ -917,7 +917,10 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
       <div style={styles.mapCanvas}>
         <div style={styles.mapFallback}>
           <strong>Google Maps failed to load.</strong>
-          <span>Set VITE_GOOGLE_MAPS_API_KEY in your .env and restart.</span>
+          <span>{loadError?.message ? `Google Maps error: ${loadError.message}` : "Set VITE_GOOGLE_MAPS_API_KEY in your .env and restart."}</span>
+          <small style={{ marginTop: 6, color: "var(--color-muted)", fontSize: 12 }}>
+            Check browser console for Google Maps API diagnostics.
+          </small>
         </div>
       </div>
     );

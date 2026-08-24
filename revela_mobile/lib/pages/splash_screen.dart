@@ -87,66 +87,78 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1B5E20), // Dark green background
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Spacer(),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
 
-            // Logo Container
-            Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                color: const Color(
-                  0xFF388E3C,
-                ).withValues(alpha: 0.5), // Lighter green glow
-                borderRadius: BorderRadius.circular(28),
+                    // Logo Container
+                    Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: const Color(
+                          0xFF388E3C,
+                        ).withValues(alpha: 0.5), // Lighter green glow
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: Center(
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          height: 65,
+                        ),
+                      ),
+                    ).animate().scale(
+                      delay: 200.ms,
+                      duration: 600.ms,
+                      curve: Curves.easeOutBack,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // App Name
+                    const Text(
+                      'REVELA',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 4,
+                      ),
+                    ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2),
+
+                    const SizedBox(height: 8),
+
+                    // Subtitle
+                    Text(
+                      'Field Inspection Platform',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        letterSpacing: 1.5,
+                      ),
+                    ).animate().fadeIn(delay: 700.ms),
+
+                    const Spacer(),
+
+                    // Loading Spinner
+                    const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ).animate().fadeIn(delay: 1000.ms),
+
+                    const SizedBox(height: 60),
+                  ],
+                ),
               ),
-              child: Center(
-                child: Image.asset('assets/images/logo.png', height: 65),
-              ),
-            ).animate().scale(
-              delay: 200.ms,
-              duration: 600.ms,
-              curve: Curves.easeOutBack,
             ),
-
-            const SizedBox(height: 24),
-
-            // App Name
-            const Text(
-              'REVELA',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: 4,
-              ),
-            ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2),
-
-            const SizedBox(height: 8),
-
-            // Subtitle
-            Text(
-              'Field Inspection Platform',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.white.withValues(alpha: 0.8),
-                letterSpacing: 1.5,
-              ),
-            ).animate().fadeIn(delay: 700.ms),
-
-            const Spacer(),
-
-            // Loading Spinner
-            const CircularProgressIndicator(
-              color: Colors.white,
-              strokeWidth: 3,
-            ).animate().fadeIn(delay: 1000.ms),
-
-            const SizedBox(height: 60),
-          ],
+          ),
         ),
       ),
     );

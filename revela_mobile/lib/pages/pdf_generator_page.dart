@@ -543,10 +543,10 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                               ),
                               decoration: BoxDecoration(
                                 color: _selectedTask!.currentNoticeLevel == 0
-                                    ? Colors.blue.withOpacity(0.1)
+                                    ? Colors.blue.withValues(alpha: 0.1)
                                     : _selectedTask!.currentNoticeLevel == 1
-                                    ? Colors.orange.withOpacity(0.1)
-                                    : Colors.red.withOpacity(0.1),
+                                    ? Colors.orange.withValues(alpha: 0.1)
+                                    : Colors.red.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: _selectedTask!.currentNoticeLevel == 0
@@ -942,7 +942,7 @@ class _PdfGeneratorPageState extends State<PdfGeneratorPage> {
                                       if (_signatureBase64 != null)
                                         Positioned(
                                           bottom: 12,
-                                          child: Container(
+                                          child: SizedBox(
                                             height: 60,
                                             child: Image.memory(
                                               base64Decode(_signatureBase64!),

@@ -398,8 +398,9 @@ class _InspectionPageState extends State<InspectionPage>
     final hasBarangayFilter = barangays.length > 1;
 
     // Check if we have anything to show
-    if (isHistory && !hasStatusFilter && !hasResultFilter && !hasBarangayFilter)
+    if (isHistory && !hasStatusFilter && !hasResultFilter && !hasBarangayFilter) {
       return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

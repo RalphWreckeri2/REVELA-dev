@@ -145,8 +145,9 @@ class InspectionService {
     if (restored && await getPendingDraftCount() > 0) {
       syncNotification.value = const SyncNotification.started();
       final synced = await syncPendingReports();
-      if (synced > 0)
+      if (synced > 0) {
         syncNotification.value = SyncNotification.completed(synced);
+      }
     }
   }
 

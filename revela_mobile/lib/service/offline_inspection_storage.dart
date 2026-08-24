@@ -168,7 +168,7 @@ class OfflineInspectionStorage {
   }
 
   Future<String> _databasePath() async {
-    if (_databasePathOverride != null) return _databasePathOverride!;
+    if (_databasePathOverride != null) return _databasePathOverride;
     final databasesPath = await getDatabasesPath();
     return p.join(databasesPath, 'revela_inspection_drafts.db');
   }
@@ -243,7 +243,7 @@ class OfflineInspectionStorage {
 
     return decoded
         .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e as Map))
+        .map((e) => Map<String, dynamic>.from(e))
         .toList();
   }
 

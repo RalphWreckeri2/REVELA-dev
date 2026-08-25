@@ -584,11 +584,14 @@ class _InspectionPageState extends State<InspectionPage>
                 ),
                 tooltip: 'Sync pending reports',
                 onPressed: () async {
+                  // Capture the messenger before any async gap so `context`
+                  // is never used across one (use_build_context_synchronously).
+                  final messenger = ScaffoldMessenger.of(context);
                   final pendingCount = await InspectionService()
                       .getPendingDraftCount();
                   if (!mounted) return;
                   if (pendingCount == 0) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       const SnackBar(
                         content: Text('No pending reports to sync.'),
                       ),
@@ -598,7 +601,7 @@ class _InspectionPageState extends State<InspectionPage>
                   final syncedCount = await InspectionService()
                       .syncPendingReports();
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     SnackBar(
                       content: Text('Synced $syncedCount pending report(s).'),
                     ),

@@ -137,6 +137,14 @@ class InspectionService {
   }
 
   Future<void> _checkReconnect() async {
+    // Don't attempt sync while logged out (e.g. after a force-stop on
+    // connection loss) — the POST would 401 and the retry classifier would
+    // needlessly cycle the drafts. Resetting _wasReachable here guarantees
+    // the offline→online transition fires once the user logs back in.
+    if (!_auth.isAuthenticated) {
+      _wasReachable = false;
+      return;
+    }
     final reachable = await ApiConfig.ensureReachable() != null;
     final restored = reachable && !_wasReachable;
     _wasReachable = reachable;
@@ -361,6 +369,9 @@ class InspectionService {
   /// next reconnect cycle instead of being submitted without proof.
   Future<int> syncPendingReports() async {
     if (_isSyncing) return 0;
+    // No point syncing without a session — the backend would 401 every
+    // draft (offline-restored sessions have no JWT until re-login).
+    if (!_auth.isAuthenticated) return 0;
     _isSyncing = true;
     try {
       final drafts = await _offlineStorage.getDrafts();
@@ -434,13 +445,18 @@ class InspectionService {
           synced++;
         } on DioException catch (e) {
           final code = e.response?.statusCode ?? 0;
-          // 4xx (except 408 timeout / 429 throttling) means the server
-          // permanently rejected the report — e.g. the assignment was
-          // revoked while offline. Mark it 'failed' (terminal) so we stop
-          // hammering the API on every reconnect tick. Anything else
-          // (offline, 5xx, timeout) stays retryable.
-          final terminal =
-              code >= 400 && code < 500 && code != 408 && code != 429;
+          // 401/403 = auth problem (expired 12h token, or an offline-restored
+          // session that has no JWT yet) — recoverable by re-logging in, so
+          // the draft stays retryable. Other 4xx mean permanent rejection
+          // (e.g. the assignment was revoked while offline) — mark terminal
+          // so we stop hammering the API on every reconnect tick. Anything
+          // network-level or 5xx also stays retryable.
+          final terminal = code >= 400 &&
+              code < 500 &&
+              code != 401 &&
+              code != 403 &&
+              code != 408 &&
+              code != 429;
           await _offlineStorage.updateDraftStatus(
             draft.id!,
             terminal ? DraftStatus.failed : DraftStatus.draft,

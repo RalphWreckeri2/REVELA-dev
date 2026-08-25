@@ -367,6 +367,10 @@ class InspectionService {
       var synced = 0;
       for (final draft in drafts) {
         if (draft.id == null) continue;
+        // 'failed' drafts are terminal (the server permanently rejected
+        // them, e.g. assignment revoked while offline). They are kept for
+        // manual review and are NOT retried here.
+        if (draft.status == DraftStatus.failed) continue;
         await _offlineStorage.updateDraftStatus(draft.id!, DraftStatus.syncing);
         await refreshPendingDraftStatuses();
         try {
@@ -406,8 +410,10 @@ class InspectionService {
           }
 
           if (!evidenceReady) {
+            // Retryable (network dropped mid-upload) — back to 'draft' so
+            // the next reconnect cycle picks it up again.
             await _offlineStorage.updateDraftStatus(
-                draft.id!, DraftStatus.failed);
+                draft.id!, DraftStatus.draft);
             await refreshPendingDraftStatuses();
             continue;
           }
@@ -426,6 +432,19 @@ class InspectionService {
           );
           await _offlineStorage.deleteDraft(draft.id!);
           synced++;
+        } on DioException catch (e) {
+          final code = e.response?.statusCode ?? 0;
+          // 4xx (except 408 timeout / 429 throttling) means the server
+          // permanently rejected the report — e.g. the assignment was
+          // revoked while offline. Mark it 'failed' (terminal) so we stop
+          // hammering the API on every reconnect tick. Anything else
+          // (offline, 5xx, timeout) stays retryable.
+          final terminal =
+              code >= 400 && code < 500 && code != 408 && code != 429;
+          await _offlineStorage.updateDraftStatus(
+            draft.id!,
+            terminal ? DraftStatus.failed : DraftStatus.draft,
+          );
         } catch (_) {
           await _offlineStorage.updateDraftStatus(draft.id!, DraftStatus.draft);
         }
@@ -440,11 +459,13 @@ class InspectionService {
     }
   }
 
-  /// Get total count of unsynced offline draft reports
+  /// Get total count of unsynced offline draft reports.
+  /// Terminal ('failed') drafts are excluded — they no longer participate
+  /// in the auto-sync cycle.
   Future<int> getPendingDraftCount() async {
     try {
       final drafts = await _offlineStorage.getDrafts();
-      return drafts.length;
+      return drafts.where((d) => d.status != DraftStatus.failed).length;
     } catch (e) {
       debugPrint('InspectionService.getPendingDraftCount error: $e');
       return 0;
@@ -464,9 +485,13 @@ class InspectionService {
     List<XFile>? evidenceFiles,
     List<String>? photoURLs,
   }) async {
-    try {
-      List<String> finalUrls = [...(photoURLs ?? [])];
+    // Bookkeeping that must survive into the offline-draft catch block below:
+    // finalUrls    = every photo URL confirmed on the server
+    // pendingPaths = local files that still need uploading
+    final List<String> finalUrls = [...(photoURLs ?? [])];
+    final pendingPaths = <String>[];
 
+    try {
       // Combine paths from strings or XFiles
       final List<dynamic> filesToUpload = [
         ...?evidenceLocalPaths,
@@ -474,11 +499,27 @@ class InspectionService {
       ];
 
       if (filesToUpload.isNotEmpty) {
-        // Upload concurrently
+        // Upload concurrently, but track each result so a partially
+        // successful upload batch is never lost.
         final uploaded = await Future.wait(
-          filesToUpload.map((item) => uploadEvidence(item)),
+          filesToUpload.map((item) async {
+            try {
+              return await uploadEvidence(item);
+            } catch (_) {
+              return null;
+            }
+          }),
         );
-        finalUrls.addAll(uploaded.whereType<String>());
+        for (var i = 0; i < filesToUpload.length; i++) {
+          final item = filesToUpload[i];
+          final localPath = item is XFile ? item.path : item.toString();
+          final url = uploaded[i];
+          if (url != null && url.isNotEmpty) {
+            finalUrls.add(url);
+          } else {
+            pendingPaths.add(localPath);
+          }
+        }
       }
 
       String? photoUrlPayload;
@@ -512,12 +553,10 @@ class InspectionService {
           noticeLevel: noticeLevel,
           verifiedLat: verifiedLat,
           verifiedLng: verifiedLng,
-          evidencePaths: [
-            ...?evidenceLocalPaths,
-            ...?(evidenceFiles?.map((file) => file.path)),
-          ],
-        photoUrlPayload:
-            photoURLs == null || photoURLs.isEmpty ? null : jsonEncode(photoURLs),
+          // Only files that never made it to the server are queued;
+          // URLs that uploaded successfully are preserved as-is.
+          evidencePaths: pendingPaths,
+          photoUrlPayload: finalUrls.isEmpty ? null : jsonEncode(finalUrls),
           createdAt: now,
           updatedAt: now,
           status: DraftStatus.draft,

@@ -602,6 +602,11 @@ def _get_all_analytics_inner(F=None):
     # ══════════════════════════════════════════════════════════════════════════
     
     # 1. Inspector Leaderboard
+    # Driven FROM users (LEFT JOIN reports) so EVERY active inspector appears —
+    # including those with zero assigned/reported tasks. The old INNER-JOIN-
+    # from-reports version silently omitted idle inspectors, which made the
+    # AI assistant under-count the workforce. Filter fragments live in the ON
+    # clauses so date/status filters don't re-inner-join and hide them again.
     cur.execute(f"""
         SELECT 
             u.userID, 
@@ -610,10 +615,10 @@ def _get_all_analytics_inner(F=None):
             SUM(CASE WHEN ir.verificationStatus IN ('Verified', 'Submitted') THEN 1 ELSE 0 END) as total_completed, 
             AVG(ir.resolutionTime) as avg_resolution_time,
             (SELECT COUNT(*) FROM geospatial_logs g2 WHERE g2.reportedByUserID = u.userID AND g2.flagColor = 'Yellow'{geo_g2}) as yellow_flags_reported
-        FROM inspection_reports ir 
-        JOIN users u ON ir.userID = u.userID 
-        LEFT JOIN geospatial_logs g ON ir.targetID = g.logID
-        WHERE 1=1 {insp_ir} {geo_g}
+        FROM users u
+        LEFT JOIN inspection_reports ir ON ir.userID = u.userID{insp_ir}
+        LEFT JOIN geospatial_logs g ON ir.targetID = g.logID{geo_g}
+        WHERE u.userRole = 'Inspector' AND u.isActive = 1
         GROUP BY u.userID
         ORDER BY total_completed DESC
     """, geo_g2_p + insp_ir_p + geo_g_p)
@@ -1020,7 +1025,14 @@ def analytics_chat():
         # Inspector stats
         inspector_stats = chart_data.get("inspectorStats", [])
         if inspector_stats:
-            summary_parts.append(f"Inspector Performance Stats: {json.dumps(inspector_stats)}")
+            summary_parts.append(
+                f"Inspector Performance Stats (this list includes ALL active "
+                f"inspectors — entries with zero assigned tasks are idle, not "
+                f"missing): {json.dumps(inspector_stats)}"
+            )
+            summary_parts.append(
+                f"Total active inspectors: {len(inspector_stats)}"
+            )
 
         # Status breakdown
         status_breakdown = chart_data.get("statusBreakdown", [])

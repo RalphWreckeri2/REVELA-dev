@@ -480,3 +480,72 @@
 @media (max-width: 900px) {
   .kpi-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Dark Mode (hero banner / greeting card) ── */
+html.theme-dark .hero-banner {
+  background: linear-gradient(135deg, #131a12 0%, #101710 55%, #0d150c 100%);
+  border-color: rgba(52, 211, 153, 0.25);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+}
+
+html.theme-dark .hero-glow {
+  background:
+    radial-gradient(circle at 85% 15%, rgba(52, 211, 153, 0.12), transparent 45%),
+    radial-gradient(circle at 10% 90%, rgba(253, 224, 71, 0.05), transparent 40%);
+}
+
+html.theme-dark .hero-status-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+html.theme-dark .hero-status-divider {
+  background: rgba(52, 211, 153, 0.3);
+}
+
+html.theme-dark .hero-greeting-name { color: var(--color-primary); }
+
+html.theme-dark .hero-sub-highlight { color: var(--color-gold); }
+
+html.theme-dark .hero-step {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+html.theme-dark .hero-step:hover {
+  background: var(--color-primary-light);
+  border-color: rgba(52, 211, 153, 0.55);
+}
+
+html.theme-dark .hero-step-num {
+  background: var(--color-primary);
+  color: #111;
+}
+
+html.theme-dark .hero-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+html.theme-dark .hero-card-badge {
+  color: var(--color-primary);
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+html.theme-dark .hero-card-foot {
+  border-top-color: rgba(52, 211, 153, 0.2);
+}
+
+html.theme-dark .hero-foot-value,
+html.theme-dark .hero-foot-value--optimal { color: var(--color-primary); }
+
+html.theme-dark .hero-sun {
+  border-color: rgba(253, 224, 71, 0.4);
+}
+
+html.theme-dark .hero-status-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+html.theme-dark .hero-status-row-value--ok   { color: var(--color-primary); }
+html.theme-dark .hero-status-row-value--wait { color: var(--color-gold); }

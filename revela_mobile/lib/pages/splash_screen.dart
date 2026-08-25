@@ -92,69 +92,76 @@ class _SplashScreenState extends State<SplashScreen> {
           builder: (context, constraints) => SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Spacer(),
-
-                    // Logo Container
-                    Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        color: const Color(
-                          0xFF388E3C,
-                        ).withValues(alpha: 0.5), // Lighter green glow
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: Center(
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          height: 65,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 32,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Logo Container
+                      Container(
+                        width: 110,
+                        height: 110,
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFF388E3C,
+                          ).withValues(alpha: 0.5), // Lighter green glow
+                          borderRadius: BorderRadius.circular(28),
                         ),
+                        child: Center(
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            height: 65,
+                          ),
+                        ),
+                      ).animate().scale(
+                        delay: 200.ms,
+                        duration: 600.ms,
+                        curve: Curves.easeOutBack,
                       ),
-                    ).animate().scale(
-                      delay: 200.ms,
-                      duration: 600.ms,
-                      curve: Curves.easeOutBack,
-                    ),
 
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                    // App Name
-                    const Text(
-                      'REVELA',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
+                      // App Name
+                      const Text(
+                        'REVELA',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          letterSpacing: 4,
+                        ),
+                      ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2),
+
+                      const SizedBox(height: 8),
+
+                      // Subtitle
+                      Text(
+                        'Field Inspection Platform',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withValues(alpha: 0.8),
+                          letterSpacing: 1.5,
+                        ),
+                      ).animate().fadeIn(delay: 700.ms),
+
+                      const SizedBox(height: 56),
+
+                      // The spinner shares the same horizontal center as the
+                      // logo and labels on every screen width.
+                      const CircularProgressIndicator(
                         color: Colors.white,
-                        letterSpacing: 4,
-                      ),
-                    ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.2),
-
-                    const SizedBox(height: 8),
-
-                    // Subtitle
-                    Text(
-                      'Field Inspection Platform',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white.withValues(alpha: 0.8),
-                        letterSpacing: 1.5,
-                      ),
-                    ).animate().fadeIn(delay: 700.ms),
-
-                    const Spacer(),
-
-                    // Loading Spinner
-                    const CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3,
-                    ).animate().fadeIn(delay: 1000.ms),
-
-                    const SizedBox(height: 60),
-                  ],
+                        strokeWidth: 3,
+                      ).animate().fadeIn(delay: 1000.ms),
+                    ],
+                  ),
                 ),
               ),
             ),

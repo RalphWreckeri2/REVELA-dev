@@ -121,7 +121,7 @@ class OfflineInspectionStorage {
     }
     _db = await openDatabase(
       normalizedDbPath,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE IF NOT EXISTS inspection_drafts (
@@ -148,12 +148,40 @@ class OfflineInspectionStorage {
             updatedAt TEXT NOT NULL
           )
         ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS inspections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            reportID INTEGER,
+            logID INTEGER,
+            payload TEXT,
+            verificationStatus TEXT,
+            flagColor TEXT,
+            deadline TEXT
+          )
+        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           try {
             await db.execute('ALTER TABLE cached_tasks ADD COLUMN user_id TEXT');
           } catch (_) {}
+        }
+        if (oldVersion < 3) {
+          // v3 consolidates the former separate revela_local.db into this
+          // database — existing installs gain the task-cache table in place.
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS inspections (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id TEXT,
+              reportID INTEGER,
+              logID INTEGER,
+              payload TEXT,
+              verificationStatus TEXT,
+              flagColor TEXT,
+              deadline TEXT
+            )
+          ''');
         }
       },
     );
@@ -198,7 +226,6 @@ class OfflineInspectionStorage {
       whereArgs: status == null ? null : [status.name],
       orderBy: 'updatedAt DESC',
     );
-    print('rows from query: $rows');
     return rows.map(InspectionDraft.fromMap).toList();
   }
 

@@ -1059,7 +1059,11 @@ class _LoginPageState extends State<LoginPage> {
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Column(
+                // IntrinsicHeight gives the Column a bounded height so the
+                // Expanded dark card below can stretch all the way to the
+                // bottom of the screen instead of floating mid-page.
+                child: IntrinsicHeight(
+                  child: Column(
                   children: [
                     SizedBox(height: topSpacing),
                     // Logo Container
@@ -1107,8 +1111,9 @@ class _LoginPageState extends State<LoginPage> {
                     ).animate().fadeIn(delay: 400.ms),
 
                     const SizedBox(height: 24),
-                    // White Card
-                    Container(
+                    // Dark Card — Expanded so it always reaches the bottom
+                    Expanded(
+                      child: Container(
                       width: double.infinity,
                       padding: EdgeInsets.fromLTRB(
                         cardPadding,
@@ -1394,7 +1399,9 @@ class _LoginPageState extends State<LoginPage> {
                         ],
                       ),
                     ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1),
+                      ),
                   ],
+                  ),
                 ),
               ),
             );

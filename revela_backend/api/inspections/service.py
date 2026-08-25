@@ -148,15 +148,18 @@ def assign_inspection(log_id, inspector_user_id, deadline, assigned_by):
             cursor.close()
             return None, f"Inspector userID {inspector_user_id} not found"
 
-        # Check if this flag was already verified in a past report
+        # First-ever dispatch for this flag → 'Assigned'. Any prior report
+        # (open, submitted, or verified) means the admin is RE-dispatching,
+        # so the task must land in the 'Reassigned' column of the Kanban
+        # board instead of masquerading as a fresh assignment.
         cursor.execute("""
             SELECT reportID FROM inspection_reports
-            WHERE targetID = %s AND verificationStatus = 'Verified'
+            WHERE targetID = %s
             LIMIT 1
         """, (log_id,))
-        was_verified = cursor.fetchone()
+        has_history = cursor.fetchone()
 
-        new_status = 'Reassigned' if was_verified else 'Assigned'
+        new_status = 'Reassigned' if has_history else 'Assigned'
 
         if existing:
             cursor.execute("""

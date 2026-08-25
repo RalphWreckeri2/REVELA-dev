@@ -671,14 +671,13 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
                   onClick={() => onViewDetail(f)}
                   style={{ 
                     background: "var(--color-surface)", 
-                    border: "1px solid var(--color-border-soft)", 
                     borderRadius: 16, 
                     padding: 20, 
                     display: "flex", 
                     flexDirection: "column", 
                     justifyContent: "space-between",
                     cursor: "pointer",
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
+                    boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
                     minHeight: 120
                   }}
                 >
@@ -729,11 +728,10 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
 function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail, isCompact }) {
   const statusMeta = STATUS_COLOR[report.verificationStatus] ?? STATUS_COLOR.Assigned;
   const flagMeta = FLAG_COLOR[report.flagColor] ?? FLAG_COLOR.Green;
-  const isOverdue = report.deadline && new Date(report.deadline) < new Date();
 
-  const cardStyle = isOverdue 
-    ? { ...s.card, border: "2px solid var(--color-danger)", padding: "12px 16px" }
-    : { ...s.card, padding: "12px 16px" };
+  // Uniform card styling for every report — overdue state is intentionally
+  // not expressed via card borders so all cards look identical.
+  const cardStyle = { ...s.card, padding: "12px 16px" };
 
   return (
     <div style={cardStyle} onClick={() => onViewDetail(report)}>
@@ -1125,10 +1123,9 @@ const s = {
   // Card
   card: {
     background: "var(--color-modal-bg)",
-    border: "1px solid var(--color-border)",
     borderRadius: "var(--radius-lg)",
     padding: "16px 20px",
-    boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
     cursor: "pointer",
     transition: "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
   },

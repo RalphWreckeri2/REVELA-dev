@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p;
 import 'package:image_picker/image_picker.dart';
 
 import 'api_config.dart';
@@ -159,34 +157,14 @@ class InspectionService {
   }
 
   /// Active assignments from the server (Assigned + Reassigned).
-  Future<Database> _openLocalDb() async {
-    final databasesPath = await getDatabasesPath();
-    final path = p.join(databasesPath, 'revela_local.db');
-    return openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-        CREATE TABLE IF NOT EXISTS inspections (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id TEXT,
-          reportID INTEGER,
-          logID INTEGER,
-          payload TEXT,
-          verificationStatus TEXT,
-          flagColor TEXT,
-          deadline TEXT
-        )
-      ''');
-      },
-    );
-  }
-
+  /// The task cache lives in the single consolidated offline database owned
+  /// by [OfflineInspectionStorage] (table `inspections`), so queued drafts
+  /// and cached tasks share one SQLite file.
   Future<List<InspectionTask>> _queryLocalTasks(
     String userId, {
     bool activeOnly = true,
   }) async {
-    final db = await _openLocalDb();
+    final db = await _offlineStorage.database();
     final where =
         'user_id = ?${activeOnly ? " AND (verificationStatus IN ('Assigned','Reassigned'))" : ''}';
     List<Map<String, Object?>> rows = await db.query(
@@ -235,7 +213,7 @@ class InspectionService {
     List<InspectionTask> tasks,
   ) async {
     if (userId.isEmpty) return;
-    final db = await _openLocalDb();
+    final db = await _offlineStorage.database();
     await db.transaction((txn) async {
       for (final task in tasks) {
         try {
@@ -371,7 +349,16 @@ class InspectionService {
     return response.data['photoURL'] as String?;
   }
 
-  /// Synchronize offline draft reports to backend
+  /// Synchronize offline draft reports to backend.
+  ///
+  /// For each queued draft, any evidence photos captured while offline
+  /// (stored as local file paths in [InspectionDraft.evidencePaths]) are
+  /// uploaded first via [uploadEvidence]; the resulting server URLs are
+  /// merged with any URLs that had already uploaded before the original
+  /// failure. The report is only submitted once its evidence is fully on
+  /// the server — if an upload fails mid-sync (e.g., signal drops again),
+  /// the draft is marked [DraftStatus.failed] and will be retried on the
+  /// next reconnect cycle instead of being submitted without proof.
   Future<int> syncPendingReports() async {
     if (_isSyncing) return 0;
     _isSyncing = true;
@@ -383,6 +370,48 @@ class InspectionService {
         await _offlineStorage.updateDraftStatus(draft.id!, DraftStatus.syncing);
         await refreshPendingDraftStatuses();
         try {
+          // ── Re-upload offline-captured evidence photos ──────────────────
+          final urls = <String>[];
+          final existingPayload = draft.photoUrlPayload;
+          if (existingPayload != null && existingPayload.isNotEmpty) {
+            try {
+              final decoded = jsonDecode(existingPayload);
+              if (decoded is List) {
+                urls.addAll(decoded.map((e) => e.toString()));
+              }
+            } catch (_) {
+              // Unparseable payload — treat as no pre-uploaded URLs.
+            }
+          }
+
+          var evidenceReady = true;
+          for (final localPath in draft.evidencePaths) {
+            try {
+              final file = File(localPath);
+              if (!await file.exists()) {
+                // File vanished from the device; nothing to upload.
+                continue;
+              }
+              final uploadedUrl = await uploadEvidence(localPath);
+              if (uploadedUrl == null || uploadedUrl.isEmpty) {
+                evidenceReady = false;
+                break;
+              }
+              urls.add(uploadedUrl);
+            } catch (_) {
+              // Network dropped again mid-sync — retry on next cycle.
+              evidenceReady = false;
+              break;
+            }
+          }
+
+          if (!evidenceReady) {
+            await _offlineStorage.updateDraftStatus(
+                draft.id!, DraftStatus.failed);
+            await refreshPendingDraftStatuses();
+            continue;
+          }
+
           await _auth.dio.post(
             '/api/inspections/submit',
             data: {
@@ -392,7 +421,7 @@ class InspectionService {
               'verifiedLat': draft.verifiedLat,
               'verifiedLng': draft.verifiedLng,
               'notes': draft.notes,
-              'photoURL': draft.photoUrlPayload,
+              'photoURL': urls.isEmpty ? null : jsonEncode(urls),
             },
           );
           await _offlineStorage.deleteDraft(draft.id!);

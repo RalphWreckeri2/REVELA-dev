@@ -42,8 +42,16 @@ void main() {
     final count = firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM inspection_drafts'));
     final drafts = await storage.getDrafts();
 
+    // v3 consolidation: drafts, cached tasks AND the task cache all live in
+    // this single database file.
+    final tables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' "
+      "AND name IN ('inspection_drafts', 'cached_tasks', 'inspections')",
+    );
+
     expect(savedId, greaterThan(0));
     expect(count, 1);
+    expect(tables, hasLength(3));
 
     expect(drafts, hasLength(1));
     expect(drafts.first.inspectionResult, 'Yellow');

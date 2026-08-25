@@ -2314,8 +2314,8 @@ const styles = {
   overlayCard: { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#fff", background: "rgba(15,23,42,0.8)", borderRadius: 16, padding: "16px 24px", fontSize: 14 },
   pickingBanner: { position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "var(--color-primary)", color: "#fff", padding: "12px 24px", borderRadius: 30, zIndex: 100, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, boxShadow: "0 10px 25px rgba(0,0,0,0.2)" },
 
-  statsStrip: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 },
-  statCard: { display: "flex", flexDirection: "column", gap: 2, padding: "14px 18px", borderRadius: "var(--radius-lg)" },
+  statsStrip: { display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 10 },
+  statCard: { display: "flex", flexDirection: "column", gap: 2, padding: "14px 12px", borderRadius: "var(--radius-lg)", minWidth: 0 },
 
   sidePanel: { borderRadius: "var(--radius-lg)", padding: 16, display: "flex", flexDirection: "column", maxHeight: 680, position: "sticky", top: 20 },
   flagList: { overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, flex: 1, paddingRight: 2 },

@@ -12,7 +12,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest, getInspectorsRequest } from "../services/api";
+import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest, getInspectorsRequest, getOpsRankingsRequest } from "../services/api";
 import "../styles/HomePage.css";
 
 const MAP_LIBRARIES = ["places", "marker"];
@@ -88,23 +88,15 @@ function OnboardingPanel({ onDismiss }) {
   );
 }
 
-function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
-  // Map severity for sorting
-  const severity = { Black: 3, Red: 2, Yellow: 1, Green: 0 };
-  const getSeverity = (capColor) => {
-    return severity[capColor] || 0;
+function HighPriorityAlertsWidget({ opsRankings, navigate, loading }) {
+  const RISK_COLORS = {
+    High:   { bg: "rgba(239,68,68,0.12)", text: "#dc2626", border: "#fca5a5" },
+    Medium: { bg: "rgba(245,158,11,0.12)", text: "#b45309", border: "#fcd34d" },
+    Low:    { bg: "rgba(34,197,94,0.12)", text: "#166534", border: "#86efac" },
   };
-  
-  // Filter to non-green, sort by severity then date, and take top 5
-  const criticalFlags = flags
-    .filter(f => getSeverity(parseColor(f)) > 0)
-    .sort((a, b) => {
-      const sevA = getSeverity(parseColor(a));
-      const sevB = getSeverity(parseColor(b));
-      if (sevA !== sevB) return sevB - sevA; // Highest severity first
-      return new Date(b.detectedDate || 0) - new Date(a.detectedDate || 0); // Newest first
-    })
-    .slice(0, 5);
+
+  // Top 5 barangays by OPS score (already sorted from backend)
+  const top5 = (opsRankings || []).filter(b => b.flagged_count > 0).slice(0, 5);
 
   return (
     <div className="dashboard-widget frosted-glass saas-card">
@@ -118,42 +110,57 @@ function HighPriorityAlertsWidget({ flags, navigate, hasLoadedFlags }) {
         </h3>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-        {criticalFlags.length === 0 ? (
+        {loading ? (
           <div style={{ textAlign: "center", padding: "20px 0", color: "var(--color-muted)", fontSize: 13 }}>
-            {hasLoadedFlags && flags.length > 0
-              ? "No critical alerts — latest scans show compliant or verified establishments."
-              : hasLoadedFlags
-                ? "No flags in the system yet. Run the detection engine or add a manual flag."
-                : "Loading alerts…"}
+            Loading priority queue…
           </div>
-        ) : criticalFlags.map(f => {
-          const capColor = parseColor(f);
-          const fc = getFlagColor(capColor);
-          
-          let alertReason = "Unregistered - Escalation needed";
-          if (capColor === 'Black') alertReason = 'Non-responsive for 7+ days';
-          else if (capColor === 'Yellow') alertReason = 'Suspected - Needs verification';
-
+        ) : top5.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "20px 0", color: "var(--color-muted)", fontSize: 13 }}>
+            No barangays with active flags detected.
+          </div>
+        ) : top5.map((b, i) => {
+          const riskStyle = RISK_COLORS[b.risk_level] || RISK_COLORS.Low;
           return (
-            <div 
-              key={f.logID || f.id} 
+            <div
+              key={b.barangayID}
               className="hover-lift"
-              style={{ background: "var(--color-surface)", border: "1px solid var(--color-border-soft)", padding: "10px 12px", borderRadius: "10px", cursor: "pointer" }} 
-              onClick={() => navigate('/map')}
+              style={{ background: "var(--color-surface)", border: "1px solid var(--color-border-soft)", padding: "10px 12px", borderRadius: "10px", cursor: "pointer" }}
+              onClick={() => navigate('/analytics')}
             >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)", marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: fc.marker, display: "inline-block", flexShrink: 0 }}></span>
-                {f.detectedName || f.name || "Unknown Establishment"}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: "50%",
+                    background: "var(--color-primary)", color: "#fff",
+                    fontSize: 10, fontWeight: 800,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+                  }}>
+                    {b.rank}
+                  </span>
+                  {shortBarangay(b.barangayName)}
+                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 700,
+                  padding: "2px 8px", borderRadius: 6,
+                  background: riskStyle.bg, color: riskStyle.text,
+                  border: `1px solid ${riskStyle.border}`,
+                }}>
+                  {b.risk_level}
+                </span>
               </div>
-              <div style={{ fontSize: 11, color: "var(--color-muted)", paddingLeft: 12 }}>
-                {alertReason}
+              <div style={{ fontSize: 11, color: "var(--color-muted)", paddingLeft: 24, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span>OPS <b style={{ color: "var(--color-ink)" }}>{b.ops_score}</b>/100</span>
+                <span>·</span>
+                <span>{b.flagged_count} flag{b.flagged_count !== 1 ? "s" : ""}</span>
+                {b.red_count > 0 && <span style={{ color: "#ef4444" }}>({b.red_count} Red)</span>}
+                {b.black_count > 0 && <span style={{ color: "#374151" }}>({b.black_count} Black)</span>}
               </div>
             </div>
           );
         })}
-        {criticalFlags.length > 0 && (
-          <button className="ghost-btn" style={{ fontSize: 11, padding: "6px", color: "var(--color-danger)", borderColor: "transparent", marginTop: 4, width: "100%" }} onClick={() => navigate('/map')}>
-            View All Critical Targets →
+        {top5.length > 0 && (
+          <button className="ghost-btn" style={{ fontSize: 11, padding: "6px", color: "var(--color-danger)", borderColor: "transparent", marginTop: 4, width: "100%" }} onClick={() => navigate('/analytics')}>
+            View Full Priority Queue →
           </button>
         )}
       </div>
@@ -592,6 +599,8 @@ export default function HomePage() {
   const [inspections, setInspections] = useState([]);
   const [inspectors, setInspectors] = useState([]);
   const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
+  const [opsRankings, setOpsRankings] = useState([]);
+  const [opsLoading, setOpsLoading] = useState(true);
 
   useEffect(() => {
     if (!token) return;
@@ -623,6 +632,13 @@ export default function HomePage() {
     getInspectorsRequest(token)
       .then(res => setInspectors(res || []))
       .catch(() => {});
+
+    // Fetch OPS rankings for High-Priority Alerts
+    setOpsLoading(true);
+    getOpsRankingsRequest(token)
+      .then(res => setOpsRankings(res?.data || []))
+      .catch(() => {})
+      .finally(() => setOpsLoading(false));
   }, [token]);
 
   const kpiCards = [
@@ -717,9 +733,9 @@ export default function HomePage() {
           <VisualCalendarWidget inspections={inspections} navigate={navigate} />
           
           <HighPriorityAlertsWidget
-            flags={allFlags}
+            opsRankings={opsRankings}
             navigate={navigate}
-            hasLoadedFlags={!flagsLoading}
+            loading={opsLoading}
           />
         </div>
       </div>

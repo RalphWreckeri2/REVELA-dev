@@ -844,6 +844,9 @@ def get_ops_rankings_only():
                 "barangayName": row["barangayName"],
                 "ops_score": ops_score,
                 "flagged_count": flagged,
+                "red_count": int(row["red_count"] or 0),
+                "yellow_count": int(row["yellow_count"] or 0),
+                "black_count": int(row["black_count"] or 0),
                 "risk_level": "High" if ops_score >= 60 else "Medium" if ops_score >= 30 else "Low"
             })
 

@@ -2538,14 +2538,35 @@ export default function AnalyticsPage() {
                           });
 
                           return (
-                            <div style={{ height: 180, width: "100%", marginTop: 16 }}>
+                            <>
+                            <div style={{ height: 220, width: "100%", marginTop: 16 }}>
                               <ResponsiveContainer width="100%" height="100%">
-                                <ScatterChart margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                                <ScatterChart margin={{ top: 10, right: 10, bottom: 18, left: -10 }}>
                                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(226,232,240,0.4)" />
-                                  <XAxis type="number" dataKey="lng" name="Longitude" domain={['auto', 'auto']} tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => v.toFixed(3)} />
-                                  <YAxis type="number" dataKey="lat" name="Latitude" domain={['auto', 'auto']} tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => v.toFixed(3)} />
+                                  <XAxis type="number" dataKey="lng" name="Longitude" domain={['auto', 'auto']} tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => v.toFixed(3)} label={{ value: "Longitude", position: "insideBottom", offset: -12, fontSize: 10, fill: "var(--color-muted)", fontWeight: 600 }} />
+                                  <YAxis type="number" dataKey="lat" name="Latitude" domain={['auto', 'auto']} tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => v.toFixed(3)} label={{ value: "Latitude", angle: -90, position: "insideLeft", offset: 10, fontSize: 10, fill: "var(--color-muted)", fontWeight: 600 }} />
                                   <ZAxis type="category" dataKey="barangay" name="Barangay" />
-                                  <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }} />
+                                  <Tooltip
+                                    cursor={{ strokeDasharray: '3 3' }}
+                                    contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)", fontSize: 12 }}
+                                    content={({ active, payload }) => {
+                                      if (!active || !payload?.length) return null;
+                                      const d = payload[0]?.payload;
+                                      if (!d) return null;
+                                      const typeLabel = d.renderType === 'noise'
+                                        ? "Isolated (no cluster)"
+                                        : d.renderType === 'centroid'
+                                          ? `Cluster #${d.cluster} center`
+                                          : `Cluster #${d.cluster} member`;
+                                      return (
+                                        <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", fontSize: 12, lineHeight: 1.6 }}>
+                                          <div style={{ fontWeight: 700, color: "var(--color-ink)", marginBottom: 2 }}>{d.barangay || "Unknown area"}</div>
+                                          <div style={{ color: "var(--color-muted)" }}>{typeLabel}{d.is_primary ? " · Primary hotspot" : ""}</div>
+                                          <div style={{ color: "var(--color-muted)", fontSize: 11, marginTop: 2 }}>{d.lat?.toFixed(4)}°N, {d.lng?.toFixed(4)}°E</div>
+                                        </div>
+                                      );
+                                    }}
+                                  />
                                   <Scatter
                                     name="Clusters"
                                     data={displayClusters}
@@ -2576,6 +2597,36 @@ export default function AnalyticsPage() {
                                 </ScatterChart>
                               </ResponsiveContainer>
                             </div>
+
+                            {/* ── DBSCAN Legend ─────────────────────── */}
+                            <div style={{
+                              display: "flex", flexWrap: "wrap", gap: "12px 20px",
+                              marginTop: 10, padding: "8px 12px",
+                              background: "rgba(241,245,249,0.5)", borderRadius: 8,
+                              fontSize: 11, color: "var(--color-muted)", lineHeight: 1.4
+                            }}>
+                              {/* Primary hotspot */}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#6366f1" fillOpacity="0.15" stroke="#6366f1" strokeWidth="2"/></svg>
+                                <span><b style={{ color: "#6366f1" }}>Top Problem Area</b> — biggest group of risky businesses</span>
+                              </span>
+                              {/* Secondary cluster */}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill={COLOR.orange} fillOpacity="0.15" stroke={COLOR.orange} strokeWidth="2"/></svg>
+                                <span><b style={{ color: COLOR.orange }}>Other Problem Areas</b> — smaller groups nearby</span>
+                              </span>
+                              {/* Flagged businesses */}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.5" fill="#6366f1" opacity="0.7"/><circle cx="13" cy="12" r="2.5" fill={COLOR.orange} opacity="0.7"/></svg>
+                                <span>Individual flagged businesses in a group</span>
+                              </span>
+                              {/* Isolated / noise */}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill={COLOR.slate} opacity="0.3"/></svg>
+                                <span>Standalone businesses — not part of any group</span>
+                              </span>
+                            </div>
+                            </>
                           );
                         })()
                       )}

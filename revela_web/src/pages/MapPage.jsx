@@ -169,7 +169,6 @@ const MUNICIPAL_BOUNDARY_NAMES = new Set(["mataasnakahoy", "mataas na kahoy"]);
 
 const LAYER_OPTIONS = [
   { id: "base", label: "Base Map" },
-  { id: "heatmap", label: "Priority Map" },
   { id: "flags", label: "Flag Markers" },
   { id: "barangay", label: "Barangay Boundaries" },
   { id: "diagnostics", label: "Risk Heatmap" },
@@ -621,9 +620,9 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
   // prop after mount — we keep a ref and call data.setStyle() imperatively.
   const geoJsonFeatureStyle = useMemo(
     () => (feature) => {
-      if (!layers.heatmap && !layers.barangay && !isPickingLocation) return { visible: false };
+      if (!layers.barangay && !layers.diagnostics && !isPickingLocation) return { visible: false };
 
-      if (layers.heatmap) {
+      if (layers.diagnostics) {
         // — Name resolution (unchanged from original) —————————————————————————————————————————————————————————
         const rawName = (
           feature.getProperty('ADM4_EN') ||
@@ -696,7 +695,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
         visible: true,
       };
     },
-    [layers.heatmap, layers.barangay, barangayRiskLevels, barangayRedFlagCounts, isPickingLocation],
+    [layers.barangay, layers.diagnostics, barangayRiskLevels, barangayRedFlagCounts, isPickingLocation],
   );
 
   useEffect(() => {
@@ -953,7 +952,7 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
         onUnmount={handleMapUnmount}
         onClick={onMapClick}
       >
-        {(layers.barangay || layers.heatmap || isPickingLocation) && (
+        {(layers.barangay || layers.diagnostics || isPickingLocation) && (
           <Data
             onClick={onDataClick}
             onLoad={(dataLayer) => {
@@ -1443,7 +1442,7 @@ export default function MapPage() {
   const timerIntervalRef = useRef(null);
   const [opsRankings, setOpsRankings] = useState([]);
 
-  const [layers, setLayers] = useState({ base: true, heatmap: false, flags: true, barangay: false, diagnostics: false });
+  const [layers, setLayers] = useState({ base: true, flags: true, barangay: false, diagnostics: false });
   const [selectedFlag, setSelectedFlag] = useState(null);   // logID of selected flag
   const [modalFlag, setModalFlag] = useState(null);   // flag object shown in detail modal
   const location = useLocation();
@@ -2005,7 +2004,7 @@ export default function MapPage() {
               handleCancelDetection={handleCancelDetection}
             />
             {/* Discrete risk legend â€” matches HEATMAP_RISK_STYLE on the Data layer */}
-            {layers.heatmap && (
+            {layers.diagnostics && (
               <div style={{
                 position: "absolute",
                 bottom: 14,

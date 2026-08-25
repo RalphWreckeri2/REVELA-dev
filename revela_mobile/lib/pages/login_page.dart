@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
 import '../service/auth_service.dart';
+import '../service/connectivity_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'main_layout.dart';
 
@@ -1043,7 +1044,17 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: context.adaptivePrimary,
       body: SafeArea(
         bottom: false, // Let the white card go to the bottom
-        child: LayoutBuilder(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: ConnectivityService().isOffline,
+          builder: (context, isOffline, child) {
+            return Column(
+              children: [
+                if (isOffline) const _OfflineBanner(),
+                Expanded(child: child!),
+              ],
+            );
+          },
+          child: LayoutBuilder(
           builder: (context, constraints) {
             final topSpacing = (constraints.maxHeight * 0.05)
                 .clamp(16.0, 40.0)
@@ -1407,6 +1418,38 @@ class _LoginPageState extends State<LoginPage> {
             );
           },
         ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Persistent banner shown at the top of the login screen whenever the device
+/// has no connectivity, explaining that biometric unlock is still available.
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Colors.redAccent,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: const Row(
+        children: [
+          Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "You're offline — you can still sign in using biometrics.",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

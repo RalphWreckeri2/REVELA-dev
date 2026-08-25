@@ -5,6 +5,7 @@ import 'pages/splash_screen.dart';
 import 'pages/login_page.dart';
 import 'pages/main_layout.dart';
 import 'service/auth_service.dart';
+import 'service/connectivity_service.dart';
 
 final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(
   ThemeMode.system,
@@ -12,6 +13,7 @@ final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  ConnectivityService().start();
   runApp(const MyApp());
 }
 
@@ -29,12 +31,46 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _authService.addListener(_handleAuthStateChanged);
+    // Force-stop the session whenever the device loses connectivity.
+    ConnectivityService().addOfflineListener(_handleConnectionLost);
   }
 
   @override
   void dispose() {
     _authService.removeListener(_handleAuthStateChanged);
+    ConnectivityService().removeOfflineListener(_handleConnectionLost);
     super.dispose();
+  }
+
+  /// Fired once per online → offline transition. If the user has an active
+  /// session, end it immediately (no server round-trip — we're offline) and
+  /// send them to the login screen where biometric unlock is still available.
+  void _handleConnectionLost() {
+    if (!mounted) return;
+    if (!_authService.isAuthenticated) return;
+
+    debugPrint('main: connection lost — force-stopping active session');
+    _authService.forceStopSession(); // auth listener navigates to LoginPage
+
+    // Give the navigation a frame to settle, then notify the user.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = AuthService.navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Connection lost — you were signed out. You can sign back in '
+            'using your biometrics.',
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    });
   }
 
   void _handleAuthStateChanged() {

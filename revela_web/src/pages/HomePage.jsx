@@ -39,49 +39,194 @@ const parseColor = (f) => {
 
 const shortBarangay = (name = "") => name.replace("Barangay ", "Brgy.");
 
-// ── Onboarding ────────────────────────────────────────────────────────────────
-const ONBOARDING_STEPS = [
-  { num: 1, title: "Upload Registry",  desc: "Upload the BPLO CSV to geocode and set the baseline." },
-  { num: 2, title: "Review Flags",     desc: "View detected establishments plotted by compliance status." },
-  { num: 3, title: "Dispatch",         desc: "Assign inspectors to high-risk targets via priority scores." },
+// ── Hero Banner ───────────────────────────────────────────────────────────────
+const HERO_STEPS = [
+  { num: 1, label: "Upload Registry CSV",     to: "/registry" },
+  { num: 2, label: "Review Geospatial Flags", to: "/map" },
+  { num: 3, label: "Priority Dispatch",       to: "/inspections" },
 ];
 
-function OnboardingPanel({ onDismiss }) {
+// WMO weather interpretation codes (Open-Meteo)
+const WEATHER_CODES = {
+  0: "Clear Sky", 1: "Mostly Clear", 2: "Partly Cloudy", 3: "Overcast",
+  45: "Foggy", 48: "Rime Fog",
+  51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
+  61: "Light Rain", 63: "Rain", 65: "Heavy Rain",
+  71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
+  80: "Light Showers", 81: "Showers", 82: "Heavy Showers",
+  95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm",
+};
+
+function HeroBanner({ user, kpis, mapsReady, navigate }) {
+  // Live clock — ticks every second
+  const [now, setNow] = useState(() => new Date());
+  // Live weather for Mataasnakahoy (Open-Meteo, keyless)
+  const [weather, setWeather] = useState(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=13.9667&longitude=121.1167&current=temperature_2m,weather_code")
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled || !data?.current) return;
+        setWeather({
+          temp:  Math.round(data.current.temperature_2m ?? 28),
+          label: WEATHER_CODES[data.current.weather_code] ?? "Fair",
+        });
+      })
+      .catch(() => {}); // fall back to the default readout on failure
+    return () => { cancelled = true; };
+  }, []);
+
+  // All times are locked to Philippine Standard Time (UTC+8)
+  const timeFmt = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+  const dateFmt = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const hourFmt = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", hour: "numeric", hour12: false });
+
+  const manilaHour = Number(hourFmt.format(now)) % 24;
+  const greeting   = manilaHour < 12 ? "Good morning" : manilaHour < 18 ? "Good afternoon" : "Good evening";
+  const firstName  = user?.fullName ? user.fullName.trim().split(/\s+/)[0] : "Admin";
+
+  const [timeStr, amPm] = timeFmt.format(now).split(" ");
+  const flaggedCount = kpis ? kpis.total_flagged.toLocaleString() : "—";
+
   return (
-    <section className="onboarding-panel frosted-glass">
-      <div className="onboarding-header">
-        <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-          <img src="/standing.png" alt="Revela Mascot" style={{ height: 100, width: "auto", objectFit: "contain", dropShadow: "0 10px 20px rgba(0,0,0,0.15)" }} />
-          <div>
-            <span className="hero-tag">Welcome to REVELA</span>
-            <h2>Geospatial Business Intelligence</h2>
+    <section className="hero-banner">
+      <div className="hero-glow" aria-hidden="true" />
+
+      {/* ── Left: greeting + steps ── */}
+      <div className="hero-left">
+        <div className="hero-status-pill">
+          <span className="hero-status-item">
+            <span className="hero-status-dot" />
+            BPLO Geospatial Engine Active
+          </span>
+          <span className="hero-status-divider" aria-hidden="true" />
+          <span className="hero-status-item">Mataasnakahoy Compliance Portal</span>
+        </div>
+
+        <h1 className="hero-greeting">
+          {greeting},<br />
+          <span className="hero-greeting-name">{firstName} 👋</span>
+        </h1>
+
+        <p className="hero-sub">
+          Welcome back! You have{" "}
+          <strong className="hero-sub-highlight">{flaggedCount} commercial flags</strong>{" "}
+          pending geospatial audit. System dispatch priority model is active.
+        </p>
+
+        <div className="hero-steps">
+          {HERO_STEPS.map(({ num, label, to }) => (
+            <button key={num} className="hero-step" onClick={() => navigate(to)}>
+              <span className="hero-step-num">{num}</span>
+              <span>{label}</span>
+              <svg className="hero-step-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
+              </svg>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Right: stat cards + quick actions ── */}
+      <div className="hero-right">
+        <div className="hero-cards">
+          {/* Municipal Time */}
+          <div className="hero-card">
+            <div className="hero-card-head">
+              <span className="hero-card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>Municipal<br />Time</span>
+              </span>
+              <span className="hero-card-badge">PST<br />(UTC+8)</span>
+            </div>
+            <div className="hero-clock">
+              {timeStr} <span className="hero-clock-ampm">{amPm}</span>
+            </div>
+            <p className="hero-card-date">{dateFmt.format(now)}</p>
+            <div className="hero-card-foot">
+              <span>Status: {mapsReady ? "Syncing Google Maps" : "Loading Google Maps"}</span>
+              <span className={mapsReady ? "hero-foot-value" : "hero-foot-value--loading"}>
+                {mapsReady ? "100%" : "…"}
+              </span>
+            </div>
+          </div>
+
+          {/* Field Weather */}
+          <div className="hero-card">
+            <div className="hero-card-head">
+              <span className="hero-card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
+                  <path d="M17.5 19a4.5 4.5 0 1 0-1.13-8.86A6 6 0 1 0 5 14.7"/>
+                </svg>
+                <span>Field<br />Weather</span>
+              </span>
+              <span className="hero-card-loc">Mataasnakahoy</span>
+            </div>
+            <div className="hero-weather-row">
+              <div>
+                <div className="hero-temp">{weather ? `${weather.temp}°C` : "28°C"}</div>
+                <p className="hero-cond">{weather ? `${weather.label} · Fair` : "Partly Cloudy · Fair"}</p>
+              </div>
+              <div className="hero-sun">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22">
+                  <circle cx="12" cy="12" r="4"/>
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+                </svg>
+              </div>
+            </div>
+            <div className="hero-card-foot">
+              <span>Inspection Readiness</span>
+              <span className="hero-foot-value hero-foot-value--optimal">Optimal</span>
+            </div>
           </div>
         </div>
-        <button className="dismiss-btn" onClick={onDismiss}>Dismiss Guide ✕</button>
-      </div>
-      <div className="onboarding-body">
-        <div className="onboarding-about">
-          <p>
-            REVELA is designed for the Municipality of Mataasnakahoy. It cross-references
-            public Google Maps data against the official BPLO registry to surface unregistered
-            commercial establishments, generate compliance intelligence reports, and optimize
-            the deployment of field inspectors.
-          </p>
-          <p>
-            The system produces three tiers of output: Descriptive Analytics for real-time
-            monitoring, Diagnostic Analytics through{" "}
-            <strong>DBSCAN-powered Barangay Risk Heatmaps</strong>, and Prescriptive Analytics
-            via a <strong>Weighted Linear Combination</strong> model that generates Operational
-            Priority Scores.
-          </p>
-        </div>
-        <div className="onboarding-steps">
-          {ONBOARDING_STEPS.map(({ num, title, desc }) => (
-            <div className="mini-step" key={num}>
-              <span className="mini-step-num">{num}</span>
-              <div><h4>{title}</h4><p>{desc}</p></div>
-            </div>
-          ))}
+
+        {/* System Status */}
+        <div className="hero-status-card">
+          <span className="hero-status-card-title">System Status</span>
+          <div className="hero-status-row">
+            <span className="hero-status-row-label">
+              <span className="hero-status-dot" />
+              Geospatial Engine
+            </span>
+            <span className="hero-status-row-value hero-status-row-value--ok">Online</span>
+          </div>
+          <div className="hero-status-row">
+            <span className="hero-status-row-label">
+              <span className={mapsReady ? "hero-status-dot" : "hero-status-dot hero-status-dot--idle"} />
+              Google Maps Sync
+            </span>
+            <span className={mapsReady ? "hero-status-row-value hero-status-row-value--ok" : "hero-status-row-value hero-status-row-value--wait"}>
+              {mapsReady ? "Ready" : "Syncing…"}
+            </span>
+          </div>
+          <div className="hero-status-row">
+            <span className="hero-status-row-label">
+              <span className={weather ? "hero-status-dot" : "hero-status-dot hero-status-dot--idle"} />
+              Weather Feed
+            </span>
+            <span className={weather ? "hero-status-row-value hero-status-row-value--ok" : "hero-status-row-value hero-status-row-value--wait"}>
+              {weather ? "Live" : "Connecting…"}
+            </span>
+          </div>
+          <div className="hero-status-row">
+            <span className="hero-status-row-label">
+              <span className="hero-status-dot" />
+              Registry Baseline
+            </span>
+            <span className="hero-status-row-value">
+              {kpis ? `${kpis.total_businesses.toLocaleString()} entities` : "—"}
+            </span>
+          </div>
         </div>
       </div>
     </section>
@@ -573,7 +718,7 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function HomePage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { theme, resolvedTheme } = useTheme();
   const navigate  = useNavigate();
   
@@ -586,7 +731,6 @@ export default function HomePage() {
     version:   "beta",
   });
 
-  const [showWelcome, setShowWelcome] = useState(true);
 
   // KPIs
   const [kpis,     setKpis]     = useState(null);
@@ -691,15 +835,7 @@ export default function HomePage() {
         
         {/* Left Column (Main Content) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {showWelcome && <OnboardingPanel onDismiss={() => setShowWelcome(false)} />}
-          
-          {/* Page header */}
-          <div className="page-header" style={{ marginBottom: 0 }}>
-            <div>
-              <h1 className="page-title">Overview Dashboard</h1>
-              <p className="page-subtitle">Real-time compliance metrics for Mataasnakahoy.</p>
-            </div>
-          </div>
+          <HeroBanner user={user} kpis={kpis} mapsReady={isLoaded} navigate={navigate} />
 
           {kpiError && (
             <div style={{

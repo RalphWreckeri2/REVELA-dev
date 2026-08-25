@@ -752,6 +752,29 @@ class AuthService extends ChangeNotifier {
     await _storage.delete(key: 'saved_password');
   }
 
+  /// Immediately ends the active session WITHOUT contacting the server.
+  ///
+  /// Used when connectivity drops mid-session (the `/auth/logout` call would
+  /// be unreachable anyway). Unlike [logout], this intentionally PRESERVES:
+  ///  * `user_profile_<id>` entries → so offline biometric re-login works
+  ///  * `saved_email` / `saved_password` → biometric eligibility
+  ///  * `active_biometric_user_id` / `last_logged_in_user_id`
+  /// while clearing everything session-scoped.
+  Future<void> forceStopSession() async {
+    try {
+      await _storage.delete(key: 'jwt_token');
+      await _storage.delete(key: 'temp_2fa_token');
+      await _storage.delete(key: 'must_change_password');
+    } catch (e) {
+      debugPrint('forceStopSession: storage cleanup failed: $e');
+    }
+
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    _currentUser = null;
+    notifyListeners(); // main.dart listener navigates to LoginPage
+  }
+
   Future<void> logout() async {
     try {
       await _dio.post('/api/auth/logout');

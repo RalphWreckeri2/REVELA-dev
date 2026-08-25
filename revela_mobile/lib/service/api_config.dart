@@ -83,8 +83,8 @@ class ApiConfig {
       add(_compileTimeBase);
     }
 
-    // 🌟 Current Wi-Fi IP ng Laptop mo (192.168.8.106)
-    add('http://192.168.8.106:5000');
+    // Current Wi-Fi IP ng Laptop mo (192.168.1.2)
+    add('http://192.168.1.2:5000');
 
     // Naka-save sa SharedPreferences (kung may dati nang gumaganang IP)
     final prefs = await SharedPreferences.getInstance();
@@ -95,7 +95,6 @@ class ApiConfig {
 
     // Secondary / Previous Wi-Fi IPs
     add('http://192.168.8.108:5000');
-    add('http://192.168.1.2:5000');
 
     // USB + `adb reverse tcp:5000 tcp:5000` (physical device)
     add('http://127.0.0.1:5000');

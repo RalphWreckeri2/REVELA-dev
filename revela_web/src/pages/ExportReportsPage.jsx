@@ -344,6 +344,12 @@ export default function ExportReportsPage() {
             ))}
           </div>
         </div>
+
+        {/* Footer — hidden in print output so it never lands in generated reports */}
+        <footer className="saas-footer frosted-glass print:hidden">
+          <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
+          <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
+        </footer>
       </DashboardLayout>
 
       {/* ── Printable Report View (hidden on screen, visible only during print) ── */}

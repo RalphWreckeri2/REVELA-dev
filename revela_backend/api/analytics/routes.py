@@ -311,12 +311,17 @@ def _get_all_analytics_inner(F=None):
     )
 
     # Category non-compliance
+    # NOTE: join is normalized (case/whitespace-insensitive) because detected names
+    # from the field rarely match registry names character-for-character — an exact
+    # match dumps most logs into the 'Unclassified' bucket. We also count DISTINCT
+    # detected entities (name + barangay), not raw detection events, so the ranking
+    # reflects how many unique businesses are flagged per line of business.
     cur.execute(f"""
         SELECT
             COALESCE(o.lineOfBusiness, 'Unclassified') AS category,
-            COUNT(DISTINCT g.logID) AS flagged_count
+            COUNT(DISTINCT CONCAT(LOWER(TRIM(g.detectedName)), '|', g.barangayID)) AS flagged_count
         FROM geospatial_logs g
-        LEFT JOIN official_registry o ON g.detectedName = o.businessName
+        LEFT JOIN official_registry o ON LOWER(TRIM(g.detectedName)) = LOWER(TRIM(o.businessName))
             AND g.barangayID = o.barangayID{reg_o}
         WHERE 1=1 AND g.flagColor != 'Green' {geo_g}
         GROUP BY category

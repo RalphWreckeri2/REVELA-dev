@@ -27,6 +27,7 @@ def get_inspector_tasks(user_id):
                 ir.targetID          AS logID,
                 ir.inspectionResult,
                 ir.verificationStatus,
+                ir.wasReassigned,
                 ir.remarks,
                 ir.photoPath,
                 ir.irTimestamp,
@@ -75,6 +76,7 @@ def get_inspector_reports_history(user_id):
                 ir.targetID          AS logID,
                 ir.inspectionResult,
                 ir.verificationStatus,
+                ir.wasReassigned,
                 ir.remarks,
                 ir.photoPath,
                 ir.irTimestamp,
@@ -129,15 +131,6 @@ def assign_inspection(log_id, inspector_user_id, deadline, assigned_by):
             cursor.close()
             return None, f"Flag #{log_id} not found"
 
-        # Check if there's already an open assignment
-        cursor.execute("""
-            SELECT reportID FROM inspection_reports
-            WHERE targetID = %s
-              AND verificationStatus IN ('Assigned', 'Reassigned')
-            LIMIT 1
-        """, (log_id,))
-        existing = cursor.fetchone()
-
         # Guard: inspector user exists and has Inspector role
         cursor.execute(
             "SELECT userID, fullName, userRole FROM users WHERE userID = %s AND userRole = 'Inspector'",
@@ -148,23 +141,36 @@ def assign_inspection(log_id, inspector_user_id, deadline, assigned_by):
             cursor.close()
             return None, f"Inspector userID {inspector_user_id} not found"
 
-        # First-ever dispatch for this flag → 'Assigned'. Any prior report
-        # (open, submitted, or verified) means the admin is RE-dispatching,
-        # so the task must land in the 'Reassigned' column of the Kanban
-        # board instead of masquerading as a fresh assignment.
+        # Check if ANY report already exists for this flag (any status).
+        # Re-dispatching reuses the existing row so the count stays correct.
         cursor.execute("""
-            SELECT reportID FROM inspection_reports
+            SELECT reportID, verificationStatus FROM inspection_reports
             WHERE targetID = %s
+            ORDER BY reportID DESC
             LIMIT 1
         """, (log_id,))
-        has_history = cursor.fetchone()
+        existing = cursor.fetchone()
 
-        new_status = 'Reassigned' if has_history else 'Assigned'
+        # First-ever dispatch → 'Assigned'. Any existing report means the
+        # admin is RE-dispatching, so it lands in 'Reassigned'.
+        is_reassign = existing is not None
+        new_status = 'Reassigned' if is_reassign else 'Assigned'
 
         if existing:
+            # Update the existing row — clear previous submission data
+            # when re-dispatching a Submitted/Verified task
             cursor.execute("""
                 UPDATE inspection_reports
-                SET userID = %s, verificationStatus = %s, deadline = %s
+                SET userID = %s,
+                    verificationStatus = %s,
+                    wasReassigned = 1,
+                    deadline = %s,
+                    inspectionResult = NULL,
+                    remarks = NULL,
+                    photoPath = NULL,
+                    resolutionTime = NULL,
+                    nearestLandmark = NULL,
+                    irTimestamp = NOW()
                 WHERE reportID = %s
             """, (inspector_user_id, new_status, deadline, existing["reportID"]))
             report_id = existing["reportID"]
@@ -321,6 +327,7 @@ def reassign_submitted_report(report_id, inspector_user_id, deadline, assigned_b
             UPDATE inspection_reports
             SET userID = %s,
                 verificationStatus = 'Reassigned',
+                wasReassigned = 1,
                 inspectionResult = NULL,
                 remarks = NULL,
                 photoPath = NULL,
@@ -466,6 +473,7 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
                 ir.targetID          AS logID,
                 ir.inspectionResult,
                 ir.verificationStatus,
+                ir.wasReassigned,
                 ir.noticeLevel,
                 ir.remarks,
                 ir.photoPath,
@@ -496,6 +504,20 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
             params + [per_page, offset],
         )
         rows = cursor.fetchall()
+
+        # Count ALL report rows (no latest-per-target collapse) so the UI can
+        # disclose how many older revisions are grouped under newer reports.
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM inspection_reports ir
+            JOIN geospatial_logs g ON ir.targetID = g.logID
+            {where}
+            """,
+            params,
+        )
+        total_rows = cursor.fetchone()["total"]
+
         cursor.close()
 
         for row in rows:
@@ -505,11 +527,12 @@ def get_all_inspections(status=None, barangay_id=None, page=1, per_page=20):
                 row["deadline"] = str(row["deadline"])
 
         return {
-            "data":     rows,
-            "total":    total,
-            "page":     page,
-            "per_page": per_page,
-            "pages":    max(1, -(-total // per_page)),
+            "data":       rows,
+            "total":      total,
+            "total_rows": total_rows,
+            "page":       page,
+            "per_page":   per_page,
+            "pages":      max(1, -(-total // per_page)),
         }, None
 
     except Exception as e:

@@ -7,9 +7,11 @@ import Swal from "sweetalert2";
 import { QRCodeSVG } from "qrcode.react";
 import { getWlcConfigRequest, updateWlcConfigRequest, updateMePreferencesRequest, API_ORIGIN } from "../services/api";
 import { useLoadScript, GoogleMap, Marker } from "@react-google-maps/api";
+import { darkMapStyle, REVELA_MAP_ID } from "../utils/mapStyles";
 import TermsPage from "../components/TermsPage";
 import PrivacyPage from "../components/PrivacyPage";
 import AnimatePresence from "../components/AnimatePresence";
+import { createPortal } from "react-dom";
 
 const LIBRARIES = ["places"];
 
@@ -30,7 +32,9 @@ const EyeOffIcon = () => (
 
 // ── Legal Document Modal ──────────────────────────────────────────────────────
 function LegalDocModal({ title, children, onClose, isClosing }) {
-  return (
+  // Rendered via portal so the modal escapes the `.saas-content` stacking context
+  // (z-index 10) and sits ABOVE the sticky top navbar (z-index 20).
+  return createPortal(
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
@@ -58,7 +62,8 @@ function LegalDocModal({ title, children, onClose, isClosing }) {
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -93,7 +98,8 @@ function ChangePasswordModal({ onClose, token, isClosing }) {
     }
   };
 
-  return (
+  // Portal: escape the .saas-content stacking context so the modal clears the navbar
+  return createPortal(
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
       <div className={"modal-panel saas-card frosted-glass" + (isClosing ? " closing" : "")} style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button className="modal-close-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}>
@@ -128,7 +134,8 @@ function ChangePasswordModal({ onClose, token, isClosing }) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -178,7 +185,8 @@ function Setup2FAModal({ onClose, token, onSuccess, isClosing }) {
     }
   };
 
-  return (
+  // Portal: escape the .saas-content stacking context so the modal clears the navbar
+  return createPortal(
     <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={onClose}>
       <div className={"modal-panel saas-card frosted-glass" + (isClosing ? " closing" : "")} style={{ width: "min(100%, 400px)", padding: 32, position: "relative", background: "var(--color-modal-bg)", boxShadow: "0 24px 60px rgba(15,23,42,0.18)" }} onClick={e => e.stopPropagation()}>
         <button className="modal-close-btn" onClick={onClose} style={{ position: "absolute", top: 16, right: 16 }}>
@@ -207,7 +215,81 @@ function Setup2FAModal({ onClose, token, onSuccess, isClosing }) {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Map Picker Modal ──────────────────────────────────────────────────────────
+// Rendered through <AnimatePresence>, which injects an `isClosing` prop during
+// the exit animation — a raw DOM <div> can't receive it, hence this component.
+function MapPickerModal({ isLoaded, loadError, isDark, center, marker, onPick, onClose, isClosing }) {
+  // Portal: escape the .saas-content stacking context so the modal clears the navbar
+  return createPortal(
+    <div
+      className={"modal-backdrop" + (isClosing ? " closing" : "")}
+      style={{
+        position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+        background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)",
+        display: "flex", justifyContent: "center", alignItems: "center",
+        zIndex: 99999
+      }}
+    >
+      <div
+        className={"modal-panel" + (isClosing ? " closing" : "")}
+        style={{
+          background: "var(--color-modal-bg)", borderRadius: 16, padding: 24,
+          width: "90%", maxWidth: 600,
+          boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)"
+        }}
+      >
+        <h3 style={{ margin: "0 0 16px", color: "var(--color-ink)", fontSize: 18, fontWeight: 700 }}>Select Base Station Location</h3>
+        <p style={{ margin: "0 0 16px", color: "var(--color-muted)", fontSize: 13 }}>Click anywhere on the map to set the BPLO office coordinates.</p>
+
+        <div style={{ position: "relative", width: "100%", height: 350, borderRadius: 12, overflow: "hidden", border: "1px solid var(--color-border)" }}>
+          {isLoaded && !loadError ? (
+            <GoogleMap
+              mapContainerStyle={{ width: "100%", height: "100%" }}
+              center={center}
+              zoom={15}
+              options={{
+                disableDefaultUI: true,
+                zoomControl: true,
+                clickableIcons: false, // POI clicks must not swallow map picks
+                mapId: REVELA_MAP_ID,
+                colorScheme: isDark ? "DARK" : "LIGHT",
+                styles: isDark ? darkMapStyle : undefined,
+              }}
+              onClick={(e) => {
+                if (!e.latLng) return; // guard: some click events carry no coordinates
+                onPick({
+                  lat: parseFloat(e.latLng.lat().toFixed(6)),
+                  lng: parseFloat(e.latLng.lng().toFixed(6)),
+                });
+              }}
+            >
+              {marker && <Marker position={marker} />}
+            </GoogleMap>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--color-muted)", fontSize: 13, padding: 24, textAlign: "center" }}>
+              {loadError ? "Failed to load Google Maps. Please check your connection or API key." : "Loading map…"}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+          <button
+            type="button"
+            className="ghost-btn"
+            onClick={onClose}
+            style={{ padding: "8px 16px", background: "var(--color-surface)", color: "var(--color-muted)" }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -222,9 +304,11 @@ export default function SettingsPage() {
   const [savingPolicy, setSavingPolicy] = useState(false);
 
   const [showMapModal, setShowMapModal] = useState(false);
-  const { isLoaded } = useLoadScript({
+  const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
     libraries: LIBRARIES,
+    // Keep in sync with MapPage/HomePage — mixing script versions can double-load the Maps API
+    version: "beta",
   });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
@@ -697,61 +781,35 @@ export default function SettingsPage() {
       </AnimatePresence>
 
       {/* Map Picker Modal */}
-      <AnimatePresence isVisible={showMapModal && isLoaded}>
-        <div
-          className={"modal-backdrop" + ((showMapModal === false) ? " closing" : "")}
-          style={{
-            position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-            background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)",
-            display: "flex", justifyContent: "center", alignItems: "center",
-            zIndex: 99999
+      <AnimatePresence isVisible={showMapModal}>
+        <MapPickerModal
+          isLoaded={isLoaded}
+          loadError={loadError}
+          isDark={isDark}
+          center={{ lat: wlcConfig.bplo_lat || 13.9639, lng: wlcConfig.bplo_lng || 121.1114 }}
+          marker={wlcConfig.bplo_lat && wlcConfig.bplo_lng ? { lat: wlcConfig.bplo_lat, lng: wlcConfig.bplo_lng } : null}
+          onPick={({ lat, lng }) => {
+            setWlcConfig(prev => ({ ...prev, bplo_lat: lat, bplo_lng: lng }));
+            setShowMapModal(false);
+            Swal.fire({
+              title: "Base Station Updated",
+              text: `Coordinates set to ${lat}, ${lng}. Click Save Changes to persist.`,
+              icon: "success",
+              timer: 2500,
+              showConfirmButton: false,
+              toast: true,
+              position: "top-end",
+            });
           }}
-        >
-          <div
-            className={"modal-panel" + ((showMapModal === false) ? " closing" : "")}
-            style={{
-              background: "var(--color-modal-bg)", borderRadius: 16, padding: 24,
-              width: "90%", maxWidth: 600,
-              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)"
-            }}
-          >
-            <h3 style={{ margin: "0 0 16px", color: "var(--color-ink)", fontSize: 18, fontWeight: 700 }}>Select Base Station Location</h3>
-            <p style={{ margin: "0 0 16px", color: "var(--color-muted)", fontSize: 13 }}>Click anywhere on the map to set the BPLO office coordinates.</p>
-
-            <div style={{ width: "100%", height: 350, borderRadius: 12, overflow: "hidden", border: "1px solid var(--color-border)" }}>
-              <GoogleMap
-                mapContainerStyle={{ width: "100%", height: "100%" }}
-                center={{ lat: wlcConfig.bplo_lat || 13.9639, lng: wlcConfig.bplo_lng || 121.1114 }}
-                zoom={15}
-                options={{ disableDefaultUI: true, zoomControl: true }}
-                onClick={(e) => {
-                  setWlcConfig(prev => ({
-                    ...prev,
-                    bplo_lat: parseFloat(e.latLng.lat().toFixed(6)),
-                    bplo_lng: parseFloat(e.latLng.lng().toFixed(6))
-                  }));
-                  setShowMapModal(false);
-                }}
-              >
-                {wlcConfig.bplo_lat && wlcConfig.bplo_lng && (
-                  <Marker position={{ lat: wlcConfig.bplo_lat, lng: wlcConfig.bplo_lng }} />
-                )}
-              </GoogleMap>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={() => setShowMapModal(false)}
-                style={{ padding: "8px 16px", background: "var(--color-surface)", color: "var(--color-muted)" }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+          onClose={() => setShowMapModal(false)}
+        />
       </AnimatePresence>
+
+      {/* Footer */}
+      <footer className="saas-footer frosted-glass">
+        <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
+        <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
+      </footer>
     </DashboardLayout>
   );
 }

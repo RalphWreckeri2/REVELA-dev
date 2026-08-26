@@ -945,8 +945,8 @@ export default function AnalyticsPage() {
   // ── Compliance by size bar ────────────────────────────────────────────────
   const complianceBySizeData = (desc?.compliance_by_size || []).map((r) => ({
     name: r.size_label,
-    Active: r.active_count,
-    "Non-Active": r.inactive_count,
+    Active: Number(r.active_count || 0),
+    "Non-Active": Number(r.inactive_count || 0),
   }));
 
   const worstComplianceSize = useMemo(() => {
@@ -994,6 +994,9 @@ export default function AnalyticsPage() {
 
 
   // ── Diagnostic: category non-compliance horizontal bar ───────────────────
+  // flagged_count = unique flagged entities per line of business (backend joins
+  // detections to the registry with a normalized name match). 'Unclassified' is
+  // excluded here since it is not a real line of business.
   const categoryData = (diag?.category_noncompliance || [])
     .filter(r => !r.category.toLowerCase().includes("unclassified"))
     .map(r => ({
@@ -2423,7 +2426,7 @@ export default function AnalyticsPage() {
                       <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={categoryData.slice(0, 7)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(226,232,240,0.4)" />
-                        <XAxis type="number" tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
+                        <XAxis type="number" allowDecimals={false} domain={[0, (dataMax) => Math.max(5, dataMax + 1)]} tick={{ fontSize: 11, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
                         <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--color-ink)", fontWeight: 500 }} width={120} axisLine={false} tickLine={false} tickFormatter={(val) => typeof val === 'string' && val.length > 18 ? val.substring(0, 18) + '…' : val} />
                         <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", background: "var(--color-surface)" }} />
                         <Bar dataKey="count" fill={COLOR.orange} radius={[0, 4, 4, 0]} name="Flagged">
@@ -3119,6 +3122,12 @@ export default function AnalyticsPage() {
           </section>
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="saas-footer frosted-glass">
+        <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
+        <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
+      </footer>
     </DashboardLayout>
   );
 }

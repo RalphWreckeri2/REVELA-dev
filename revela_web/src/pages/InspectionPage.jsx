@@ -205,7 +205,7 @@ function AssignModal({ report, token, onClose, onSuccess, isClosing }) {
   };
 
   return createPortal(
-    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={s.backdrop} onClick={!loading ? onClose : undefined}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{...s.backdrop, zIndex: 10001}} onClick={!loading ? onClose : undefined}>
       <div className={"modal-panel" + (isClosing ? " closing" : "")} style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>
@@ -304,7 +304,7 @@ function VerifyModal({ report, token, onClose, onSuccess, isClosing }) {
   };
 
   return (
-    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={s.backdrop} onClick={!loading ? onClose : undefined}>
+    <div className={"modal-backdrop" + (isClosing ? " closing" : "")} style={{...s.backdrop, zIndex: 10001}} onClick={!loading ? onClose : undefined}>
       <div className={"modal-panel" + (isClosing ? " closing" : "")} style={s.modal} onClick={e => e.stopPropagation()}>
         <div style={s.modalHeader}>
           <h3 style={s.modalTitle}>Verify Inspection</h3>
@@ -431,6 +431,11 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose, i
               <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 700, color: statusMeta.text }}>
                 {report.verificationStatus}
               </span>
+              {report.wasReassigned === 1 && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 4, background: "#fefce8", color: "#ca8a04", border: "1px solid rgba(202,138,4,0.2)", marginTop: 6 }}>
+                  <Icon.RefreshCw /> Reassigned
+                </span>
+              )}
             </div>
           </div>
           {(report.inspectionResult || report.noticeLevel > 0) && (
@@ -695,6 +700,11 @@ function ColumnFocusModal({ status, reports, isAdmin, onAssign, onVerify, onView
                           </span>
                         </>
                       )}
+                      {f.wasReassigned === 1 && (
+                        <span style={{ fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 4, background: "#fefce8", color: "#ca8a04", display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid rgba(202,138,4,0.2)" }}>
+                          <Icon.RefreshCw /> Reassigned
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -750,6 +760,11 @@ function InspectionCard({ report, isAdmin, onAssign, onVerify, onViewDetail, isC
                 {report.noticeLevel === 1 ? "1st Notice" : report.noticeLevel === 2 ? "2nd Notice" : report.noticeLevel === 3 ? "3rd Notice" : "Escalated"}
               </span>
             </>
+          )}
+          {report.wasReassigned === 1 && (
+            <span style={{ fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 4, background: "#fefce8", color: "#ca8a04", display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid rgba(202,138,4,0.2)" }}>
+              <Icon.RefreshCw /> Reassigned
+            </span>
           )}
         </div>
       </div>
@@ -855,10 +870,13 @@ export default function InspectionPage() {
   const { token, user } = useContext(AuthContext);
   const isAdmin = ["Admin", "SUPER_ADMIN", "System Administrator"].includes(user?.role);
 
-  const [reports,  setReports]  = useState([]);
-  const [total,    setTotal]    = useState(0);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState("");
+  const [reports,   setReports]   = useState([]);
+  const [total,     setTotal]     = useState(0);
+  // All report rows in the DB (incl. older revisions collapsed by the
+  // latest-per-target query) — lets the UI disclose hidden history.
+  const [totalRows, setTotalRows] = useState(0);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState("");
 
   // Kanban View Optimization State
   const isCompact = true;
@@ -895,10 +913,12 @@ export default function InspectionPage() {
         );
         setReports(result.data ?? []);
         setTotal(result.total ?? 0);
+        setTotalRows(result.total_rows ?? result.total ?? 0);
       } else {
         result = await getInspectorTasksRequest(token);
         setReports(result.data ?? []);
         setTotal(result.total ?? 0);
+        setTotalRows(result.total_rows ?? result.total ?? 0);
       }
     } catch (err) {
       setError(err.message || "Failed to load inspections.");
@@ -961,8 +981,20 @@ export default function InspectionPage() {
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {/* Total badge */}
           {!loading && (
-            <span style={s.totalPill}>
+            <span
+              style={s.totalPill}
+              title={
+                totalRows > total
+                  ? `${totalRows - total} older revision${totalRows - total !== 1 ? "s" : ""} of re-dispatched flags are grouped under their latest report.`
+                  : undefined
+              }
+            >
               {total} report{total !== 1 ? "s" : ""}
+              {totalRows > total && (
+                <span style={{ opacity: 0.65, fontWeight: 600 }}>
+                  {" "}· {totalRows - total} in history
+                </span>
+              )}
             </span>
           )}
 

@@ -194,7 +194,31 @@ def _status_to_flag_color(status: str) -> str:
         "Revoked": "Black",
         "Closed": "Purple"
     }
-    return mapping.get(status, "Green")
+    # Unknown statuses default to Yellow (needs verification) — NEVER Green,
+    # which would falsely label an unverified business as compliant/active.
+    return mapping.get(status, "Yellow")
+
+
+def _sync_flag_color(cursor, barangay_id, business_name: str, status: str):
+    """
+    Propagate a registry permit-status change to the business's map pin
+    (its most recent geospatial_logs entry, matched case-insensitively on
+    name + barangay — the same linkage the Registry page uses).
+    """
+    cursor.execute(
+        """
+        UPDATE geospatial_logs g
+        JOIN (
+            SELECT logID
+            FROM geospatial_logs
+            WHERE barangayID = %s AND LOWER(detectedName) = LOWER(%s)
+            ORDER BY detectedDate DESC
+            LIMIT 1
+        ) latest ON g.logID = latest.logID
+        SET g.flagColor = %s
+        """,
+        (barangay_id, str(business_name).strip(), _status_to_flag_color(status)),
+    )
 
 
 # ── Service functions ─────────────────────────────────────────────────────────
@@ -272,10 +296,11 @@ def upload_registry(file, ext: str):
                 geocoded_failed += 1
 
             # Status (BPLO files may use application or registration status columns)
+            # Missing/blank status → Pending (Yellow), never Active. See sync_registry.
             status_raw = (
                 row.get("applicationStatus")
                 or row.get("registrationStatus")
-                or "Active"
+                or "Pending"
             )
             status = _normalise_status(status_raw)
 
@@ -484,6 +509,8 @@ def sync_registry(file, ext: str):
                     ),
                 )
                 updated += 1
+                # Propagate status → flag color on the map pin
+                _sync_flag_color(cursor, barangay_id, name_key, status)
             else:
                 cursor.execute(
                     """
@@ -584,6 +611,7 @@ def update_business(business_id: int, data: dict):
             cursor.execute(query, tuple(params))
 
             # If the business name changed, update geospatial_logs to maintain the linkage
+            current_name = old_name
             if "businessName" in data:
                 new_name = str(data["businessName"]).strip()
                 if new_name.lower() != old_name.lower():
@@ -592,6 +620,17 @@ def update_business(business_id: int, data: dict):
                         SET detectedName = %s
                         WHERE LOWER(detectedName) = LOWER(%s) AND barangayID = %s
                     """, (new_name, old_name, barangay_id))
+                current_name = new_name
+
+            # Keep the map pin in sync when the permit status changes
+            # (otherwise an Expired/Revoked/Closed business stays Green on the map)
+            if "applicationStatus" in data:
+                _sync_flag_color(
+                    cursor,
+                    barangay_id,
+                    current_name,
+                    _normalise_status(data["applicationStatus"]),
+                )
 
             mysql.connection.commit()
 

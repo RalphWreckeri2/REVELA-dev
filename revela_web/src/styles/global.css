@@ -674,6 +674,10 @@ body {
 
 /* ── FOOTER ── */
 .saas-footer {
+  /* .saas-content is a full-height flex column: the auto top margin soaks up
+     any leftover space, keeping the footer pinned to the bottom of the page
+     even when a page's content is shorter than the viewport. */
+  margin-top: auto;
   border-radius: var(--radius-md);
   padding: 22px 32px;
   display: flex;

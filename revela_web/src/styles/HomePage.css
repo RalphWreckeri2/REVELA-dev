@@ -124,7 +124,8 @@
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  /* minmax(0, …) lets both halves shrink instead of being locked to content width */
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 32px;
   padding: 36px;
   border-radius: 24px;
@@ -193,11 +194,13 @@
 }
 
 .hero-greeting {
-  font-size: 44px;
+  /* fluid headline: scales with the banner instead of overflowing it */
+  font-size: clamp(28px, 3.4vw, 44px);
   font-weight: 800;
   letter-spacing: -1px;
   line-height: 1.1;
   margin: 20px 0 12px;
+  overflow-wrap: break-word;
 }
 
 .hero-greeting-name { color: var(--color-primary-dark); }
@@ -281,8 +284,10 @@
 .hero-cards {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …): tracks may compress below their content's intrinsic width */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  min-width: 0;
 }
 
 .hero-card {
@@ -294,6 +299,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  /* Size container: lets .hero-clock / .hero-temp scale with the card itself */
+  container-type: inline-size;
 }
 
 .hero-card-head {
@@ -301,7 +309,11 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
+  /* children must be allowed to shrink or long labels overflow the card */
+  min-width: 0;
 }
+
+.hero-card-head > * { min-width: 0; }
 
 .hero-card-title {
   display: flex;
@@ -324,16 +336,24 @@
   text-align: center;
   line-height: 1.3;
   white-space: nowrap;
+  flex-shrink: 0; /* keep the badge intact; let the title/loc shrink instead */
 }
 
 .hero-card-loc {
-  font-size: 10.5px;
+  font-size: clamp(9px, 3.5cqi, 10.5px);
   font-weight: 600;
   color: var(--color-muted);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* "Mataasnakahoy" clips instead of spilling out */
 }
 
 .hero-clock {
-  font-size: 30px;
+  /* Fallback for browsers without container queries… */
+  font-size: clamp(20px, 3vw, 30px);
+  /* …then fluid sizing driven by the card's own width (~11% of card, 20–30px) */
+  font-size: clamp(20px, 11cqi, 30px);
   font-weight: 800;
   letter-spacing: -0.5px;
   font-variant-numeric: tabular-nums;
@@ -342,7 +362,7 @@
 }
 
 .hero-clock-ampm {
-  font-size: 15px;
+  font-size: clamp(11px, 5.5cqi, 15px);
   font-weight: 700;
   color: var(--color-muted);
 }
@@ -390,7 +410,10 @@
 }
 
 .hero-temp {
-  font-size: 30px;
+  /* Fallback for browsers without container queries… */
+  font-size: clamp(20px, 3vw, 30px);
+  /* …then fluid sizing driven by the card's own width (~11% of card, 20–30px) */
+  font-size: clamp(20px, 11cqi, 30px);
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.5px;

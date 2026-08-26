@@ -110,7 +110,7 @@ def _get_all_analytics_inner(F=None):
     current_year_count = cur.fetchone()["n"]
 
     cur.execute(
-        "SELECT COUNT(*) AS n FROM geospatial_logs g WHERE g.flagColor != 'Green'" + geo_g,
+        "SELECT COUNT(*) AS n FROM geospatial_logs g WHERE g.flagColor != 'Green' AND g.reportedByUserID IS NOT NULL" + geo_g,
         geo_g_p,
     )
     total_flagged = cur.fetchone()["n"]
@@ -129,7 +129,7 @@ def _get_all_analytics_inner(F=None):
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Purple' THEN g.logID END) AS purple_count
         FROM barangays b
-        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
+        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID AND g.reportedByUserID IS NOT NULL{geo_on_g}
         WHERE 1=1 {brgy_b}
         GROUP BY b.barangayID, b.barangayName
         ORDER BY b.barangayName
@@ -286,7 +286,7 @@ def _get_all_analytics_inner(F=None):
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Orange' THEN g.logID END) AS orange_count,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Purple' THEN g.logID END) AS purple_count
         FROM barangays b
-        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID{geo_on_g}
+        LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID AND g.reportedByUserID IS NOT NULL{geo_on_g}
         WHERE 1=1 {brgy_b}
         GROUP BY b.barangayID, b.barangayName
         ORDER BY flagged_count DESC
@@ -323,7 +323,7 @@ def _get_all_analytics_inner(F=None):
         FROM geospatial_logs g
         LEFT JOIN official_registry o ON LOWER(TRIM(g.detectedName)) = LOWER(TRIM(o.businessName))
             AND g.barangayID = o.barangayID{reg_o}
-        WHERE 1=1 AND g.flagColor != 'Green' {geo_g}
+        WHERE 1=1 AND g.flagColor != 'Green' AND g.reportedByUserID IS NOT NULL {geo_g}
         GROUP BY category
         ORDER BY flagged_count DESC
         LIMIT 10
@@ -342,7 +342,7 @@ def _get_all_analytics_inner(F=None):
             ) AS week_start,
             COUNT(DISTINCT CASE WHEN g.flagColor = 'Red' THEN g.logID END) AS new_red_flags
         FROM geospatial_logs g
-        WHERE g.detectedDate >= DATE_SUB(NOW(), INTERVAL 8 WEEK) {geo_g}
+        WHERE g.detectedDate >= DATE_SUB(NOW(), INTERVAL 8 WEEK) AND g.reportedByUserID IS NOT NULL {geo_g}
         GROUP BY week_start
         ORDER BY week_start
     """, geo_g_p)
@@ -362,7 +362,8 @@ def _get_all_analytics_inner(F=None):
             LEFT JOIN barangays b ON g.barangayID = b.barangayID
             WHERE g.flagColor IN ('Red', 'Black')
               AND g.latitude IS NOT NULL
-              AND g.longitude IS NOT NULL {geo_g}
+              AND g.longitude IS NOT NULL
+              AND g.reportedByUserID IS NOT NULL {geo_g}
         """, geo_g_p)
         hotspot_data = cur.fetchall()
 
@@ -427,7 +428,7 @@ def _get_all_analytics_inner(F=None):
                 AVG(g.longitude) as lng,
                 COUNT(DISTINCT CASE WHEN g.flagColor IN ('Red', 'Black') THEN g.logID END) as severe_count
             FROM barangays b
-            JOIN geospatial_logs g ON b.barangayID = g.barangayID{geo_on_g}
+            JOIN geospatial_logs g ON b.barangayID = g.barangayID AND g.reportedByUserID IS NOT NULL{geo_on_g}
             WHERE g.latitude IS NOT NULL AND g.longitude IS NOT NULL {brgy_b}
             GROUP BY b.barangayID, b.barangayName
         """, geo_on_g_p + brgy_b_p)
@@ -517,7 +518,7 @@ def _get_all_analytics_inner(F=None):
             AVG(g.longitude)                                         AS avg_lng,
             COUNT(DISTINCT o.businessID)                             AS total_registered
         FROM barangays b
-        LEFT JOIN geospatial_logs   g ON g.barangayID = b.barangayID{geo_on_g}
+        LEFT JOIN geospatial_logs   g ON g.barangayID = b.barangayID AND g.reportedByUserID IS NOT NULL{geo_on_g}
         LEFT JOIN official_registry o ON o.barangayID = b.barangayID{reg_o}
         WHERE 1=1 {brgy_b}
         GROUP BY b.barangayID, b.barangayName
@@ -818,7 +819,7 @@ def get_ops_rankings_only():
                 AVG(g.latitude)                                          AS avg_lat,
                 AVG(g.longitude)                                         AS avg_lng
             FROM barangays b
-            LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID
+            LEFT JOIN geospatial_logs g ON g.barangayID = b.barangayID AND g.reportedByUserID IS NOT NULL
             GROUP BY b.barangayID, b.barangayName
         """)
         rows = cur.fetchall()

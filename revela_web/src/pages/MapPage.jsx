@@ -307,13 +307,14 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
 
   const canShowDispatchButton = (() => {
     if (!isAdmin) return false;
+    if (flag.color === "Black") return false;
     if (flag.hasActiveInspection) {
-      return flag.color !== "Black";
+      return true;
     }
     if (flag.verificationStatus === 'Verified') {
-      return flag.color !== "Black";
+      return true;
     }
-    return flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange" || flag.color === "Black";
+    return flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange";
   })();
 
   const dispatchButtonLabel = (() => {
@@ -436,7 +437,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
 
         {/* Secondary Actions */}
         <div style={{ display: "flex", gap: 12 }}>
-          {isAdmin && flag.color !== "Purple" && (
+          {isAdmin && flag.color !== "Purple" && flag.color !== "Black" && (
             <button
               style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", height: 44, borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: "pointer", border: "1px solid var(--color-border)", background: "var(--color-surface)", color: "var(--color-ink)", transition: "all 0.2s" }}
               disabled={actionLoading}
@@ -459,59 +460,70 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
               href={mapsUrl}
               target="_blank"
               rel="noreferrer"
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 10, border: "none", background: "transparent", color: "#3b82f6", fontSize: 14, fontWeight: 600, textDecoration: "none", cursor: "pointer", transition: "all 0.15s" }}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 10, border: flag.color === "Black" ? "1px solid var(--color-border)" : "none", background: flag.color === "Black" ? "var(--color-surface)" : "transparent", color: "#3b82f6", fontSize: 14, fontWeight: 600, textDecoration: "none", cursor: "pointer", transition: "all 0.15s" }}
             >
               <Icon.ExternalLink size={16} /> Open in maps
             </a>
           )}
+          {isAdmin && flag.color === "Black" && (
+            <button
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderRadius: 10, border: "none", background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}
+              disabled={actionLoading}
+              onClick={() => onDelete(flag.id)}
+            >
+              <Icon.Trash size={16} /> Delete Flag
+            </button>
+          )}
         </div>
 
         {/* More Actions Toggle */}
-        <div style={{ borderTop: "1px solid var(--color-border-soft)", paddingTop: 16, marginTop: 4 }}>
-          <button
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: "var(--color-muted)", fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 }}
-            onClick={() => setShowMoreActions(!showMoreActions)}
-          >
-            <div style={{ display: "flex", gap: 2 }}>
-              <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor" }} />
-              <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor" }} />
-              <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor" }} />
-            </div>
-            {showMoreActions ? "Less actions" : "More actions"}
-          </button>
+        {flag.color !== "Black" && (
+          <div style={{ borderTop: "1px solid var(--color-border-soft)", paddingTop: 16, marginTop: 4 }}>
+            <button
+              style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: "var(--color-muted)", fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 }}
+              onClick={() => setShowMoreActions(!showMoreActions)}
+            >
+              <div style={{ display: "flex", gap: 2 }}>
+                <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor" }} />
+                <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor" }} />
+                <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor" }} />
+              </div>
+              {showMoreActions ? "Less actions" : "More actions"}
+            </button>
 
-          {showMoreActions && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
-              {isAdmin && (flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange") && (
-                <button
-                  style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", height: 44, borderRadius: 8, border: "none", background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", fontSize: 14, fontWeight: 600, padding: "0 16px", cursor: "pointer", transition: "all 0.15s" }}
-                  disabled={actionLoading}
-                  onClick={() => onEscalate(flag.id)}
-                >
-                  <Icon.AlertTriangle size={16} /> Escalate to Black
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", height: 44, borderRadius: 8, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-ink)", fontSize: 14, fontWeight: 500, padding: "0 16px", cursor: "pointer", transition: "all 0.15s" }}
-                  disabled={actionLoading}
-                  onClick={() => onAdjustLocation(flag)}
-                >
-                  <Icon.Crosshair size={16} /> Adjust Pin Location
-                </button>
-              )}
-              {isAdmin && (
-                <button
-                  style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", height: 44, borderRadius: 8, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-ink)", fontSize: 14, fontWeight: 500, padding: "0 16px", cursor: "pointer", transition: "all 0.15s" }}
-                  disabled={actionLoading}
-                  onClick={() => onDelete(flag.id)}
-                >
-                  <Icon.Trash size={16} /> Delete Flag
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+            {showMoreActions && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+                {isAdmin && (flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange") && (
+                  <button
+                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", height: 44, borderRadius: 8, border: "none", background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", fontSize: 14, fontWeight: 600, padding: "0 16px", cursor: "pointer", transition: "all 0.15s" }}
+                    disabled={actionLoading}
+                    onClick={() => onEscalate(flag.id)}
+                  >
+                    <Icon.AlertTriangle size={16} /> Escalate to Black
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", height: 44, borderRadius: 8, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-ink)", fontSize: 14, fontWeight: 500, padding: "0 16px", cursor: "pointer", transition: "all 0.15s" }}
+                    disabled={actionLoading}
+                    onClick={() => onAdjustLocation(flag)}
+                  >
+                    <Icon.Crosshair size={16} /> Adjust Pin Location
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", height: 44, borderRadius: 8, border: "1px solid var(--color-border)", background: "transparent", color: "var(--color-ink)", fontSize: 14, fontWeight: 500, padding: "0 16px", cursor: "pointer", transition: "all 0.15s" }}
+                    disabled={actionLoading}
+                    onClick={() => onDelete(flag.id)}
+                  >
+                    <Icon.Trash size={16} /> Delete Flag
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>,

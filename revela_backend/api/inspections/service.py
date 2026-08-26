@@ -308,12 +308,13 @@ def reassign_submitted_report(report_id, inspector_user_id, deadline, assigned_b
             cursor.close()
             return None, f"Report #{report_id} not found"
 
-        if report["verificationStatus"] != "Submitted":
+        if report["verificationStatus"] not in ("Submitted", "Verified"):
             cursor.close()
             return None, (
                 f"Report is '{report['verificationStatus']}' — "
-                "only Submitted reports can be sent back for redo"
+                "only Submitted or Verified reports can be sent back for redo"
             )
+
 
         cursor.execute(
             """

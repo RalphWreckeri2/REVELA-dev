@@ -305,6 +305,28 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
   const [showMoreActions, setShowMoreActions] = useState(false);
   const fc = getFlagColor(flag.color);
 
+  const canShowDispatchButton = (() => {
+    if (!isAdmin) return false;
+    if (flag.hasActiveInspection) {
+      return flag.color !== "Black";
+    }
+    if (flag.verificationStatus === 'Verified') {
+      return flag.color !== "Black";
+    }
+    return flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange" || flag.color === "Black";
+  })();
+
+  const dispatchButtonLabel = (() => {
+    if (flag.hasActiveInspection) {
+      return "Undergoing Inspection";
+    }
+    if (flag.verificationStatus === 'Verified') {
+      return "Re-dispatch inspector";
+    }
+    return "Dispatch inspector";
+  })();
+
+
   // Source labels
   const sourceLabel = flag.source === "registry_and_maps"
     ? "Registry & Google Maps"
@@ -387,7 +409,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
           </div>
         </div>
 
-        {isAdmin && (flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange" || flag.color === "Black") && (
+        {canShowDispatchButton && (
           <button
             style={{ 
               width: "100%", 
@@ -408,7 +430,7 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
             disabled={actionLoading || flag.hasActiveInspection}
             onClick={() => onDispatch(flag)}
           >
-            <Icon.Send size={18} /> {flag.hasActiveInspection ? "Undergoing Inspection" : "Dispatch inspector"}
+            <Icon.Send size={18} /> {dispatchButtonLabel}
           </button>
         )}
 

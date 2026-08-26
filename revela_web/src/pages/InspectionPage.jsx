@@ -524,7 +524,8 @@ function InspectionDetailModal({ report, isAdmin, onAssign, onVerify, onClose, i
         {isAdmin && (
           <div style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
             {(report.verificationStatus === "Assigned" ||
-              report.verificationStatus === "Reassigned") && (
+              report.verificationStatus === "Reassigned" ||
+              (report.verificationStatus === "Verified" && report.inspectionResult !== "Black")) && (
               <button className="ghost-btn" style={{ fontSize: 14, fontWeight: 600, padding: "12px 16px", flex: 1, border: "1px solid var(--color-border-soft)", background: "transparent", color: "var(--color-ink)" }}
                 onClick={(e) => { e.stopPropagation(); onAssign(report); }}>
                 Reassign

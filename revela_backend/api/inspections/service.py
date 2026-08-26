@@ -151,6 +151,11 @@ def assign_inspection(log_id, inspector_user_id, deadline, assigned_by):
         """, (log_id,))
         existing = cursor.fetchone()
 
+        if existing and existing["verificationStatus"] in ('Assigned', 'Reassigned', 'In Progress'):
+            cursor.close()
+            return None, "This business is already undergoing inspection and cannot be double-booked."
+
+
         # First-ever dispatch → 'Assigned'. Any existing report means the
         # admin is RE-dispatching, so it lands in 'Reassigned'.
         is_reassign = existing is not None

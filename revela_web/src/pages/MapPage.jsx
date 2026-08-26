@@ -281,8 +281,7 @@ function normalizeFlag(flag) {
       ? `${Number(flag.latitude).toFixed(6)}Â°N, ${Number(flag.longitude).toFixed(6)}Â°E`
       : "No coordinates";
 
-  const hasActiveInspection = flag.verificationStatus === 'Assigned' ||
-    flag.verificationStatus === 'Reassigned' ||
+  const hasActiveInspection = (flag.verificationStatus != null && flag.verificationStatus !== 'Verified') ||
     flag.hasActiveInspection === true;
 
   return {
@@ -388,14 +387,28 @@ function FlagDetailModal({ flag, onClose, onEscalate, onDispatch, onAdjustLocati
           </div>
         </div>
 
-        {/* Primary Action */}
         {isAdmin && (flag.color === "Red" || flag.color === "Yellow" || flag.color === "Orange" || flag.color === "Black") && (
           <button
-            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: 10, fontWeight: 600, fontSize: 15, cursor: "pointer", background: "#16a34a", color: "#ffffff", border: "none", transition: "all 0.2s" }}
-            disabled={actionLoading}
+            style={{ 
+              width: "100%", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              gap: 8, 
+              height: 48, 
+              borderRadius: 10, 
+              fontWeight: 600, 
+              fontSize: 15, 
+              cursor: flag.hasActiveInspection ? "not-allowed" : "pointer", 
+              background: flag.hasActiveInspection ? "var(--color-border)" : "#16a34a", 
+              color: flag.hasActiveInspection ? "var(--color-muted)" : "#ffffff", 
+              border: "none", 
+              transition: "all 0.2s" 
+            }}
+            disabled={actionLoading || flag.hasActiveInspection}
             onClick={() => onDispatch(flag)}
           >
-            <Icon.Send size={18} /> {flag.hasActiveInspection ? "Reassign inspector" : "Dispatch inspector"}
+            <Icon.Send size={18} /> {flag.hasActiveInspection ? "Undergoing Inspection" : "Dispatch inspector"}
           </button>
         )}
 

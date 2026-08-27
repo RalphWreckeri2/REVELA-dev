@@ -1064,7 +1064,7 @@ export default function InspectionPage() {
       {/* Footer */}
       <footer className="saas-footer frosted-glass">
         <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
-        <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
+        <p className="footer-links"><span>BPLO Portal</span> &bull; <span>System Settings</span></p>
       </footer>
 
       {/* Assign Modal */}

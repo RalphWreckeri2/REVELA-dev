@@ -418,7 +418,7 @@
   padding: 16px;
   border-radius: 10px;
   border: none;
-  background: #1a3a1a;
+  background: #059669;
   color: #ffffff;
   font-size: 16px;
   font-weight: 600;
@@ -426,11 +426,11 @@
   letter-spacing: 0.5px;
   transition: all var(--duration-normal) var(--ease-in-out);
   margin-bottom: 28px;
-  box-shadow: 0 8px 16px rgba(26, 58, 26, 0.2);
+  box-shadow: 0 8px 16px rgba(5, 150, 105, 0.25);
 }
 
 .signin-btn:hover {
-  background: #2d5a1b;
+  background: #10b981;
   transform: translateY(-2px);
   box-shadow: 0 12px 20px rgba(26, 58, 26, 0.25);
 }
@@ -539,8 +539,8 @@ html.theme-dark .orb-mid { background: rgba(16, 185, 129, 0.08); }
 html.theme-dark .topo-overlay { opacity: 0.03; filter: invert(1); }
 
 html.theme-dark .login-card {
-  background: var(--glass-bg);
-  border-color: var(--glass-border);
+  background: rgba(17, 24, 39, 0.86);
+  border-color: #1f2937;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
 }
 
@@ -584,15 +584,19 @@ html.theme-dark .tagline {
 }
 
 html.theme-dark .glass-input {
-  background: var(--color-input-bg);
-  border-color: var(--color-border);
-  color: var(--color-ink);
+  background: #1f2937;
+  border-color: #374151;
+  color: #fff;
 }
 
 html.theme-dark .glass-input:focus {
-  border-color: var(--color-primary);
-  background: rgba(15, 23, 42, 0.8);
+  border-color: #10b981;
+  background: #1f2937;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.16);
 }
+
+html.theme-dark .signin-btn { background: #059669; color: #fff; }
+html.theme-dark .signin-btn:hover { background: #10b981; }
 
 html.theme-dark .pw-toggle,
 html.theme-dark .input-icon {

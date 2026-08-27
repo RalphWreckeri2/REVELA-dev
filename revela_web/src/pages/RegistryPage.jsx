@@ -701,7 +701,7 @@ export default function RegistryPage() {
                     </td>
                     <td style={styles.td}>
                       <button
-                        className="action-btn"
+                        className="registry-action-btn"
                         style={styles.viewBtn}
                         onClick={() => setDetailId(b.businessID)}
                       >
@@ -766,7 +766,7 @@ export default function RegistryPage() {
       {/* Footer */}
       <footer className="saas-footer frosted-glass">
         <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
-        <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
+        <p className="footer-links"><span>BPLO Portal</span> &bull; <span>System Settings</span></p>
       </footer>
 
       {/* Upload Modal */}

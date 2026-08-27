@@ -235,7 +235,7 @@ class _MainLayoutState extends State<MainLayout> {
     // scroll the enclosing ListView/ScrollView before displaying each step.
     ShowcaseView.register(
       enableAutoScroll: true,
-      scrollDuration: const Duration(milliseconds: 350),
+      scrollDuration: const Duration(milliseconds: 450),
     );
     _selectedIndex = widget.initialIndex;
     _pages = [
@@ -344,11 +344,20 @@ class _MainLayoutState extends State<MainLayout> {
 
     final hasSeenTour = prefs.getBool(prefKey) ?? false;
     if (!hasSeenTour) {
+      // The dashboard tour can be read hands-free, while every manual tap
+      // still completes the active step immediately. showcaseview cancels the
+      // active timer during that transition and starts a fresh timer only for
+      // the newly visible step, so a stale timer cannot skip an instruction.
+      final showcase = ShowcaseView.get()
+        ..autoPlay = index == 0
+        ..autoPlayDelay = const Duration(seconds: 5)
+        ..enableAutoPlayLock = false;
+
       void tryStartShowcase() {
         if (!mounted || _selectedIndex != index) return;
         if (targetKeys.isNotEmpty &&
-            ShowcaseView.get().isTargetRendered(targetKeys.first)) {
-          ShowcaseView.get().startShowCase(targetKeys);
+            showcase.isTargetRendered(targetKeys.first)) {
+          showcase.startShowCase(targetKeys);
           prefs.setBool(prefKey, true);
         } else {
           Future.delayed(const Duration(milliseconds: 500), tryStartShowcase);

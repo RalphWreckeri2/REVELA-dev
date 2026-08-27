@@ -1,3 +1,5 @@
+import traceback
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, get_jwt, create_access_token
 from api.auth.service import login_user, request_otp, reset_password, update_user_password, generate_2fa_setup, verify_totp_code
@@ -12,17 +14,35 @@ auth_bp = Blueprint("auth", __name__)
 # ── POST /api/auth/login ──────────────────────────────────────────────────────
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
+    # ``silent=True`` keeps malformed/non-JSON request bodies from becoming an
+    # unhandled BadRequest exception.
+    data = request.get_json(silent=True)
 
     if not data or not data.get("email") or not data.get("password"):
         return jsonify({"error": "email and password are required"}), 400
 
-    token, error = login_user(data["email"], data["password"])
+    email = data["email"].strip().lower() if isinstance(data["email"], str) else ""
+    password = data["password"]
+    if not email or not isinstance(password, str):
+        return jsonify({"error": "email and password are required"}), 400
 
-    if error:
-        return jsonify({"error": error}), 401
+    try:
+        token, error = login_user(email, password)
 
-    user = find_user_by_email(data["email"])
+        if error:
+            # Keep this response generic to avoid revealing which emails exist.
+            return jsonify({"error": error}), 401
+
+        # Re-fetch only for the response/role gate.  The guard also protects
+        # against a user deleted between authentication and this query.
+        user = find_user_by_email(email)
+        if not user:
+            return jsonify({"error": "Invalid email or password"}), 401
+    except Exception:
+        # Keep the traceback server-side; never expose database/configuration
+        # details (or password-hash errors) to the client.
+        traceback.print_exc()
+        return jsonify({"error": "Unable to process login at this time"}), 500
 
     # ── Role gate ──
     source = data.get("source")

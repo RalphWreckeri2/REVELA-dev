@@ -2,11 +2,11 @@
 // Drop-in replacement for the UploadModal component in RegistryPage.jsx.
 //
 // KEY BEHAVIOUR:
-//   • Before upload  → drag/drop form, same as before
-//   • During upload  → animated row counter that ticks through fileRowCount,
+//   - Before upload  → drag/drop form, same as before
+//   - During upload  → animated row counter that ticks through fileRowCount,
 //                      slowing near the end so it never hits 100% before the
 //                      real response arrives (no fake "done" flash)
-//   • After upload   → existing summary + error list, unchanged
+//   - After upload   → existing summary + error list, unchanged
 //
 // HOW THE COUNTER WORKS:
 //   Each geocoding call takes roughly 300-500 ms on the backend.

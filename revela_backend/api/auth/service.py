@@ -19,15 +19,20 @@ def login_user(email, password):
     if not user:
         return None, "Invalid email or password"
 
-    # Guard clause: Check if account is active/enabled
-    if not user.get("is_active", True):
+    # The USERS table uses isActive.  Retain the old spelling as a fallback for
+    # deployments whose schema has not yet been migrated.
+    if not user.get("isActive", user.get("is_active", True)):
         return None, "Account is disabled. Please contact the administrator."
 
-    # bcrypt check — password is the raw string, user["userPassword"] is the hash
-    password_matches = bcrypt.checkpw(
-        password.encode("utf-8"),
-        user["userPassword"].encode("utf-8")
-    )
+    # A NULL, plaintext, or otherwise invalid stored hash raises from bcrypt.
+    # Let the route log it and return a safe 500 instead of hiding corruption as
+    # a bad-password response.
+    stored_hash = user.get("userPassword")
+    if not isinstance(stored_hash, (str, bytes)):
+        raise RuntimeError("User password hash is missing or invalid")
+
+    raw_hash = stored_hash.encode("utf-8") if isinstance(stored_hash, str) else stored_hash
+    password_matches = bcrypt.checkpw(password.encode("utf-8"), raw_hash)
 
     if not password_matches:
         return None, "Invalid email or password"

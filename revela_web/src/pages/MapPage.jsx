@@ -855,7 +855,8 @@ function MapCanvas({ isDark, isLoaded, loadError, center, zoom, mapRef, layers, 
           const dominant = getDominantFlagColorFromMarkers(clusterMarkers);
           const fc = getFlagColor(dominant);
           const sev = flagSeverityRank(dominant);
-          const countColor = dominant === "Yellow" ? "#422006" : "#ffffff";
+          // Always keep the cluster count legible over the severity overlay.
+          const countColor = "#ffffff";
           const size = count > 100 ? 56 : count > 50 ? 48 : count > 10 ? 42 : 36;
           const el = document.createElement("div");
           el.style.cssText = `
@@ -2207,27 +2208,27 @@ export default function MapPage() {
 
           {/* Priority Dispatch Queue */}
           {isAdmin && opsRankings.length > 0 && (
-            <div style={{ marginBottom: 14, background: "var(--color-input-bg)", padding: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-soft)" }}>
+            <div className="priority-dispatch-queue" style={{ marginBottom: 14, background: "var(--color-input-bg)", padding: 12, borderRadius: "var(--radius-md)", border: "1px solid var(--color-border-soft)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <div style={{ color: "var(--color-primary)", display: "flex" }}><Icon.AlertTriangle /></div>
+                <div className="priority-dispatch-icon" style={{ color: "var(--color-primary)", display: "flex" }}><Icon.AlertTriangle /></div>
                 <h4 style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Priority Dispatch Queue
                 </h4>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {opsRankings.filter(r => r.flagged_count > 0).slice(0, 3).map((r, i) => (
-                  <div key={r.barangayID} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-modal-bg)", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--color-border-soft)" }}>
+                  <div className="priority-dispatch-item" key={r.barangayID} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-modal-bg)", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--color-border-soft)" }}>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)", marginBottom: 2 }}>{i + 1}. {r.barangayName}</div>
-                      <div style={{ fontSize: 10, color: "var(--color-muted)", fontWeight: 600 }}>
+                      <div className="priority-dispatch-name" style={{ fontSize: 12, fontWeight: 700, color: "var(--color-ink)", marginBottom: 2 }}>{i + 1}. {r.barangayName}</div>
+                      <div className="priority-dispatch-meta" style={{ fontSize: 10, color: "var(--color-muted)", fontWeight: 600 }}>
                         OPS: <span style={{ color: r.ops_score >= 60 ? "#dc2626" : r.ops_score >= 30 ? "#d97706" : "#16a34a" }}>{r.ops_score}</span>
-                        <span style={{ margin: "0 4px" }}>â€¢</span>
+                        <span style={{ margin: "0 4px" }}>&bull;</span>
                         {r.flagged_count} flagged
                       </div>
                     </div>
                     <button
-                      className="ghost-btn"
-                      style={{ fontSize: 10, padding: "4px 10px", color: "var(--color-primary)", background: "var(--color-hover)", borderColor: "var(--color-border)" }}
+                      className="ghost-btn priority-filter-btn"
+                      style={{ fontSize: 10, padding: "4px 10px" }}
                       onClick={() => {
                         setSearch(r.barangayName);
                         setFilterColor("all");
@@ -2261,7 +2262,7 @@ export default function MapPage() {
       {/* Footer */}
       <footer className="saas-footer frosted-glass">
         <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
-        <p className="footer-links"><span>BPLO Portal</span> â€¢ <span>System Settings</span></p>
+        <p className="footer-links"><span>BPLO Portal</span> &bull; <span>System Settings</span></p>
       </footer>
 
       {/* Flag detail modal â€” opens on marker or side panel click */}

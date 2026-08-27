@@ -189,7 +189,7 @@ export default function PrintReportTemplate({
               
               {/* System Audit Footer & Page Numbering */}
               <div className="text-[9px] text-gray-400 mt-2 flex justify-between items-center w-full">
-                <span>REVELA System • BPLO Compliance Audit Report</span>
+                <span>REVELA System &bull; BPLO Compliance Audit Report</span>
                 <span className="print-page-number font-medium"></span>
               </div>
             </td>

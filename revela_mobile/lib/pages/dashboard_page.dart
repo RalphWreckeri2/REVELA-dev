@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -30,6 +32,12 @@ class _DashboardPageState extends State<DashboardPage>
     with WidgetsBindingObserver {
   Timer? _pollTimer;
   final PageController _pageController = PageController(viewportFraction: 1.0);
+  final ScrollController _dashboardScrollController = ScrollController();
+  final GlobalKey _cardsTourTargetKey = GlobalKey();
+  final GlobalKey _progressTourTargetKey = GlobalKey();
+  final GlobalKey _flagsTourTargetKey = GlobalKey();
+  final GlobalKey _calendarTourTargetKey = GlobalKey();
+  final GlobalKey _assignmentsTourTargetKey = GlobalKey();
   double _currentPage = 0.0;
   final InspectionService _inspectionService = InspectionService();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -60,6 +68,9 @@ class _DashboardPageState extends State<DashboardPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // ShowcaseView owns the overlay; the dashboard owns scrolling its content
+    // into view before the overlay settles on each target.
+    ShowcaseView.get().addOnStartCallback(_scrollTourTargetIntoView);
     _pageController.addListener(() {
       if (!mounted) return;
       if (_pageController.hasClients &&
@@ -127,7 +138,66 @@ class _DashboardPageState extends State<DashboardPage>
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     _pageController.dispose();
+    _dashboardScrollController.dispose();
+    ShowcaseView.get().removeOnStartCallback(_scrollTourTargetIntoView);
     super.dispose();
+  }
+
+  void _scrollTourTargetIntoView(int? _, GlobalKey showcaseKey) {
+    GlobalKey? targetKey;
+    if (showcaseKey == MainLayout.dashboardCardsTourKey) {
+      targetKey = _cardsTourTargetKey;
+    } else if (showcaseKey == MainLayout.dashboardProgressTourKey) {
+      targetKey = _progressTourTargetKey;
+    } else if (showcaseKey == MainLayout.dashboardFlagsTourKey) {
+      targetKey = _flagsTourTargetKey;
+    } else if (showcaseKey == MainLayout.dashboardCalendarTourKey) {
+      targetKey = _calendarTourTargetKey;
+    } else if (showcaseKey == MainLayout.dashboardAssignmentsTourKey) {
+      targetKey = _assignmentsTourTargetKey;
+    }
+
+    final targetContext = targetKey?.currentContext;
+    if (targetContext == null || !_dashboardScrollController.hasClients) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || targetKey?.currentContext == null) return;
+      await Scrollable.ensureVisible(
+        targetKey!.currentContext!,
+        alignment: 0.12,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOutCubic,
+      );
+      if (mounted) ShowcaseView.get().updateOverlay();
+    });
+  }
+
+  Widget _dashboardTourStep({
+    required GlobalKey showcaseKey,
+    required GlobalKey targetKey,
+    required String title,
+    required String description,
+    required Widget child,
+    EdgeInsets targetPadding = const EdgeInsets.all(4),
+  }) {
+    return Showcase(
+      key: showcaseKey,
+      title: title,
+      description: description,
+      targetPadding: targetPadding,
+      // The barrier stays interactive, so a tap anywhere outside the focused
+      // component advances the tour. The Next button is a clear alternative.
+      disableBarrierInteraction: false,
+      scaleAnimationDuration: const Duration(milliseconds: 260),
+      movingAnimationDuration: const Duration(milliseconds: 320),
+      tooltipActions: const [
+        TooltipActionButton(
+          type: TooltipDefaultActionType.next,
+          name: 'Next',
+        ),
+      ],
+      child: KeyedSubtree(key: targetKey, child: child),
+    );
   }
 
   @override
@@ -387,6 +457,7 @@ class _DashboardPageState extends State<DashboardPage>
                             ),
                           )
                         : SingleChildScrollView(
+                            controller: _dashboardScrollController,
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16.0,
@@ -396,8 +467,9 @@ class _DashboardPageState extends State<DashboardPage>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // ── Modern Welcome Banner ──
-                                Showcase(
-                                  key: MainLayout.dashboardCardsTourKey,
+                                _dashboardTourStep(
+                                  showcaseKey: MainLayout.dashboardCardsTourKey,
+                                  targetKey: _cardsTourTargetKey,
                                   title: 'Welcome Cards',
                                   description:
                                       'Here you can quickly see your most urgent tasks and overall progress.',
@@ -991,8 +1063,9 @@ class _DashboardPageState extends State<DashboardPage>
                                   ],
                                 ).animate().fadeIn(delay: 100.ms),
                                 const SizedBox(height: 16),
-                                Showcase(
-                                      key: MainLayout.dashboardProgressTourKey,
+                                _dashboardTourStep(
+                                      showcaseKey: MainLayout.dashboardProgressTourKey,
+                                      targetKey: _progressTourTargetKey,
                                       title: 'Overall Progress Bar',
                                       description:
                                           'Track your workload: Assigned (Grey), Submitted (Gold), and Verified (Green).',
@@ -1097,8 +1170,9 @@ class _DashboardPageState extends State<DashboardPage>
                                   ],
                                 ).animate().fadeIn(delay: 300.ms),
                                 const SizedBox(height: 16),
-                                Showcase(
-                                  key: MainLayout.dashboardFlagsTourKey,
+                                _dashboardTourStep(
+                                  showcaseKey: MainLayout.dashboardFlagsTourKey,
+                                  targetKey: _flagsTourTargetKey,
                                   title: 'Flag Reports',
                                   description:
                                       'Quickly gauge risk levels. Red flags indicate unregistered establishments requiring priority.',
@@ -1258,8 +1332,9 @@ class _DashboardPageState extends State<DashboardPage>
                                   ],
                                 ).animate().fadeIn(delay: 400.ms),
                                 const SizedBox(height: 16),
-                                Showcase(
-                                  key: MainLayout.dashboardCalendarTourKey,
+                                _dashboardTourStep(
+                                  showcaseKey: MainLayout.dashboardCalendarTourKey,
+                                  targetKey: _calendarTourTargetKey,
                                   title: 'Deadlines Calendar',
                                   description:
                                       'Visually manage your schedule. Dates with a dot indicate upcoming task deadlines.',
@@ -1483,8 +1558,9 @@ class _DashboardPageState extends State<DashboardPage>
                                 const SizedBox(height: 32),
 
                                 // ── Recent Active Tasks ──
-                                Showcase(
-                                  key: MainLayout.dashboardAssignmentsTourKey,
+                                _dashboardTourStep(
+                                  showcaseKey: MainLayout.dashboardAssignmentsTourKey,
+                                  targetKey: _assignmentsTourTargetKey,
                                   title: 'Recent Assignments',
                                   description:
                                       'View actionable tasks. Tap a task to open the Inspection Modal. Select a date on the calendar to filter this list.',

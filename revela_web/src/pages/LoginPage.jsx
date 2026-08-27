@@ -424,7 +424,7 @@ const handleVerify2FA = async () => {
                 <input
                   type={showPassword ? "text" : "password"}
                   className="glass-input glass-input--pw"
-                  placeholder="••••••••••"
+                  placeholder={"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}

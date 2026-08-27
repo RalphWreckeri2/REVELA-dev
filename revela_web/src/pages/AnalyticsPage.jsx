@@ -57,12 +57,12 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: "var(--color-modal-bg)", border: "1px solid var(--color-border)",
+      background: "#111827", border: "1px solid #374151", color: "#ffffff",
       borderRadius: 10, padding: "10px 14px", fontSize: 13, boxShadow: "0 4px 20px rgba(0,0,0,0.08)"
     }}>
-      <p style={{ fontWeight: 700, color: "var(--color-ink)", marginBottom: 6 }}>{label}</p>
+      <p style={{ fontWeight: 700, color: "#ffffff", marginBottom: 6 }}>{label}</p>
       {payload.map((p, i) => (
-        <p key={i} style={{ color: p.color || "var(--color-muted)", margin: "2px 0" }}>
+        <p key={i} style={{ color: "#ffffff", margin: "2px 0" }}>
           {p.name}: <strong>{typeof p.value === "number" ? p.value.toLocaleString() : p.value}</strong>
         </p>
       ))}
@@ -2572,10 +2572,10 @@ export default function AnalyticsPage() {
                                           ? `Cluster #${d.cluster} center`
                                           : `Cluster #${d.cluster} member`;
                                       return (
-                                        <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: 8, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", fontSize: 12, lineHeight: 1.6 }}>
-                                          <div style={{ fontWeight: 700, color: "var(--color-ink)", marginBottom: 2 }}>{d.barangay || "Unknown area"}</div>
-                                          <div style={{ color: "var(--color-muted)" }}>{typeLabel}{d.is_primary ? " · Primary hotspot" : ""}</div>
-                                          <div style={{ color: "var(--color-muted)", fontSize: 11, marginTop: 2 }}>{d.lat?.toFixed(4)}°N, {d.lng?.toFixed(4)}°E</div>
+                                        <div style={{ background: "#111827", border: "1px solid #374151", color: "#ffffff", borderRadius: 8, padding: "8px 12px", boxShadow: "0 4px 12px rgba(0,0,0,0.3)", fontSize: 12, lineHeight: 1.6 }}>
+                                          <div style={{ fontWeight: 700, color: "#ffffff", marginBottom: 2 }}>{d.barangay || "Unknown area"}</div>
+                                          <div style={{ color: "#e5e7eb" }}>{typeLabel}{d.is_primary ? " · Primary hotspot" : ""}</div>
+                                          <div style={{ color: "#e5e7eb", fontSize: 11, marginTop: 2 }}>{d.lat?.toFixed(4)}°N, {d.lng?.toFixed(4)}°E</div>
                                         </div>
                                       );
                                     }}
@@ -2615,8 +2615,8 @@ export default function AnalyticsPage() {
                             <div style={{
                               display: "flex", flexWrap: "wrap", gap: "12px 20px",
                               marginTop: 10, padding: "8px 12px",
-                              background: "rgba(241,245,249,0.5)", borderRadius: 8,
-                              fontSize: 11, color: "var(--color-muted)", lineHeight: 1.4
+                              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(229,231,235,0.16)", borderRadius: 8,
+                              fontSize: 11, color: "#e5e7eb", lineHeight: 1.4
                             }}>
                               {/* Primary hotspot */}
                               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -3136,7 +3136,7 @@ export default function AnalyticsPage() {
       {/* Footer */}
       <footer className="saas-footer frosted-glass">
         <p>&copy; 2026 Municipality of Mataasnakahoy. All Rights Reserved.</p>
-        <p className="footer-links"><span>BPLO Portal</span> • <span>System Settings</span></p>
+        <p className="footer-links"><span>BPLO Portal</span> &bull; <span>System Settings</span></p>
       </footer>
     </DashboardLayout>
   );

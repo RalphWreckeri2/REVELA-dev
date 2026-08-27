@@ -15,6 +15,11 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Do not wait until the first successful login to discover this required
+    # production setting is missing.
+    if not app.config.get("JWT_SECRET_KEY"):
+        raise RuntimeError("JWT_SECRET_KEY must be set in revela_backend/.env")
+
     # Init extensions
     mysql.init_app(app)
     jwt.init_app(app)
@@ -66,7 +71,9 @@ def create_app():
     def handle_exception(e):
         if isinstance(e, HTTPException):
             return e
-        return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+        # Avoid leaking database, JWT, and password-hash details in production.
+        app.logger.exception("Unhandled application exception", exc_info=e)
+        return jsonify({"error": "Internal Server Error"}), 500
 
     return app
 

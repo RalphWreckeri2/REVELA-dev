@@ -678,6 +678,7 @@ def delete_business(business_id: int):
 def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_page=10):
     """Return paginated list of businesses with optional filters."""
     try:
+        check_and_expire_old_permits()
         cursor = mysql.connection.cursor()
 
         conditions = []
@@ -732,7 +733,6 @@ def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_p
                     FROM geospatial_logs g
                     WHERE LOWER(g.detectedName) = LOWER(r.businessName)
                     AND g.barangayID = r.barangayID
-                    AND g.flagColor = 'Green'
                     ORDER BY g.detectedDate DESC
                     LIMIT 1
                 ) AS flagSource,
@@ -778,6 +778,7 @@ def get_all_businesses(barangay_id=None, status=None, search=None, page=1, per_p
 def get_business_by_id(business_id: int):
     """Return a single business record with flagColor and inspection history."""
     try:
+        check_and_expire_old_permits()
         cursor = mysql.connection.cursor()
 
         # Main record + latest flagColor
@@ -804,7 +805,6 @@ def get_business_by_id(business_id: int):
                     FROM geospatial_logs g
                     WHERE LOWER(g.detectedName) = LOWER(r.businessName)
                     AND g.barangayID = r.barangayID
-                    AND g.flagColor = 'Green'
                     ORDER BY g.detectedDate DESC
                     LIMIT 1
                 ) AS flagSource,
@@ -865,3 +865,109 @@ def get_business_by_id(business_id: int):
 
     except Exception as e:
         return None, str(e)
+
+
+def check_and_expire_old_permits():
+    """
+    Check if there are any active business permits from a previous calendar year.
+    If so, mark them as 'Expired' and set their map pin flagColor to 'Red'.
+    Also insert an in-app notification for all admin users and publish SSE.
+    """
+    try:
+        cursor = mysql.connection.cursor()
+        
+        # 1. Count active businesses from previous years
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS cnt FROM official_registry
+            WHERE YEAR(lastRenewalDate) < YEAR(CURDATE()) AND applicationStatus = 'Active'
+            """
+        )
+        row = cursor.fetchone()
+        cnt = row["cnt"] if row else 0
+
+        if cnt > 0:
+            current_year = __import__('datetime').date.today().year
+
+            # 2. Update map flag colors in geospatial_logs to Red (Expired)
+            cursor.execute(
+                """
+                UPDATE geospatial_logs g
+                JOIN official_registry r ON LOWER(g.detectedName) = LOWER(r.businessName) AND g.barangayID = r.barangayID
+                SET g.flagColor = 'Red'
+                WHERE YEAR(r.lastRenewalDate) < YEAR(CURDATE()) AND r.applicationStatus = 'Active'
+                """
+            )
+
+            # 3. Update registry status to 'Expired'
+            cursor.execute(
+                """
+                UPDATE official_registry
+                SET applicationStatus = 'Expired'
+                WHERE YEAR(lastRenewalDate) < YEAR(CURDATE()) AND applicationStatus = 'Active'
+                """
+            )
+
+            # 4. Fetch admin userIDs
+            cursor.execute(
+                """
+                SELECT userID FROM USERS
+                WHERE userRole IN ('Admin', 'SUPER_ADMIN', 'System Administrator')
+                """
+            )
+            admins = cursor.fetchall() or []
+
+            # 5. Insert system notification for admins
+            title = "New Year Rollover Detected!"
+            body = (
+                f"Welcome to {current_year}! The system has automatically marked {cnt} "
+                "active business permits from previous years as Expired and their map flags as Red. "
+                "Please upload the new registry to synchronize their statuses."
+            )
+            link = "/registry"
+
+            for a in admins:
+                aid = int(a["userID"])
+                cursor.execute(
+                    """
+                    INSERT INTO revela_notifications
+                        (recipientUserId, type, title, body, link)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (aid, "new_year_rollover", title, body, link),
+                )
+
+            mysql.connection.commit()
+            cursor.close()
+
+            # 6. Publish to admins via SSE
+            try:
+                from api.notifications import hub
+                hub.publish_to_admins({
+                    "type": "new_year_rollover",
+                    "title": title,
+                    "body": body,
+                    "link": link,
+                    "count": cnt,
+                    "year": current_year
+                })
+            except Exception as sse_err:
+                print(f"Failed to publish rollover SSE: {sse_err}")
+
+            return {
+                "detected": True,
+                "count": cnt,
+                "year": current_year
+            }
+
+        cursor.close()
+        return None
+    except Exception as e:
+        print(f"check_and_expire_old_permits error: {e}")
+        try:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+        except Exception:
+            pass
+        return None
+

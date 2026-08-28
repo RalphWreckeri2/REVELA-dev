@@ -312,6 +312,8 @@ def run_detection():
     """
     set_cancel("run_detection", False)
     try:
+        from api.registry.service import check_and_expire_old_permits
+        check_and_expire_old_permits()
         from api.notifications import hub
 
         def progress_callback(idx, total_steps, lat, lng):
@@ -450,6 +452,8 @@ def run_detection():
 def get_flags(color=None, barangay_id=None, page=1, per_page=50, reported_by_user_id=None):
     """Return paginated geospatial_logs entries with optional filters."""
     try:
+        from api.registry.service import check_and_expire_old_permits
+        check_and_expire_old_permits()
         cursor = mysql.connection.cursor()
 
         conditions = []
@@ -496,8 +500,8 @@ def get_flags(color=None, barangay_id=None, page=1, per_page=50, reported_by_use
                 COALESCE(g.nearestLandmark, r.businessAddress) AS resolvedAddress,
                 CASE
                     WHEN g.reportedByUserID IS NOT NULL AND g.flagColor != 'Green' THEN 'inspector_reported'
-                    WHEN g.flagColor = 'Green' AND g.placeID IS NOT NULL AND r.businessID IS NOT NULL THEN 'registry_and_maps'
-                    WHEN g.flagColor = 'Green' AND g.placeID IS NULL THEN 'registry_only'
+                    WHEN g.placeID IS NOT NULL AND r.businessID IS NOT NULL THEN 'registry_and_maps'
+                    WHEN g.placeID IS NULL AND r.businessID IS NOT NULL THEN 'registry_only'
                     ELSE 'maps_only'
                 END AS flagSource,
                 (

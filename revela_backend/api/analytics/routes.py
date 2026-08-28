@@ -25,7 +25,41 @@ analytics_bp = Blueprint("analytics", __name__)
 def get_all_analytics():
     try:
         F = parse_analytics_filters(request.args)
-        return _get_all_analytics_inner(F)
+        res_response, status_code = _get_all_analytics_inner(F)
+        data = res_response.get_json()
+        
+        from flask_jwt_extended import get_jwt_identity
+        uid = int(get_jwt_identity())
+        
+        from app import mysql
+        cursor = mysql.connection.cursor()
+        cursor.execute(
+            """
+            SELECT id, body FROM revela_notifications
+            WHERE recipientUserId = %s AND type = 'new_year_rollover' AND readAt IS NULL
+            ORDER BY id DESC LIMIT 1
+            """,
+            (uid,)
+        )
+        notif = cursor.fetchone()
+        cursor.close()
+        
+        import re
+        rollover_info = None
+        if notif:
+            body = notif["body"]
+            m = re.search(r"Welcome to (\d+)!.*marked (\d+) active", body)
+            year = int(m.group(1)) if m else __import__('datetime').date.today().year
+            count = int(m.group(2)) if m else 0
+            rollover_info = {
+                "detected": True,
+                "count": count,
+                "year": year,
+                "notification_id": notif["id"]
+            }
+            
+        data["new_year_rollover"] = rollover_info
+        return jsonify(data), status_code
     except Exception as e:
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
@@ -34,6 +68,8 @@ def _get_all_analytics_inner(F=None):
     if F is None:
         F = {}
     from app import mysql
+    from api.registry.service import check_and_expire_old_permits
+    rollover_info = check_and_expire_old_permits()
 
     cur = mysql.connection.cursor()
 
@@ -672,6 +708,7 @@ def _get_all_analytics_inner(F=None):
 
     return jsonify({
         "applied_filters": Fx,
+        "new_year_rollover": rollover_info,
         "descriptive": {
             "kpis": {
                 "total_businesses":    total_businesses,

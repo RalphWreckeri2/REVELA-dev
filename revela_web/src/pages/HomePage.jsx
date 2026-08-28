@@ -12,19 +12,20 @@ import DashboardLayout from "../components/DashboardLayout";
 import KpiCard from "../components/KpiCard";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest, getInspectorsRequest, getOpsRankingsRequest } from "../services/api";
+import { getAnalyticsOverviewRequest, getFlagsRequest, getInspectionsRequest, getInspectorsRequest, getOpsRankingsRequest, markNotificationsReadRequest } from "../services/api";
+import Swal from "sweetalert2";
 import "../styles/HomePage.css";
 
 const MAP_LIBRARIES = ["places", "marker"];
 const DEFAULT_CENTER = { lat: 13.9667, lng: 121.1167 };
 
 const FLAG_COLORS = {
-  Red:    { marker: "#ef4444", bg: "var(--flag-red-bg)", text: "var(--flag-red-text)", label: "Detected Unregistered" },
+  Red: { marker: "#ef4444", bg: "var(--flag-red-bg)", text: "var(--flag-red-text)", label: "Detected Unregistered" },
   Yellow: { marker: "#f59e0b", bg: "var(--flag-yellow-bg)", text: "var(--flag-yellow-text)", label: "Suspected Unregistered" },
   Orange: { marker: "#e65100", bg: "var(--flag-orange-bg)", text: "var(--flag-orange-text)", label: "1st/2nd Warning / 3rd Notice Closure" },
-  Black:  { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Blacklisted / Non-Responsive" },
+  Black: { marker: "#000000", bg: "var(--flag-black-bg)", text: "var(--flag-black-text)", label: "Blacklisted / Non-Responsive" },
   Purple: { marker: "#7c3aed", bg: "var(--flag-purple-bg)", text: "var(--flag-purple-text)", label: "Closed / Abandoned" },
-  Green:  { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
+  Green: { marker: "#22c55e", bg: "var(--flag-green-bg)", text: "var(--flag-green-text)", label: "Active Business" },
 };
 const defaultColor = { marker: "var(--color-muted)", bg: "var(--flag-default-bg)", text: "var(--flag-default-text)", label: "Unknown" };
 const getFlagColor = (c) => FLAG_COLORS[c] ?? defaultColor;
@@ -41,9 +42,9 @@ const shortBarangay = (name = "") => name.replace("Barangay ", "Brgy.");
 
 // ── Hero Banner ───────────────────────────────────────────────────────────────
 const HERO_STEPS = [
-  { num: 1, label: "Upload Registry CSV",     to: "/registry" },
+  { num: 1, label: "Upload Registry CSV", to: "/registry" },
   { num: 2, label: "Review Geospatial Flags", to: "/map" },
-  { num: 3, label: "Priority Dispatch",       to: "/inspections" },
+  { num: 3, label: "Priority Dispatch", to: "/inspections" },
 ];
 
 // WMO weather interpretation codes (Open-Meteo)
@@ -75,11 +76,11 @@ function HeroBanner({ user, kpis, mapsReady, navigate }) {
       .then(data => {
         if (cancelled || !data?.current) return;
         setWeather({
-          temp:  Math.round(data.current.temperature_2m ?? 28),
+          temp: Math.round(data.current.temperature_2m ?? 28),
           label: WEATHER_CODES[data.current.weather_code] ?? "Fair",
         });
       })
-      .catch(() => {}); // fall back to the default readout on failure
+      .catch(() => { }); // fall back to the default readout on failure
     return () => { cancelled = true; };
   }, []);
 
@@ -89,8 +90,8 @@ function HeroBanner({ user, kpis, mapsReady, navigate }) {
   const hourFmt = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Manila", hour: "numeric", hour12: false });
 
   const manilaHour = Number(hourFmt.format(now)) % 24;
-  const greeting   = manilaHour < 12 ? "Good morning" : manilaHour < 18 ? "Good afternoon" : "Good evening";
-  const firstName  = user?.fullName ? user.fullName.trim().split(/\s+/)[0] : "Admin";
+  const greeting = manilaHour < 12 ? "Good morning" : manilaHour < 18 ? "Good afternoon" : "Good evening";
+  const firstName = user?.fullName ? user.fullName.trim().split(/\s+/)[0] : "Admin";
 
   const [timeStr, amPm] = timeFmt.format(now).split(" ");
   const flaggedCount = kpis ? kpis.total_flagged.toLocaleString() : "—";
@@ -127,7 +128,7 @@ function HeroBanner({ user, kpis, mapsReady, navigate }) {
               <span className="hero-step-num">{num}</span>
               <span>{label}</span>
               <svg className="hero-step-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-                <path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>
+                <path d="M5 12h14" /><path d="M13 6l6 6-6 6" />
               </svg>
             </button>
           ))}
@@ -142,7 +143,7 @@ function HeroBanner({ user, kpis, mapsReady, navigate }) {
             <div className="hero-card-head">
               <span className="hero-card-title">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
                 </svg>
                 <span>Municipal<br />Time</span>
               </span>
@@ -165,7 +166,7 @@ function HeroBanner({ user, kpis, mapsReady, navigate }) {
             <div className="hero-card-head">
               <span className="hero-card-title">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="15" height="15">
-                  <path d="M17.5 19a4.5 4.5 0 1 0-1.13-8.86A6 6 0 1 0 5 14.7"/>
+                  <path d="M17.5 19a4.5 4.5 0 1 0-1.13-8.86A6 6 0 1 0 5 14.7" />
                 </svg>
                 <span>Field<br />Weather</span>
               </span>
@@ -178,8 +179,8 @@ function HeroBanner({ user, kpis, mapsReady, navigate }) {
               </div>
               <div className="hero-sun">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22">
-                  <circle cx="12" cy="12" r="4"/>
-                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
                 </svg>
               </div>
             </div>
@@ -235,9 +236,9 @@ function HeroBanner({ user, kpis, mapsReady, navigate }) {
 
 function HighPriorityAlertsWidget({ opsRankings, navigate, loading }) {
   const RISK_COLORS = {
-    High:   { bg: "rgba(239,68,68,0.12)", text: "#dc2626", border: "#fca5a5" },
+    High: { bg: "rgba(239,68,68,0.12)", text: "#dc2626", border: "#fca5a5" },
     Medium: { bg: "rgba(245,158,11,0.12)", text: "#b45309", border: "#fcd34d" },
-    Low:    { bg: "rgba(34,197,94,0.12)", text: "#166534", border: "#86efac" },
+    Low: { bg: "rgba(34,197,94,0.12)", text: "#166534", border: "#86efac" },
   };
 
   // Top 5 barangays by OPS score (already sorted from backend)
@@ -248,8 +249,8 @@ function HighPriorityAlertsWidget({ opsRankings, navigate, loading }) {
       <div className="widget-header">
         <h3 style={{ color: "var(--color-danger)", display: "flex", alignItems: "center", gap: 6, margin: 0 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
           High-Priority Alerts
         </h3>
@@ -315,7 +316,7 @@ function HighPriorityAlertsWidget({ opsRankings, navigate, loading }) {
 
 // ── Mini Map Widget ───────────────────────────────────────────────────────────
 function MiniMapWidget({ flags, isDark, onOpenMap, isLoaded, loadError }) {
-  const mapRef     = useRef(null);
+  const mapRef = useRef(null);
   const markerRefs = useRef([]);
 
   const buildMarkerEl = (color) => {
@@ -347,8 +348,8 @@ function MiniMapWidget({ flags, isDark, onOpenMap, isLoaded, loadError }) {
         const fc = getFlagColor(parseColor(f));
         const marker = new window.google.maps.marker.AdvancedMarkerElement({
           position: { lat: Number(f.latitude), lng: Number(f.longitude) },
-          map:      mapRef.current,
-          content:  buildMarkerEl(fc.marker),
+          map: mapRef.current,
+          content: buildMarkerEl(fc.marker),
         });
         markerRefs.current.push(marker);
       });
@@ -385,11 +386,11 @@ function MiniMapWidget({ flags, isDark, onOpenMap, isLoaded, loadError }) {
             center={DEFAULT_CENTER}
             zoom={12}
             options={{
-              disableDefaultUI:  true,
-              clickableIcons:    false,
-              zoomControl:       false,
-              mapId:             "34390388b3abb63aa84876a7",
-              colorScheme:       isDark ? "DARK" : "LIGHT",
+              disableDefaultUI: true,
+              clickableIcons: false,
+              zoomControl: false,
+              mapId: "34390388b3abb63aa84876a7",
+              colorScheme: isDark ? "DARK" : "LIGHT",
             }}
             onLoad={handleMapLoad}
           />
@@ -442,7 +443,7 @@ const miniMapFallback = {
 function VisualCalendarWidget({ inspections, navigate }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
-  
+
   // Get days in month
   const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
@@ -470,7 +471,7 @@ function VisualCalendarWidget({ inspections, navigate }) {
       const day = d.getDate();
       if (!tasksByDate[day]) tasksByDate[day] = [];
       tasksByDate[day].push(t);
-      
+
       const isOverdue = d < new Date();
       if (statusByDate[day] !== 'overdue') {
         statusByDate[day] = isOverdue ? 'overdue' : 'upcoming';
@@ -496,7 +497,7 @@ function VisualCalendarWidget({ inspections, navigate }) {
           <button className="ghost-btn" onClick={nextMonth} style={{ padding: "4px 8px" }}>&rarr;</button>
         </div>
       </div>
-      
+
       <div style={{ padding: "0 20px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center", gap: 4, marginBottom: 8 }}>
           {weekDays.map(day => (
@@ -510,7 +511,7 @@ function VisualCalendarWidget({ inspections, navigate }) {
             const status = statusByDate[day];
             const isToday = new Date().getDate() === day && new Date().getMonth() === currentDate.getMonth() && new Date().getFullYear() === currentDate.getFullYear();
             const isSelected = selectedDay === day;
-            
+
             let color = isToday ? "var(--color-primary)" : "var(--color-ink)";
             let dotColor = null;
             if (status === 'overdue') {
@@ -518,13 +519,13 @@ function VisualCalendarWidget({ inspections, navigate }) {
             } else if (status === 'upcoming') {
               dotColor = "var(--color-primary)";
             }
-            
+
             let bg = isSelected ? "var(--color-border-soft)" : "transparent";
 
             return (
-              <div key={day} style={{ 
-                padding: "4px 0", 
-                fontSize: 13, 
+              <div key={day} style={{
+                padding: "4px 0",
+                fontSize: 13,
                 fontWeight: isToday || isSelected ? 700 : 500,
                 color: color,
                 background: bg,
@@ -541,7 +542,7 @@ function VisualCalendarWidget({ inspections, navigate }) {
                 transform: isSelected ? "scale(1.1)" : "scale(1)",
                 transition: "all 0.15s"
               }}
-              onClick={() => setSelectedDay(day === selectedDay ? null : day)}
+                onClick={() => setSelectedDay(day === selectedDay ? null : day)}
               >
                 <span style={{ lineHeight: 1 }}>{day}</span>
                 <span style={{ width: 4, height: 4, borderRadius: "50%", background: dotColor || "transparent", marginTop: 2 }} />
@@ -564,9 +565,9 @@ function VisualCalendarWidget({ inspections, navigate }) {
           ) : displayedTasks.map(task => {
             const isOverdue = new Date(task.deadline) < new Date();
             return (
-              <div 
-                key={task.reportID} 
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-hover)", border: "1px solid var(--color-border-soft)", borderLeft: isOverdue ? "4px solid var(--color-danger)" : "4px solid var(--color-primary)", padding: "10px 12px", borderRadius: 10, cursor: "pointer" }} 
+              <div
+                key={task.reportID}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-hover)", border: "1px solid var(--color-border-soft)", borderLeft: isOverdue ? "4px solid var(--color-danger)" : "4px solid var(--color-primary)", padding: "10px 12px", borderRadius: 10, cursor: "pointer" }}
                 onClick={() => navigate('/inspections')}
               >
                 <div>
@@ -605,18 +606,18 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div className="modal-panel modal-content saas-card" onClick={e => e.stopPropagation()} style={{ width: 1040, maxWidth: "95vw", height: "85vh", display: "flex", flexDirection: "column", padding: 32, borderRadius: 24, background: "var(--color-modal-bg)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)" }}>
-        
+
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--color-ink)", display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--color-primary)", display: "inline-block" }}></span>
             Submitted Backlog <span style={{ color: "var(--color-muted)", fontSize: 16, fontWeight: 600 }}>({filteredFlags.length})</span>
           </h2>
-          
+
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <select 
-              className="saas-input" 
-              value={filterInspector} 
+            <select
+              className="saas-input"
+              value={filterInspector}
               onChange={e => setFilterInspector(e.target.value)}
               style={{ padding: "8px 14px", minWidth: 160, borderRadius: 8, background: "transparent" }}
             >
@@ -625,19 +626,19 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
                 <option key={insp.userID} value={insp.userID}>{insp.fullName}</option>
               ))}
             </select>
-            
+
             <div style={{ position: "relative" }}>
               <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--color-muted)" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                className="saas-input" 
+              <input
+                type="text"
+                placeholder="Search..."
+                className="saas-input"
                 style={{ padding: "8px 14px 8px 36px", width: 220, borderRadius: 8, background: "transparent" }}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
             </div>
-            
+
             <button className="modal-close-btn" onClick={onClose} style={{ marginLeft: 12 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
@@ -656,19 +657,19 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
               {filteredFlags.map(f => {
                 const fc = getFlagColor(parseColor(f));
                 const isRed = parseColor(f) === "Red";
-                
+
                 return (
-                  <div 
+                  <div
                     key={f.logID || f.id}
                     className="hover-lift"
                     onClick={() => { onClose(); navigate('/map?flag=' + (f.logID || f.id)); }}
-                    style={{ 
-                      background: "var(--color-surface)", 
-                      border: isRed ? "1px solid var(--color-danger)" : "1px solid var(--color-border-soft)", 
-                      borderRadius: 16, 
-                      padding: 20, 
-                      display: "flex", 
-                      flexDirection: "column", 
+                    style={{
+                      background: "var(--color-surface)",
+                      border: isRed ? "1px solid var(--color-danger)" : "1px solid var(--color-border-soft)",
+                      borderRadius: 16,
+                      padding: 20,
+                      display: "flex",
+                      flexDirection: "column",
                       justifyContent: "space-between",
                       cursor: "pointer",
                       boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
@@ -678,7 +679,7 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: fc.bg, color: fc.text, display: "flex", alignItems: "center", gap: 6 }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>
                           {fc.label}
                         </span>
                         {f.noticeLevel && (
@@ -700,9 +701,9 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
                           {shortBarangay(f.barangayName || f.barangay || "—")}
                         </p>
                       </div>
-                      
+
                       <button style={{ width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--color-border-soft)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-ink)", flexShrink: 0 }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
                       </button>
                     </div>
                   </div>
@@ -720,26 +721,26 @@ function InspectorReportsModal({ isOpen, onClose, flags, inspectors, navigate })
 export default function HomePage() {
   const { token, user } = useAuth();
   const { theme, resolvedTheme } = useTheme();
-  const navigate  = useNavigate();
-  
+  const navigate = useNavigate();
+
   const isDark = resolvedTheme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey,
     libraries: MAP_LIBRARIES,
-    version:   "beta",
+    version: "beta",
   });
 
 
   // KPIs
-  const [kpis,     setKpis]     = useState(null);
+  const [kpis, setKpis] = useState(null);
   const [kpiError, setKpiError] = useState(false);
 
   // Flags
-  const [allFlags,      setAllFlags]      = useState([]);
-  const [flagsLoading,  setFlagsLoading]  = useState(true);
-  
+  const [allFlags, setAllFlags] = useState([]);
+  const [flagsLoading, setFlagsLoading] = useState(true);
+
   const [inspections, setInspections] = useState([]);
   const [inspectors, setInspectors] = useState([]);
   const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
@@ -751,7 +752,39 @@ export default function HomePage() {
 
     // Fetch KPIs
     getAnalyticsOverviewRequest(token)
-      .then(data => setKpis(data?.descriptive?.kpis ?? null))
+      .then(data => {
+        setKpis(data?.descriptive?.kpis ?? null);
+        if (data?.new_year_rollover?.detected) {
+          Swal.fire({
+            title: "Happy New Year!",
+            html: `<div style="text-align: left; font-size: 13.5px; line-height: 1.6; color: var(--color-ink);">` +
+              `Welcome to <b>${data.new_year_rollover.year}</b>!<br/><br/>` +
+              `The system has automatically marked <b>${data.new_year_rollover.count}</b> active business permits from previous years as <span style="color: var(--color-danger); font-weight: 700;">Expired</span> and their map flags as <span style="color: var(--color-danger); font-weight: 700;">Red</span>.<br/><br/>` +
+              `Let's upload/sync the new BPLO registry to update their statuses.</div>`,
+            icon: "info",
+            confirmButtonText: "Upload Registry Now",
+            showCancelButton: true,
+            cancelButtonText: "Later",
+            confirmButtonColor: "var(--color-primary-dark)",
+            cancelButtonColor: "var(--color-muted)",
+            background: "var(--color-surface)",
+            color: "var(--color-ink)",
+            customClass: {
+              popup: 'frosted-glass saas-card',
+              confirmButton: 'primary-btn',
+              cancelButton: 'ghost-btn'
+            }
+          }).then((result) => {
+            // Mark the rollover notification as read so the alert does not show again
+            if (data.new_year_rollover.notification_id) {
+              markNotificationsReadRequest(token, [data.new_year_rollover.notification_id]).catch(() => {});
+            }
+            if (result.isConfirmed) {
+              navigate("/registry");
+            }
+          });
+        }
+      })
       .catch(() => setKpiError(true));
 
     // Fetch flags for map + recent list
@@ -761,7 +794,7 @@ export default function HomePage() {
         const data = res?.data ?? [];
         setAllFlags(data);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setFlagsLoading(false));
 
     // Fetch inspection tracker counts
@@ -770,57 +803,57 @@ export default function HomePage() {
         const data = res?.data ?? [];
         setInspections(data);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // Fetch inspectors
     getInspectorsRequest(token)
       .then(res => setInspectors(res || []))
-      .catch(() => {});
+      .catch(() => { });
 
     // Fetch OPS rankings for High-Priority Alerts
     setOpsLoading(true);
     getOpsRankingsRequest(token)
       .then(res => setOpsRankings(res?.data || []))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setOpsLoading(false));
   }, [token]);
 
   const kpiCards = [
     {
-      value:       kpis ? kpis.total_businesses.toLocaleString() : "—",
-      label:       "Total Registered Entities",
-      delta:       kpis?.total_businesses_delta ? `${kpis.total_businesses_delta > 0 ? '+' : ''}${kpis.total_businesses_delta} vs last month` : undefined,
-      trend:       kpis?.total_businesses_delta >= 0 ? "up" : "down",
+      value: kpis ? kpis.total_businesses.toLocaleString() : "—",
+      label: "Total Registered Entities",
+      delta: kpis?.total_businesses_delta ? `${kpis.total_businesses_delta > 0 ? '+' : ''}${kpis.total_businesses_delta} vs last month` : undefined,
+      trend: kpis?.total_businesses_delta >= 0 ? "up" : "down",
       iconVariant: "gold",
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+          <path d="M3 3v18h18" /><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
         </svg>
       ),
     },
     {
-      value:       kpis ? kpis.total_flagged : "—",
-      label:       "Unregistered Flags Detected",
-      delta:       kpis?.total_flagged_delta ? `${kpis.total_flagged_delta > 0 ? '+' : ''}${kpis.total_flagged_delta} vs last month` : undefined,
-      trend:       kpis?.total_flagged_delta > 0 ? "down" : "up", // Red flag: more is bad
+      value: kpis ? kpis.total_flagged : "—",
+      label: "Unregistered Flags Detected",
+      delta: kpis?.total_flagged_delta ? `${kpis.total_flagged_delta > 0 ? '+' : ''}${kpis.total_flagged_delta} vs last month` : undefined,
+      trend: kpis?.total_flagged_delta > 0 ? "down" : "up", // Red flag: more is bad
       iconVariant: "red",
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-          <line x1="4" y1="22" x2="4" y2="15"/>
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+          <line x1="4" y1="22" x2="4" y2="15" />
         </svg>
       ),
     },
     {
-      value:       kpis ? `${kpis.compliance_rate}%` : "—",
-      label:       "Overall Compliance Rate",
-      delta:       kpis?.compliance_rate_delta ? `${kpis.compliance_rate_delta > 0 ? '+' : ''}${kpis.compliance_rate_delta}% vs last month` : undefined,
-      trend:       kpis?.compliance_rate_delta >= 0 ? "up" : "down",
+      value: kpis ? `${kpis.compliance_rate}%` : "—",
+      label: "Overall Compliance Rate",
+      delta: kpis?.compliance_rate_delta ? `${kpis.compliance_rate_delta > 0 ? '+' : ''}${kpis.compliance_rate_delta}% vs last month` : undefined,
+      trend: kpis?.compliance_rate_delta >= 0 ? "up" : "down",
       iconVariant: "green",
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-          <polyline points="22 4 12 14.01 9 11.01"/>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
         </svg>
       ),
     },
@@ -832,7 +865,7 @@ export default function HomePage() {
 
       {/* Main Layout: 2 Columns */}
       <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 24, alignItems: "start" }}>
-        
+
         {/* Left Column (Main Content) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <HeroBanner user={user} kpis={kpis} mapsReady={isLoaded} navigate={navigate} />
@@ -867,7 +900,7 @@ export default function HomePage() {
         {/* Right Column (Sidebar) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <VisualCalendarWidget inspections={inspections} navigate={navigate} />
-          
+
           <HighPriorityAlertsWidget
             opsRankings={opsRankings}
             navigate={navigate}
@@ -885,12 +918,12 @@ export default function HomePage() {
       </footer>
 
       {/* Modals */}
-      <InspectorReportsModal 
-        isOpen={isInspectorModalOpen} 
-        onClose={() => setIsInspectorModalOpen(false)} 
-        flags={allFlags} 
-        inspectors={inspectors} 
-        navigate={navigate} 
+      <InspectorReportsModal
+        isOpen={isInspectorModalOpen}
+        onClose={() => setIsInspectorModalOpen(false)}
+        flags={allFlags}
+        inspectors={inspectors}
+        navigate={navigate}
       />
     </DashboardLayout>
   );

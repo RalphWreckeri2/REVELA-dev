@@ -23,17 +23,12 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
+    bool seenWelcome = false;
+
+    // 1. Read SharedPreferences first
     try {
-      // 1. Initialize API config and base URL
-      await ApiConfig.initialize();
-      AuthService().syncBaseUrl();
-
-      // 2. Initialize notifications
-      await AssignmentNotifications.init();
-
-      // 3. Read SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final bool seenWelcome = prefs.getBool('seen_welcome') ?? false;
+      seenWelcome = prefs.getBool('seen_welcome') ?? false;
       final String themePref = prefs.getString('theme_preference') ?? 'system';
 
       if (themePref == 'dark') {
@@ -43,44 +38,44 @@ class _SplashScreenState extends State<SplashScreen> {
       } else {
         themeModeNotifier.value = ThemeMode.system;
       }
-
-      // 4. Check Authentication
-      // We intentionally do not auto-login here anymore.
-      // We enforce re-authentication (biometrics or password) on every launch.
-
-      // Minimum display time for splash to look polished
-      await Future.delayed(const Duration(milliseconds: 1500));
-
-      if (!mounted) return;
-
-      // 5. Navigate based on app state
-      Widget nextRoute;
-      if (seenWelcome) {
-        nextRoute = const LoginPage();
-      } else {
-        nextRoute = const WelcomePage();
-      }
-
-      Navigator.pushReplacement(
-        context,
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 600),
-          pageBuilder: (context, animation, secondaryAnimation) => nextRoute,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-        ),
-      );
     } catch (e) {
-      debugPrint("Initialization error: $e");
-      // Fallback behavior if init fails
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginPage()),
-        );
-      }
+      debugPrint("SharedPreferences error: $e");
     }
+
+    // 2. Initialize API config (safe)
+    try {
+      await ApiConfig.initialize();
+      AuthService().syncBaseUrl();
+    } catch (e) {
+      debugPrint("ApiConfig initialization error: $e");
+    }
+
+    // 3. Initialize notifications (safe)
+    try {
+      await AssignmentNotifications.init();
+    } catch (e) {
+      debugPrint("AssignmentNotifications error: $e");
+    }
+
+    // Minimum display time for splash to look polished
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    if (!mounted) return;
+
+    // 4. Navigate based on app state
+    final Widget nextRoute =
+        seenWelcome ? const LoginPage() : const WelcomePage();
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 600),
+        pageBuilder: (context, animation, secondaryAnimation) => nextRoute,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
   }
 
   @override

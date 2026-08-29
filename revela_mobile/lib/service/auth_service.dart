@@ -161,13 +161,15 @@ class AuthService extends ChangeNotifier {
                 user['fullName']?.toString() ?? '',
                 userRole,
               );
-              _currentUser = {
-                'id': userId,
-                'fullName': user['fullName']?.toString() ?? '',
-                'role': userRole,
-                'token': token,
-              };
-              notifyListeners();
+              if (!mustChange) {
+                _currentUser = {
+                  'id': userId,
+                  'fullName': user['fullName']?.toString() ?? '',
+                  'role': userRole,
+                  'token': token,
+                };
+                notifyListeners();
+              }
             }
           }
 
@@ -264,25 +266,8 @@ class AuthService extends ChangeNotifier {
                 profile['fullName']?.toString() ?? '',
                 userRole,
               );
-              _currentUser = {
-                'id': userId,
-                'fullName': profile['fullName']?.toString() ?? '',
-                'role': userRole,
-                'token': token,
-              };
-              notifyListeners();
             }
-
-            // If the temporary credentials were saved for 2FA flow, persist them
-            // as saved credentials and associate biometric with this user.
-            final tempEmail = await _storage.read(key: 'temp_email');
-            final tempPassword = await _storage.read(key: 'temp_password');
-            if (tempEmail != null && tempPassword != null) {
-              await _storage.write(key: 'saved_email', value: tempEmail);
-              await _storage.write(key: 'saved_password', value: tempPassword);
-              await _storage.delete(key: 'temp_email');
-              await _storage.delete(key: 'temp_password');
-            }
+            // Do not notifyListeners inside dialog flow; caller will pop dialog and activate session
           } catch (e) {
             debugPrint('Failed to cache profile after 2FA: $e');
           }
@@ -300,6 +285,20 @@ class AuthService extends ChangeNotifier {
       );
       return LoginResult.failed;
     }
+  }
+
+  Future<void> activateSavedUserSession({bool notify = true}) async {
+    final userId = await _storage.read(key: 'last_active_user_id') ?? '';
+    final fullName = await _storage.read(key: 'user_fullName') ?? '';
+    final userRole = await _storage.read(key: 'user_role') ?? 'Inspector';
+    final token = await _storage.read(key: 'jwt_token') ?? '';
+    _currentUser = {
+      'id': userId,
+      'fullName': fullName,
+      'role': userRole,
+      'token': token,
+    };
+    if (notify) notifyListeners();
   }
 
   Future<Map<String, dynamic>> changePassword(

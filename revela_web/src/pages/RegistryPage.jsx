@@ -235,7 +235,7 @@ function BusinessDetailModal({ businessId, onClose, token, isAdmin, onSuccess, i
       setSaving(true);
       setError("");
       try {
-        const baseUrl = (import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : "http://localhost:5000/api";
+        const baseUrl = (import.meta.env && import.meta.env.VITE_API_ORIGIN) ? `${import.meta.env.VITE_API_ORIGIN}/api` : "http://localhost:5000/api";
         const res = await fetch(`${baseUrl}/registry/${businessId}`, {
           method: 'DELETE',
           headers: { "Authorization": `Bearer ${token}` }

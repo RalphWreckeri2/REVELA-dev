@@ -19,11 +19,15 @@ class _WelcomePageState extends State<WelcomePage>
   late Animation<Offset> _slideAnim;
 
   Future<void> _requestPermissions() async {
-    await [
-      Permission.camera,
-      Permission.location,
-      Permission.notification,
-    ].request();
+    try {
+      await [
+        Permission.camera,
+        Permission.location,
+        Permission.notification,
+      ].request();
+    } catch (e) {
+      debugPrint('Permission request error: $e');
+    }
   }
 
   final List<_WelcomeSlide> _slides = const [

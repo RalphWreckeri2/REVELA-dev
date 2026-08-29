@@ -14,14 +14,14 @@ import AnimatePresence from "../components/AnimatePresence";
 const Icon = {
   Eye: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   ),
   EyeOff: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   ),
 };
@@ -100,8 +100,8 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   // -- 2FA
-  const [loginStep, setLoginStep] = useState("credentials"); 
-  const [tempToken, setTempToken] = useState(null); 
+  const [loginStep, setLoginStep] = useState("credentials");
+  const [tempToken, setTempToken] = useState(null);
   const [totpCode, setTotpCode] = useState("");
 
   // ── Login state ──
@@ -213,7 +213,7 @@ export default function LoginPage() {
 
     try {
       const response = await login(username, password);
-      
+
       // Check if the backend says 2FA is needed
       if (response?.status === "2fa_required") {
         setTempToken(response.tempToken);
@@ -311,7 +311,7 @@ export default function LoginPage() {
     setForgotSuccess(null);
   };
 
-const handleVerify2FA = async () => {
+  const handleVerify2FA = async () => {
     if (!totpCode || totpCode.length < 6) {
       setLoginError("Please enter your 6-digit Authenticator code.");
       return;
@@ -345,7 +345,7 @@ const handleVerify2FA = async () => {
     } finally {
       setLoginLoading(false);
     }
-};
+  };
 
   // ── Step labels ───────────────────────────────────────────────────────────────
   const stepLabel = ["", "Step 1 of 3 — Identify Account", "Step 2 of 3 — Enter OTP", "Step 3 of 3 — New Password"];
@@ -387,216 +387,216 @@ const handleVerify2FA = async () => {
             <span className="portal-label">BPLO Admin Portal</span>
           </div>
 
-        <h2 className="form-heading">{loginStep === "credentials" ? "Welcome back" : "Two-Step Verification"}</h2>
-        <p className="form-sub">{loginStep === "credentials" ? "Sign in to access the compliance dashboard" : "Secure your account"}</p>
+          <h2 className="form-heading">{loginStep === "credentials" ? "Welcome back" : "Two-Step Verification"}</h2>
+          <p className="form-sub">{loginStep === "credentials" ? "Sign in to access the compliance dashboard" : "Secure your account"}</p>
 
           <Alert type="error" message={loginError} />
 
-        {loginStep === "credentials" && (
-          <>
-            {/* ── Username ── */}
-            <div className="field">
-              <label className="field-label">Username or Email</label>
-              <div className="input-wrap">
-                <svg className="input-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="8" cy="5" r="3"/>
-                  <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
-                </svg>
-                <input
-                  type="text"
-                  className="glass-input"
-                  placeholder="admin@mataasnakahoy.gov.ph"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                />
+          {loginStep === "credentials" && (
+            <>
+              {/* ── Username ── */}
+              <div className="field">
+                <label className="field-label">Username or Email</label>
+                <div className="input-wrap">
+                  <svg className="input-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="8" cy="5" r="3" />
+                    <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+                  </svg>
+                  <input
+                    type="text"
+                    className="glass-input"
+                    placeholder="admin@mataasnakahoy.gov.ph"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* ── Password ── */}
-            <div className="field">
-              <label className="field-label">Password</label>
-              <div className="input-wrap">
-                <svg className="input-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="3" y="7" width="10" height="8" rx="1.5"/>
-                  <path d="M5 7V5a3 3 0 016 0v2"/>
-                </svg>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  className="glass-input glass-input--pw"
-                  placeholder={"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                />
-                <button className="pw-toggle" onClick={() => setShowPassword(!showPassword)} type="button">
-                  {showPassword ? (
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M2 2l12 12M6.5 6.7A2 2 0 009.3 9.5"/>
-                      <path d="M4.2 4.4C2.4 5.5 1 8 1 8s2.5 5 7 5c1.4 0 2.7-.4 3.8-1M7 3.1C7.3 3 7.7 3 8 3c4.5 0 7 5 7 5s-.7 1.4-1.9 2.7"/>
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                      <circle cx="8" cy="8" r="2"/>
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* ── Forgot password toggle ── */}
-            <div className="forgot-row">
-              <button className="forgot-btn" type="button" onClick={() => setShowForgot(!showForgot)}>
-                Forgot password?
-              </button>
-            </div>
-
-            {/* ── Password Reset Flow ── */}
-            {showForgot && (
-              <div className="otp-box">
-
-                {/* Step indicator + close */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <span className="text-accent" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    {stepLabel[forgotStep]}
-                  </span>
-                  <button onClick={handleForgotClose} type="button" style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(26,58,26,0.4)", fontSize: "18px", lineHeight: 1 }}>
-                    ✕
+              {/* ── Password ── */}
+              <div className="field">
+                <label className="field-label">Password</label>
+                <div className="input-wrap">
+                  <svg className="input-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="7" width="10" height="8" rx="1.5" />
+                    <path d="M5 7V5a3 3 0 016 0v2" />
+                  </svg>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="glass-input glass-input--pw"
+                    placeholder={"\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  />
+                  <button className="pw-toggle" onClick={() => setShowPassword(!showPassword)} type="button">
+                    {showPassword ? (
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M2 2l12 12M6.5 6.7A2 2 0 009.3 9.5" />
+                        <path d="M4.2 4.4C2.4 5.5 1 8 1 8s2.5 5 7 5c1.4 0 2.7-.4 3.8-1M7 3.1C7.3 3 7.7 3 8 3c4.5 0 7 5 7 5s-.7 1.4-1.9 2.7" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+                        <circle cx="8" cy="8" r="2" />
+                      </svg>
+                    )}
                   </button>
                 </div>
+              </div>
 
-                <Alert type="error" message={forgotError} />
-                <Alert type="success" message={forgotSuccess} />
+              {/* ── Forgot password toggle ── */}
+              <div className="forgot-row">
+                <button className="forgot-btn" type="button" onClick={() => setShowForgot(!showForgot)}>
+                  Forgot password?
+                </button>
+              </div>
 
-                {/* ── Step 1: Enter email/phone ── */}
-                {forgotStep === 1 && (
-                  <>
-                    <p className="otp-desc">Enter your registered email or phone number to receive a one-time password.</p>
-                    <div className="otp-action-row">
-                      <input
-                        type="text"
-                        className="glass-input glass-input--otp"
-                        placeholder="Email or phone number"
-                        value={identifier}
-                        onChange={(e) => setIdentifier(e.target.value)}
-                      />
-                      <button className="otp-send-btn" type="button" onClick={handleSendOtp} disabled={forgotLoading}>
-                        {forgotLoading ? "Sending..." : "Send OTP"}
-                      </button>
-                    </div>
-                  </>
-                )}
+              {/* ── Password Reset Flow ── */}
+              {showForgot && (
+                <div className="otp-box">
 
-                {/* ── Step 2: Enter OTP ── */}
-                {forgotStep === 2 && (
-                  <>
-                    <p className="otp-desc">Enter the 5-digit OTP sent to <strong>{identifier}</strong>.</p>
-                    <div className="otp-action-row">
-                      <input
-                        type="text"
-                        className="glass-input glass-input--otp"
-                        placeholder="e.g. 48291"
-                        maxLength={5}
-                        value={otpCode}
-                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                      />
-                      <button className="otp-send-btn" type="button" onClick={handleVerifyOtp}>
-                        Verify
-                      </button>
-                    </div>
-                    <button type="button" className="text-accent" onClick={() => setForgotStep(1)}
-                      style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", cursor: "pointer" }}>
-                      ← Back / Resend OTP
+                  {/* Step indicator + close */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <span className="text-accent" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {stepLabel[forgotStep]}
+                    </span>
+                    <button onClick={handleForgotClose} type="button" style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(26,58,26,0.4)", fontSize: "18px", lineHeight: 1 }}>
+                      ✕
                     </button>
-                  </>
-                )}
+                  </div>
 
-                {/* ── Step 3: New password ── */}
-                {forgotStep === 3 && (
-                  <>
-                    <p className="otp-desc">Choose a strong new password for your account.</p>
-                    <div className="field" style={{ marginBottom: "12px" }}>
-                      <label className="field-label">New Password</label>
-                      <div className="input-wrap">
+                  <Alert type="error" message={forgotError} />
+                  <Alert type="success" message={forgotSuccess} />
+
+                  {/* ── Step 1: Enter email/phone ── */}
+                  {forgotStep === 1 && (
+                    <>
+                      <p className="otp-desc">Enter your registered email or phone number to receive a one-time password.</p>
+                      <div className="otp-action-row">
                         <input
-                          type={showNewPassword ? "text" : "password"}
-                          className="glass-input glass-input--pw"
-                          placeholder="Min. 8 characters"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
+                          type="text"
+                          className="glass-input glass-input--otp"
+                          placeholder="Email or phone number"
+                          value={identifier}
+                          onChange={(e) => setIdentifier(e.target.value)}
                         />
-                        <button className="pw-toggle" type="button" onClick={() => setShowNewPassword(!showNewPassword)}>
-                          {showNewPassword ? (
-                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <path d="M2 2l12 12M6.5 6.7A2 2 0 009.3 9.5"/>
-                              <path d="M4.2 4.4C2.4 5.5 1 8 1 8s2.5 5 7 5c1.4 0 2.7-.4 3.8-1M7 3.1C7.3 3 7.7 3 8 3c4.5 0 7 5 7 5s-.7 1.4-1.9 2.7"/>
-                            </svg>
-                          ) : (
-                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                              <circle cx="8" cy="8" r="2"/>
-                            </svg>
-                          )}
+                        <button className="otp-send-btn" type="button" onClick={handleSendOtp} disabled={forgotLoading}>
+                          {forgotLoading ? "Sending..." : "Send OTP"}
                         </button>
                       </div>
-                    </div>
-                    <div className="field" style={{ marginBottom: "14px" }}>
-                      <label className="field-label">Confirm Password</label>
-                      <div className="input-wrap">
-                        <input
-                          type="password"
-                          className="glass-input"
-                          placeholder="Repeat new password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <button className="otp-send-btn" type="button" onClick={handleResetPassword}
-                      disabled={forgotLoading} style={{ width: "100%", padding: "12px" }}>
-                      {forgotLoading ? "Resetting..." : "Reset Password"}
-                    </button>
-                  </>
-                )}
+                    </>
+                  )}
 
-              </div>
-            )}
-          </>
+                  {/* ── Step 2: Enter OTP ── */}
+                  {forgotStep === 2 && (
+                    <>
+                      <p className="otp-desc">Enter the 5-digit OTP sent to <strong>{identifier}</strong>.</p>
+                      <div className="otp-action-row">
+                        <input
+                          type="text"
+                          className="glass-input glass-input--otp"
+                          placeholder="e.g. 48291"
+                          maxLength={5}
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                        />
+                        <button className="otp-send-btn" type="button" onClick={handleVerifyOtp}>
+                          Verify
+                        </button>
+                      </div>
+                      <button type="button" className="text-accent" onClick={() => setForgotStep(1)}
+                        style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", cursor: "pointer" }}>
+                        ← Back / Resend OTP
+                      </button>
+                    </>
+                  )}
+
+                  {/* ── Step 3: New password ── */}
+                  {forgotStep === 3 && (
+                    <>
+                      <p className="otp-desc">Choose a strong new password for your account.</p>
+                      <div className="field" style={{ marginBottom: "12px" }}>
+                        <label className="field-label">New Password</label>
+                        <div className="input-wrap">
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            className="glass-input glass-input--pw"
+                            placeholder="Min. 8 characters"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                          />
+                          <button className="pw-toggle" type="button" onClick={() => setShowNewPassword(!showNewPassword)}>
+                            {showNewPassword ? (
+                              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path d="M2 2l12 12M6.5 6.7A2 2 0 009.3 9.5" />
+                                <path d="M4.2 4.4C2.4 5.5 1 8 1 8s2.5 5 7 5c1.4 0 2.7-.4 3.8-1M7 3.1C7.3 3 7.7 3 8 3c4.5 0 7 5 7 5s-.7 1.4-1.9 2.7" />
+                              </svg>
+                            ) : (
+                              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+                                <circle cx="8" cy="8" r="2" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="field" style={{ marginBottom: "14px" }}>
+                        <label className="field-label">Confirm Password</label>
+                        <div className="input-wrap">
+                          <input
+                            type="password"
+                            className="glass-input"
+                            placeholder="Repeat new password"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <button className="otp-send-btn" type="button" onClick={handleResetPassword}
+                        disabled={forgotLoading} style={{ width: "100%", padding: "12px" }}>
+                        {forgotLoading ? "Resetting..." : "Reset Password"}
+                      </button>
+                    </>
+                  )}
+
+                </div>
+              )}
+            </>
           )}
 
-        {/* ── 2FA Code Flow ── */}
-        {loginStep === "2fa" && (
-          <div className="otp-box" style={{ marginTop: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <span className="text-accent" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Authenticator Code
-              </span>
+          {/* ── 2FA Code Flow ── */}
+          {loginStep === "2fa" && (
+            <div className="otp-box" style={{ marginTop: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <span className="text-accent" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Authenticator Code
+                </span>
+              </div>
+              <p className="otp-desc">Enter the 6-digit code from your Authenticator app.</p>
+              <div className="otp-action-row">
+                <input
+                  type="text"
+                  className="glass-input glass-input--otp"
+                  placeholder="e.g. 123456"
+                  maxLength={6}
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => e.key === "Enter" && handleVerify2FA()}
+                />
+              </div>
+              <button type="button" className="text-accent" onClick={() => setLoginStep("credentials")}
+                style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", cursor: "pointer" }}>
+                ← Back to Login
+              </button>
             </div>
-            <p className="otp-desc">Enter the 6-digit code from your Authenticator app.</p>
-            <div className="otp-action-row">
-              <input
-                type="text"
-                className="glass-input glass-input--otp"
-                placeholder="e.g. 123456"
-                maxLength={6}
-                value={totpCode}
-                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
-                onKeyDown={(e) => e.key === "Enter" && handleVerify2FA()}
-              />
-            </div>
-            <button type="button" className="text-accent" onClick={() => setLoginStep("credentials")}
-              style={{ marginTop: "10px", background: "none", border: "none", fontSize: "12px", cursor: "pointer" }}>
-              ← Back to Login
-            </button>
-          </div>
-        )}
+          )}
 
           {/* ── Primary CTA ── */}
-          <button 
-            className="signin-btn" 
-            type="button" 
-          onClick={loginStep === "credentials" ? handleLogin : handleVerify2FA} 
+          <button
+            className="signin-btn"
+            type="button"
+            onClick={loginStep === "credentials" ? handleLogin : handleVerify2FA}
             disabled={loginLoading}
           >
             {loginLoading ? (
@@ -605,7 +605,7 @@ const handleVerify2FA = async () => {
                 Signing in...
               </div>
             ) : (
-            loginStep === "credentials" ? "Secure Login" : "Verify Code"
+              loginStep === "credentials" ? "Secure Login" : "Verify Code"
             )}
           </button>
 

@@ -802,12 +802,7 @@ class _LoginPageState extends State<LoginPage> {
                             if (!context.mounted || !ctx.mounted) return;
                             if (res == LoginResult.success) {
                               Navigator.pop(ctx);
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const MainLayout(),
-                                ),
-                              );
+                              await _authService.activateSavedUserSession();
                             } else if (res == LoginResult.mustChangePassword) {
                               Navigator.pop(ctx);
                               _showForcePasswordChangeDialog();
@@ -1000,15 +995,13 @@ class _LoginPageState extends State<LoginPage> {
                               newController.text,
                             );
                             if (res['success'] == true) {
-                              if (context.mounted && ctx.mounted) {
-                                Navigator.pop(ctx);
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const MainLayout(),
-                                  ),
-                                );
-                              }
+                              if (!context.mounted || !ctx.mounted) return;
+                              Navigator.pop(ctx);
+                              await _authService.activateSavedUserSession(
+                                notify: false,
+                              );
+                              if (!mounted) return;
+                              _showWelcomeGreetingAndNavigate();
                             } else {
                               setDialogState(() {
                                 isSubmitting = false;
@@ -1055,369 +1048,383 @@ class _LoginPageState extends State<LoginPage> {
             );
           },
           child: LayoutBuilder(
-          builder: (context, constraints) {
-            final topSpacing = (constraints.maxHeight * 0.05)
-                .clamp(16.0, 40.0)
-                .toDouble();
-            final cardPadding = (constraints.maxWidth * 0.08)
-                .clamp(20.0, 32.0)
-                .toDouble();
+            builder: (context, constraints) {
+              final topSpacing = (constraints.maxHeight * 0.05)
+                  .clamp(16.0, 40.0)
+                  .toDouble();
+              final cardPadding = (constraints.maxWidth * 0.08)
+                  .clamp(20.0, 32.0)
+                  .toDouble();
 
-            return SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.viewInsetsOf(context).bottom,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                // IntrinsicHeight gives the Column a bounded height so the
-                // Expanded dark card below can stretch all the way to the
-                // bottom of the screen instead of floating mid-page.
-                child: IntrinsicHeight(
-                  child: Column(
-                  children: [
-                    SizedBox(height: topSpacing),
-                    // Logo Container
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          height: 44,
+              return SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  // IntrinsicHeight gives the Column a bounded height so the
+                  // Expanded dark card below can stretch all the way to the
+                  // bottom of the screen instead of floating mid-page.
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        SizedBox(height: topSpacing),
+                        // Logo Container
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Center(
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              height: 44,
+                            ),
+                          ),
+                        ).animate().scale(
+                          duration: 600.ms,
+                          curve: Curves.easeOutBack,
                         ),
-                      ),
-                    ).animate().scale(
-                      duration: 600.ms,
-                      curve: Curves.easeOutBack,
-                    ),
 
-                    const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-                    // App Name
-                    const Text(
-                      'REVELA',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: 4,
-                      ),
-                    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
-
-                    const SizedBox(height: 2),
-
-                    // Subtitle
-                    Text(
-                      'Field Inspection Platform',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.8),
-                        letterSpacing: 1.2,
-                      ),
-                    ).animate().fadeIn(delay: 400.ms),
-
-                    const SizedBox(height: 24),
-                    // Dark Card — Expanded so it always reaches the bottom
-                    Expanded(
-                      child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.fromLTRB(
-                        cardPadding,
-                        32,
-                        cardPadding,
-                        32,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.adaptiveSurface,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(32),
-                          topRight: Radius.circular(32),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Welcome',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: context.adaptiveTextDark,
-                            ),
+                        // App Name
+                        const Text(
+                          'REVELA',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            letterSpacing: 4,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Please login to continue',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: context.adaptiveTextMid,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
+                        ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
 
-                          // Email Field
-                          Text(
-                            'Email *',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: context.adaptiveTextDark,
-                            ),
+                        const SizedBox(height: 2),
+
+                        // Subtitle
+                        Text(
+                          'Field Inspection Platform',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.8),
+                            letterSpacing: 1.2,
                           ),
-                          const SizedBox(height: 8),
-                          Container(
+                        ).animate().fadeIn(delay: 400.ms),
+
+                        const SizedBox(height: 24),
+                        // Dark Card — Expanded so it always reaches the bottom
+                        Expanded(
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.fromLTRB(
+                              cardPadding,
+                              32,
+                              cardPadding,
+                              32,
+                            ),
                             decoration: BoxDecoration(
-                              color: context.isDarkMode
-                                  ? Colors.black.withValues(alpha: 0.15)
-                                  : Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: context.adaptiveBorder),
-                            ),
-                            child: TextField(
-                              style: TextStyle(color: context.adaptiveTextDark),
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: InputDecoration(
-                                hintText: 'Enter your email',
-                                hintStyle: TextStyle(
-                                  color: context.adaptiveTextLight,
-                                  fontSize: 14,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.email_outlined,
-                                  color: context.adaptiveTextLight,
-                                  size: 20,
-                                ),
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
+                              color: context.adaptiveSurface,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(32),
+                                topRight: Radius.circular(32),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          // Password Field
-                          Text(
-                            'Password *',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: context.adaptiveTextDark,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: context.isDarkMode
-                                  ? Colors.black.withValues(alpha: 0.15)
-                                  : Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: context.adaptiveBorder),
-                            ),
-                            child: TextField(
-                              style: TextStyle(color: context.adaptiveTextDark),
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              decoration: InputDecoration(
-                                hintText: 'Enter your password',
-                                hintStyle: TextStyle(
-                                  color: context.adaptiveTextLight,
-                                  fontSize: 14,
-                                ),
-                                prefixIcon: Icon(
-                                  Icons.lock_outline,
-                                  color: context.adaptiveTextLight,
-                                  size: 20,
-                                ),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off,
-                                    color: context.adaptivePrimary,
-                                    size: 20,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Welcome',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w800,
+                                    color: context.adaptiveTextDark,
                                   ),
-                                  onPressed: () {
-                                    if (mounted) {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    }
-                                  },
                                 ),
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Please login to continue',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: context.adaptiveTextMid,
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
+                                const SizedBox(height: 32),
 
-                          // Forgot Password Button
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: _showForgotPasswordDialog,
-                              style: TextButton.styleFrom(
-                                foregroundColor: context.adaptivePrimary
-                                    .withValues(alpha: 0.8),
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text(
-                                'Forgot Password?',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
+                                // Email Field
+                                Text(
+                                  'Email *',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.adaptiveTextDark,
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          // Login Button
-                          SizedBox(
-                            height: 54,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleLogin,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: context.adaptivePrimary,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2.5,
+                                const SizedBox(height: 8),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: context.isDarkMode
+                                        ? Colors.black.withValues(alpha: 0.15)
+                                        : Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: context.adaptiveBorder,
+                                    ),
+                                  ),
+                                  child: TextField(
+                                    style: TextStyle(
+                                      color: context.adaptiveTextDark,
+                                    ),
+                                    controller: _emailController,
+                                    keyboardType: TextInputType.emailAddress,
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter your email',
+                                      hintStyle: TextStyle(
+                                        color: context.adaptiveTextLight,
+                                        fontSize: 14,
                                       ),
-                                    )
-                                  : const Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          'Login',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
+                                      prefixIcon: Icon(
+                                        Icons.email_outlined,
+                                        color: context.adaptiveTextLight,
+                                        size: 20,
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
                                           ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        Icon(
-                                          Icons.arrow_forward_rounded,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                // Password Field
+                                Text(
+                                  'Password *',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.adaptiveTextDark,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: context.isDarkMode
+                                        ? Colors.black.withValues(alpha: 0.15)
+                                        : Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: context.adaptiveBorder,
+                                    ),
+                                  ),
+                                  child: TextField(
+                                    style: TextStyle(
+                                      color: context.adaptiveTextDark,
+                                    ),
+                                    controller: _passwordController,
+                                    obscureText: _obscurePassword,
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter your password',
+                                      hintStyle: TextStyle(
+                                        color: context.adaptiveTextLight,
+                                        fontSize: 14,
+                                      ),
+                                      prefixIcon: Icon(
+                                        Icons.lock_outline,
+                                        color: context.adaptiveTextLight,
+                                        size: 20,
+                                      ),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                          _obscurePassword
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off,
+                                          color: context.adaptivePrimary,
                                           size: 20,
                                         ),
-                                      ],
+                                        onPressed: () {
+                                          if (mounted) {
+                                            setState(() {
+                                              _obscurePassword =
+                                                  !_obscurePassword;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
                                     ),
-                            ),
-                          ),
-                          if (_canUseBiometrics) ...[
-                            const SizedBox(height: 16),
-                            SizedBox(
-                                  height: 54,
-                                  child: OutlinedButton.icon(
-                                    onPressed: _isLoading
-                                        ? null
-                                        : _handleBiometricLogin,
-                                    icon: const Icon(
-                                      Icons.fingerprint_rounded,
-                                      size: 24,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Forgot Password Button
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _showForgotPasswordDialog,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: context.adaptivePrimary
+                                          .withValues(alpha: 0.8),
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
-                                    label: const Text(
-                                      'Login with Biometrics',
+                                    child: const Text(
+                                      'Forgot Password?',
                                       style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: context.adaptivePrimary,
-                                      side: BorderSide(
-                                        color: context.adaptivePrimary
-                                            .withValues(alpha: 0.3),
-                                        width: 1.5,
-                                      ),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                // Login Button
+                                SizedBox(
+                                  height: 54,
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading ? null : _handleLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: context.adaptivePrimary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                     ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          )
+                                        : const Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                'Login',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              SizedBox(width: 8),
+                                              Icon(
+                                                Icons.arrow_forward_rounded,
+                                                size: 20,
+                                              ),
+                                            ],
+                                          ),
                                   ),
-                                )
-                                .animate()
-                                .fadeIn(delay: 600.ms)
-                                .slideY(begin: 0.1),
-                          ],
-                          const SizedBox(height: 24),
-                          RichText(
-                            textAlign: TextAlign.center,
-                            text: TextSpan(
-                              style: TextStyle(
-                                color: context.adaptiveTextMid,
-                                fontSize: 11,
-                                height: 1.5,
-                              ),
-                              children: [
-                                const TextSpan(
-                                  text: 'By logging in, you agree to the ',
                                 ),
-                                TextSpan(
-                                  text: 'Terms & Conditions',
-                                  style: TextStyle(
-                                    color: context.adaptivePrimary.withValues(
-                                      alpha: 0.8,
+                                if (_canUseBiometrics) ...[
+                                  const SizedBox(height: 16),
+                                  SizedBox(
+                                        height: 54,
+                                        child: OutlinedButton.icon(
+                                          onPressed: _isLoading
+                                              ? null
+                                              : _handleBiometricLogin,
+                                          icon: const Icon(
+                                            Icons.fingerprint_rounded,
+                                            size: 24,
+                                          ),
+                                          label: const Text(
+                                            'Login with Biometrics',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor:
+                                                context.adaptivePrimary,
+                                            side: BorderSide(
+                                              color: context.adaptivePrimary
+                                                  .withValues(alpha: 0.3),
+                                              width: 1.5,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .animate()
+                                      .fadeIn(delay: 600.ms)
+                                      .slideY(begin: 0.1),
+                                ],
+                                const SizedBox(height: 24),
+                                RichText(
+                                  textAlign: TextAlign.center,
+                                  text: TextSpan(
+                                    style: TextStyle(
+                                      color: context.adaptiveTextMid,
+                                      fontSize: 11,
+                                      height: 1.5,
                                     ),
-                                    fontWeight: FontWeight.bold,
-                                    decoration: TextDecoration.underline,
+                                    children: [
+                                      const TextSpan(
+                                        text:
+                                            'By logging in, you agree to the ',
+                                      ),
+                                      TextSpan(
+                                        text: 'Terms & Conditions',
+                                        style: TextStyle(
+                                          color: context.adaptivePrimary
+                                              .withValues(alpha: 0.8),
+                                          fontWeight: FontWeight.bold,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        recognizer: TapGestureRecognizer()
+                                          ..onTap = () => _openLegalUrl(
+                                            'https://ralphwreckeri2.github.io/revela_tc/',
+                                          ),
+                                      ),
+                                      const TextSpan(text: ' and '),
+                                      TextSpan(
+                                        text: 'Privacy Policy',
+                                        style: TextStyle(
+                                          color: context.adaptivePrimary
+                                              .withValues(alpha: 0.8),
+                                          fontWeight: FontWeight.bold,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        recognizer: TapGestureRecognizer()
+                                          ..onTap = () => _openLegalUrl(
+                                            'https://ralphwreckeri2.github.io/revela_pn/',
+                                          ),
+                                      ),
+                                      const TextSpan(text: '.'),
+                                    ],
                                   ),
-                                  recognizer: TapGestureRecognizer()
-                                    ..onTap = () => _openLegalUrl(
-                                      'https://ralphwreckeri2.github.io/revela_tc/',
-                                    ),
                                 ),
-                                const TextSpan(text: ' and '),
-                                TextSpan(
-                                  text: 'Privacy Policy',
-                                  style: TextStyle(
-                                    color: context.adaptivePrimary.withValues(
-                                      alpha: 0.8,
-                                    ),
-                                    fontWeight: FontWeight.bold,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                                  recognizer: TapGestureRecognizer()
-                                    ..onTap = () => _openLegalUrl(
-                                      'https://ralphwreckeri2.github.io/revela_pn/',
-                                    ),
-                                ),
-                                const TextSpan(text: '.'),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1),
-                      ),
-                  ],
+                          ).animate().fadeIn(delay: 500.ms).slideY(begin: 0.1),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
+              );
+            },
+          ),
         ),
       ),
     );

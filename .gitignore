@@ -16,6 +16,7 @@ revela_mobile/.flutter-plugins
 revela_mobile/.flutter-plugins-dependencies
 revela_mobile/.idea/
 *.apk
+!revela_web/public/revela.apk
 *.aab
 
 # General

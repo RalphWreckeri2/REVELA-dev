@@ -4,6 +4,7 @@ from flask_mysqldb import MySQL
 from config import Config
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
+import os
 import re
 
 
@@ -24,13 +25,20 @@ def create_app():
     mysql.init_app(app)
     jwt.init_app(app)
 
+    # Load CORS origins from environment
+    cors_origins = os.getenv("CORS_ORIGINS")
+    if cors_origins:
+        allowed_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+    else:
+        allowed_origins = [
+            re.compile(r"http://localhost:\d+"),
+            re.compile(r"http://127\.0\.0\.1:\d+"),
+            "http://10.0.2.2:5000",
+        ]
+
     CORS(app, resources={
         r"/api/*": {
-            "origins": [
-                re.compile(r"http://localhost:\d+"),
-                re.compile(r"http://127\.0\.0\.1:\d+"),
-                "http://10.0.2.2:5000",
-            ],
+            "origins": allowed_origins,
             "allow_headers": ["Content-Type", "Authorization"],
             "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
             "supports_credentials": True

@@ -7,20 +7,20 @@ class ApiConfig {
   static const String _prefKey = 'api_base_url';
   static const String _compileTimeBase = String.fromEnvironment(
     'API_BASE',
-    defaultValue: '',
+    defaultValue: 'https://api.revelasys.site',
   );
 
   static const Duration _probeTimeout = Duration(seconds: 4);
 
   static String? _resolvedBase;
 
-  /// Active base URL (no trailing slash), e.g. `http://127.0.0.1:5000`.
+  /// Active base URL (no trailing slash), e.g. `https://api.revelasys.site`.
   static String get apiBase {
     if (_resolvedBase != null) return _resolvedBase!;
     if (_compileTimeBase.trim().isNotEmpty) {
       return _normalize(_compileTimeBase);
     }
-    return 'http://127.0.0.1:5000';
+    return 'https://api.revelasys.site';
   }
 
   static Future<void> initialize() async {
@@ -82,6 +82,9 @@ class ApiConfig {
     if (_compileTimeBase.trim().isNotEmpty) {
       add(_compileTimeBase);
     }
+
+    // Live Production Server
+    add('https://api.revelasys.site');
 
     // Current Wi-Fi IP ng Laptop mo (192.168.1.2)
     add('http://192.168.1.2:5000');

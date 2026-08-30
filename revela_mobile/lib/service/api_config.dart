@@ -79,30 +79,40 @@ class ApiConfig {
       if (seen.add(n)) ordered.add(n);
     }
 
-    if (_compileTimeBase.trim().isNotEmpty) {
+    // 1. Explicit --dart-define=API_BASE passed at build/run time
+    final hasCustomCompileTime = _compileTimeBase.trim().isNotEmpty &&
+        _compileTimeBase.trim() != 'https://api.revelasys.site';
+    if (hasCustomCompileTime) {
       add(_compileTimeBase);
     }
 
-    // Live Production Server
-    add('https://api.revelasys.site');
-
-    // Current Wi-Fi IP ng Laptop mo (192.168.1.2)
-    add('http://192.168.1.2:5000');
-
-    // Naka-save sa SharedPreferences (kung may dati nang gumaganang IP)
+    // 2. Previously verified working URL from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_prefKey);
     if (saved != null && saved.isNotEmpty) {
       add(saved);
     }
 
-    // Secondary / Previous Wi-Fi IPs
-    add('http://192.168.8.108:5000');
+    // 3. Local Development endpoints (preferred during debugging/development)
+    if (kDebugMode || hasCustomCompileTime) {
+      // Android emulator → host machine loopback
+      add('http://10.0.2.2:5000');
+      // USB + `adb reverse tcp:5000 tcp:5000` / physical device loopback
+      add('http://127.0.0.1:5000');
+      // Local Wi-Fi subnet candidates
+      add('http://192.168.1.2:5000');
+      add('http://192.168.8.108:5000');
+    }
 
-    // USB + `adb reverse tcp:5000 tcp:5000` (physical device)
-    add('http://127.0.0.1:5000');
-    // Android emulator → host machine
-    add('http://10.0.2.2:5000');
+    // 4. Live Production Server (fallback)
+    add('https://api.revelasys.site');
+
+    // Also include local endpoints as final fallback in release if production unreachable
+    if (!kDebugMode && !hasCustomCompileTime) {
+      add('http://10.0.2.2:5000');
+      add('http://127.0.0.1:5000');
+      add('http://192.168.1.2:5000');
+    }
 
     return ordered;
   }

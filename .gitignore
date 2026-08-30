@@ -32,3 +32,15 @@ revela_mobile/macos/Flutter/ephemeral/
 
 # Analytics and Colab Exports
 revela_backend/colab_export/
+
+# Secrets & Credentials
+*firebase-adminsdk*.json
+revela_backend/*firebase-adminsdk*.json
+google-services.json
+revela_mobile/android/app/google-services.json
+GoogleService-Info.plist
+revela_mobile/ios/Runner/GoogleService-Info.plist
+key.properties
+revela_mobile/android/key.properties
+*.keystore
+*.jks

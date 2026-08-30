@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -7,6 +8,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../pages/notifications_page.dart';
 import 'auth_service.dart';
+import 'in_app_notifications_service.dart';
+import 'inspection_service.dart';
 
 final _channel = AndroidNotificationChannel(
   'revela_inspection_alerts',
@@ -32,7 +35,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     // Notification payloads are rendered by Android/iOS while backgrounded.
     // Render data-only messages locally so they are not silently dropped.
     if (message.notification == null) {
-      await _showLocalNotification(message);
+      await PushNotifications.showRemoteNotification(message);
     }
   } catch (error, stackTrace) {
     debugPrint('[FIREBASE INIT WARNING] Background handler: $error');
@@ -44,8 +47,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// invoked while the process is not running.
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
-  // Background isolates cannot safely navigate. The payload remains available
-  // to the OS; foreground startup is handled by getInitialMessage below.
+  // Payload handled upon app startup by getNotificationAppLaunchDetails.
 }
 
 class PushNotifications {
@@ -53,7 +55,8 @@ class PushNotifications {
 
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static bool _initialized = false;
-  static bool _launchNavigationHandled = false;
+  static String? pendingReportId;
+  static final Set<int> _warnedDeadlineTaskIds = {};
 
   static Future<void> initialize() async {
     if (_initialized) return;
@@ -77,20 +80,31 @@ class PushNotifications {
       await android?.requestNotificationsPermission();
 
       FirebaseMessaging.onMessage.listen((message) async {
-        await _showLocalNotification(message);
+        await showRemoteNotification(message);
+        // Refresh unread count in real-time on foreground message
+        unawaited(InAppNotificationsService().fetchUnreadCount());
       });
+
       FirebaseMessaging.onMessageOpenedApp.listen(_openInspectionAlerts);
 
-      // Covers a data-only local notification that launched a terminated app.
-      final localLaunch = await _localNotifications
-          .getNotificationAppLaunchDetails();
+      // Covers local notification that launched a terminated app.
+      final localLaunch =
+          await _localNotifications.getNotificationAppLaunchDetails();
       if (localLaunch?.didNotificationLaunchApp ?? false) {
-        _scheduleAlertNavigation(localLaunch?.notificationResponse?.payload);
+        final payload = localLaunch?.notificationResponse?.payload;
+        if (payload != null && payload.isNotEmpty) {
+          pendingReportId = payload;
+          _scheduleAlertNavigation(payload);
+        }
       }
 
-      // Covers a user tapping an FCM notification that launched a terminated app.
+      // Covers FCM notification that launched a terminated app.
       final initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) {
+        final reportId = _reportIdFromData(initialMessage.data);
+        if (reportId != null && reportId.isNotEmpty) {
+          pendingReportId = reportId;
+        }
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _openInspectionAlerts(initialMessage),
         );
@@ -106,15 +120,20 @@ class PushNotifications {
   }
 
   static void _openInspectionAlerts(RemoteMessage message) {
-    _scheduleAlertNavigation(_reportIdFromData(message.data));
+    final reportId = _reportIdFromData(message.data);
+    _scheduleAlertNavigation(reportId);
   }
 
   static void _scheduleAlertNavigation(String? reportId) {
+    if (reportId != null) pendingReportId = reportId;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_launchNavigationHandled) return;
       final navigator = AuthService.navigatorKey.currentState;
       if (navigator == null) return;
-      _launchNavigationHandled = true;
+
+      // Only navigate if user is authenticated
+      if (!AuthService().isAuthenticated) return;
+
       navigator.push(
         MaterialPageRoute(
           builder: (_) => NotificationsPage(initialReportId: reportId),
@@ -122,15 +141,143 @@ class PushNotifications {
       );
     });
   }
+
+  /// Show a local notification for an incoming remote message.
+  static Future<void> showRemoteNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    final title =
+        notification?.title ?? message.data['title'] ?? 'REVELA Update';
+    final body =
+        notification?.body ??
+        message.data['body'] ??
+        'You have a new inspection alert.';
+
+    final reportId = _reportIdFromData(message.data);
+    final notificationId =
+        ((message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) &
+            0x7FFFFFFF);
+
+    await _localNotifications.show(
+      notificationId,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList(<int>[0, 300, 180, 300]),
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: reportId,
+    );
+  }
+
+  /// Local polling alert: Triggered when new tasks appear.
+  static Future<void> notifyNewAssignments({
+    required List<InspectionTask> previous,
+    required List<InspectionTask> next,
+  }) async {
+    if (!_initialized) return;
+
+    final prevIds = previous.map((e) => e.reportID).toSet();
+    final newcomers =
+        next.where((t) => !prevIds.contains(t.reportID)).toList();
+    if (newcomers.isEmpty) return;
+
+    for (final task in newcomers) {
+      final notificationId = (task.reportID & 0x7FFFFFFF);
+      await _localNotifications.show(
+        notificationId,
+        'New inspection assigned',
+        task.detectedName,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channel.id,
+            _channel.name,
+            channelDescription: _channel.description,
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: task.reportID.toString(),
+      );
+    }
+  }
+
+  /// Local polling alert: Triggered when a deadline is nearing within 24 hours.
+  static Future<void> notifyApproachingDeadlines(
+    List<InspectionTask> tasks,
+  ) async {
+    if (!_initialized) return;
+
+    final now = DateTime.now();
+    for (final task in tasks) {
+      if (task.deadline == null || task.deadline!.isEmpty) continue;
+
+      try {
+        final deadline = DateTime.parse(task.deadline!);
+        final diff = deadline.difference(now);
+
+        // Only alert for future deadlines within 24 hours (not already overdue)
+        if (diff.inMinutes > 0 &&
+            diff.inHours <= 24 &&
+            !_warnedDeadlineTaskIds.contains(task.reportID)) {
+          _warnedDeadlineTaskIds.add(task.reportID);
+
+          final notificationId = ((task.reportID + 100000) & 0x7FFFFFFF);
+          await _localNotifications.show(
+            notificationId,
+            'Approaching Deadline',
+            'Task "${task.detectedName}" is due soon. Please inspect it.',
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                _channel.id,
+                _channel.name,
+                channelDescription: _channel.description,
+                importance: Importance.high,
+                priority: Priority.high,
+                icon: '@mipmap/ic_launcher',
+              ),
+              iOS: const DarwinNotificationDetails(
+                presentAlert: true,
+                presentBadge: true,
+                presentSound: true,
+              ),
+            ),
+            payload: task.reportID.toString(),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error parsing deadline for task ${task.reportID}: $e');
+      }
+    }
+  }
 }
 
 Future<void> _initializeLocalNotifications() async {
   const settings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     iOS: DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     ),
   );
   await _localNotifications.initialize(
@@ -145,41 +292,6 @@ Future<void> _initializeLocalNotifications() async {
         AndroidFlutterLocalNotificationsPlugin
       >();
   await android?.createNotificationChannel(_channel);
-}
-
-Future<void> _showLocalNotification(RemoteMessage message) async {
-  final notification = message.notification;
-  final title = notification?.title ?? message.data['title'] ?? 'REVELA update';
-  final body =
-      notification?.body ??
-      message.data['body'] ??
-      'You have a new inspection alert.';
-
-  await _localNotifications.show(
-    message.messageId?.hashCode ??
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    title,
-    body,
-    NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channel.id,
-        _channel.name,
-        channelDescription: _channel.description,
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-        vibrationPattern: Int64List.fromList(<int>[0, 300, 180, 300]),
-        icon: '@mipmap/ic_launcher',
-      ),
-      iOS: const DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-    ),
-    payload: _reportIdFromData(message.data),
-  );
 }
 
 String? _reportIdFromData(Map<String, dynamic> data) {

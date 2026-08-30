@@ -36,6 +36,7 @@ class _NotificationsPageState extends State<NotificationsPage>
   bool _isDrawerOpen = false;
   Timer? _pollingTimer;
   bool _loadInFlight = false;
+  bool _autoOpenAttempted = false;
   int _currentFilterIndex = 0;
   late PageController _pageController;
 
@@ -49,7 +50,7 @@ class _NotificationsPageState extends State<NotificationsPage>
   }
 
   void _startPolling() {
-    _pollingTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+    _pollingTimer ??= Timer.periodic(const Duration(seconds: 25), (_) {
       _load(silent: true);
     });
   }
@@ -100,6 +101,26 @@ class _NotificationsPageState extends State<NotificationsPage>
           _loading = false;
           _error = null;
         });
+
+        // Automatically open task modal if arriving via notification deep link
+        if (widget.initialReportId != null && !_autoOpenAttempted) {
+          final targetId = int.tryParse(widget.initialReportId!);
+          if (targetId != null) {
+            InspectionTask? targetTask;
+            for (final t in tasks) {
+              if (t.reportID == targetId) {
+                targetTask = t;
+                break;
+              }
+            }
+            if (targetTask != null) {
+              _autoOpenAttempted = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _onTaskTap(targetTask!);
+              });
+            }
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -427,7 +448,7 @@ class _NotificationsPageState extends State<NotificationsPage>
           ),
           onDismissed: (direction) {
             setState(() {
-              _items.removeAt(i);
+              _items.removeWhere((item) => item.id == n.id);
             });
             InAppNotificationsService().deleteNotification(n.id);
           },

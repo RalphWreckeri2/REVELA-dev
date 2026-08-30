@@ -561,6 +561,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _handleLoginResult(LoginResult result) {
+    final authError = _authService.lastAuthError;
     switch (result) {
       case LoginResult.success:
         _showWelcomeGreetingAndNavigate();
@@ -574,16 +575,18 @@ class _LoginPageState extends State<LoginPage> {
       case LoginResult.notInspector:
         _showErrorDialog(
           'Unauthorized Access',
-          'Only registered field inspectors are authorized to use the mobile application. Administrators and other personnel must log in through the web dashboard.',
+          authError ??
+              'Only registered field inspectors are authorized to use the mobile application. Administrators and other personnel must log in through the web dashboard.',
         );
         break;
       case LoginResult.failed:
-        _showSnackBar('Incorrect email or password. Please try again.');
+        _showSnackBar(authError ?? 'Incorrect email or password. Please try again.');
         break;
       case LoginResult.networkError:
         _showErrorDialog(
           'Cannot Reach Server',
-          'Unable to connect to the server. Please check your internet connection and try again.',
+          authError ??
+              'Unable to connect to the server. Please check your internet connection and try again.',
         );
         break;
       case LoginResult.canceled:

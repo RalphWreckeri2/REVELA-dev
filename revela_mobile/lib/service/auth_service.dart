@@ -92,9 +92,14 @@ class AuthService extends ChangeNotifier {
     _dio.options.baseUrl = ApiConfig.apiBase;
   }
 
+  String? _lastAuthError;
+  String? get lastAuthError => _lastAuthError;
+
   Future<LoginResult> loginWithRole(String email, String password) async {
+    _lastAuthError = null;
     final reachable = await ApiConfig.ensureReachable();
     if (reachable == null) {
+      _lastAuthError = 'Cannot connect to server at ${ApiConfig.apiBase}. Please verify the backend is running.';
       return LoginResult.networkError;
     }
     syncBaseUrl();
@@ -121,7 +126,8 @@ class AuthService extends ChangeNotifier {
 
           final String userRole =
               user?['userRole']?.toString() ?? user?['role']?.toString() ?? '';
-          if (userRole != 'Inspector') {
+          if (userRole.trim().toLowerCase() != 'inspector') {
+            _lastAuthError = 'Access denied. Account has role "$userRole", but only Inspectors can use the mobile app.';
             return LoginResult.notInspector;
           }
 
@@ -184,24 +190,27 @@ class AuthService extends ChangeNotifier {
           return LoginResult.success;
         }
       }
+      _lastAuthError = response.data?['error']?.toString() ?? 'Invalid email or password.';
       return LoginResult.failed;
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.sendTimeout) {
+        _lastAuthError = 'Connection timed out or failed to reach ${ApiConfig.apiBase}.';
         return LoginResult.networkError;
       }
 
+      final errorMsg = e.response?.data?['error']?.toString() ?? e.response?.data?['message']?.toString() ?? '';
+      _lastAuthError = errorMsg.isNotEmpty ? errorMsg : (e.message ?? 'Authentication failed');
+
       if (e.response?.statusCode == 403) {
-        final errorMsg = e.response?.data?['error']?.toString() ?? '';
-        if (errorMsg.contains('Inspectors only')) {
+        if (errorMsg.toLowerCase().contains('inspector')) {
           return LoginResult.notInspector;
         }
       }
 
-      debugPrint('Login Error: ${e.response?.data ?? e.message}');
-      debugPrint('Login Error: ${e.response?.data ?? e.message}');
+      debugPrint('Login Error (${e.response?.statusCode}): ${e.response?.data ?? e.message}');
       return LoginResult.failed;
     }
   }
@@ -507,6 +516,8 @@ class AuthService extends ChangeNotifier {
           value: profile['token']?.toString(),
         );
       }
+      // Register/sync FCM token in background if network is available
+      unawaited(_registerFcmToken());
       return true;
     } catch (e) {
       debugPrint('hydrateLocalSessionForUserId failed: $e');

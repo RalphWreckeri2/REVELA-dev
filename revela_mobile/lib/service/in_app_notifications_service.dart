@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import 'auth_service.dart';
 
@@ -43,27 +44,41 @@ class InAppNotificationsService {
 
   Dio get _dio => AuthService().dio;
 
+  /// Reactive unread count listener for app bar / bottom nav bar badges.
+  final ValueNotifier<int> unreadCountNotifier = ValueNotifier<int>(0);
+
   Future<List<InAppNotification>> fetchNotifications() async {
     final response = await _dio.get('/api/notifications');
     final List<dynamic> data = response.data['data'] ?? [];
-    return data
+    final list = data
         .map((e) => InAppNotification.fromJson(e as Map<String, dynamic>))
         .toList();
+    final unread = list.where((n) => n.isUnread).length;
+    unreadCountNotifier.value = unread;
+    return list;
   }
 
   Future<int> fetchUnreadCount() async {
-    final response = await _dio.get('/api/notifications/unread-count');
-    final n = response.data['count'];
-    if (n is int) return n;
-    return int.tryParse(n?.toString() ?? '') ?? 0;
+    try {
+      final response = await _dio.get('/api/notifications/unread-count');
+      final n = response.data['count'];
+      final count = (n is int) ? n : (int.tryParse(n?.toString() ?? '') ?? 0);
+      unreadCountNotifier.value = count;
+      return count;
+    } catch (_) {
+      return unreadCountNotifier.value;
+    }
   }
 
   Future<void> markAllRead() async {
     await _dio.patch('/api/notifications/read', data: <String, dynamic>{});
+    unreadCountNotifier.value = 0;
   }
 
   Future<void> markRead(List<int> ids) async {
     await _dio.patch('/api/notifications/read', data: {'ids': ids});
+    unreadCountNotifier.value =
+        (unreadCountNotifier.value - ids.length).clamp(0, 9999);
   }
 
   Future<void> deleteNotification(int id) async {
@@ -72,5 +87,6 @@ class InAppNotificationsService {
 
   Future<void> deleteAllNotifications() async {
     await _dio.delete('/api/notifications', data: {});
+    unreadCountNotifier.value = 0;
   }
 }

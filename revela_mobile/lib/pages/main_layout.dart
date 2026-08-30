@@ -11,6 +11,7 @@ import 'settings_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_background.dart';
 import '../service/in_app_notifications_service.dart';
+import '../service/push_notifications.dart';
 import '../widgets/scale_tap.dart';
 import '../widgets/floating_mascot.dart';
 import 'dart:async';
@@ -212,7 +213,6 @@ class _MainLayoutState extends State<MainLayout> {
   // enough to trigger an ANR dialog on lower-end devices.
   late final List<Widget?> _pages;
 
-  int _unreadAlerts = 0;
   Timer? _pollingTimer;
   Timer? _welcomeDismissTimer;
   bool _isWelcomeGreetingVisible = false;
@@ -245,13 +245,17 @@ class _MainLayoutState extends State<MainLayout> {
     _pages = List<Widget?>.filled(5, null);
     _ensurePageLoaded(_selectedIndex);
     _fetchUnreadCount();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _fetchUnreadCount();
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTabTour(_selectedIndex);
       if (widget.showWelcomeGreeting) _showWelcomeGreeting();
+      if (PushNotifications.pendingReportId != null) {
+        PushNotifications.pendingReportId = null;
+        _onItemTapped(3);
+      }
     });
   }
 
@@ -390,12 +394,7 @@ class _MainLayoutState extends State<MainLayout> {
 
   Future<void> _fetchUnreadCount() async {
     try {
-      final count = await InAppNotificationsService().fetchUnreadCount();
-      if (mounted) {
-        setState(() {
-          _unreadAlerts = count;
-        });
-      }
+      await InAppNotificationsService().fetchUnreadCount();
     } catch (_) {}
   }
 
@@ -643,7 +642,6 @@ class _MainLayoutState extends State<MainLayout> {
                                             MainAxisAlignment.spaceAround,
                                         children: List.generate(5, (index) {
                                           IconData iconData;
-                                          bool hasAlert = false;
                                           switch (index) {
                                             case 0:
                                               iconData =
@@ -659,7 +657,6 @@ class _MainLayoutState extends State<MainLayout> {
                                             case 3:
                                               iconData =
                                                   Icons.notifications_rounded;
-                                              hasAlert = _unreadAlerts > 0;
                                               break;
                                             case 4:
                                               iconData = Icons.settings_rounded;
@@ -701,48 +698,58 @@ class _MainLayoutState extends State<MainLayout> {
                                                                   .adaptiveTextMid,
                                                       ),
                                                     ),
-                                                    if (hasAlert)
-                                                      Positioned(
-                                                        right:
-                                                            (tabWidth / 2) - 20,
-                                                        top: -4,
-                                                        child: Container(
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
-                                                                horizontal: 5,
-                                                                vertical: 2,
+                                                    if (index == 3)
+                                                      ValueListenableBuilder<int>(
+                                                        valueListenable:
+                                                            InAppNotificationsService()
+                                                                .unreadCountNotifier,
+                                                        builder: (context, unread, _) {
+                                                          if (unread <= 0) {
+                                                            return const SizedBox.shrink();
+                                                          }
+                                                          return Positioned(
+                                                            right:
+                                                                (tabWidth / 2) - 20,
+                                                            top: -4,
+                                                            child: Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal: 5,
+                                                                    vertical: 2,
+                                                                  ),
+                                                              decoration: BoxDecoration(
+                                                                color: Colors
+                                                                    .redAccent,
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      10,
+                                                                    ),
                                                               ),
-                                                          decoration: BoxDecoration(
-                                                            color: Colors
-                                                                .redAccent,
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  10,
-                                                                ),
-                                                          ),
-                                                          constraints:
-                                                              const BoxConstraints(
-                                                                minWidth: 18,
-                                                                minHeight: 18,
+                                                              constraints:
+                                                                  const BoxConstraints(
+                                                                    minWidth: 18,
+                                                                    minHeight: 18,
+                                                                  ),
+                                                              child: Text(
+                                                                unread > 9
+                                                                    ? '9+'
+                                                                    : '$unread',
+                                                                style:
+                                                                    const TextStyle(
+                                                                      color: Colors
+                                                                          .white,
+                                                                      fontSize: 10,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                      height: 1.4,
+                                                                    ),
+                                                                textAlign: TextAlign
+                                                                    .center,
                                                               ),
-                                                          child: Text(
-                                                            _unreadAlerts > 9
-                                                                ? '9+'
-                                                                : '$_unreadAlerts',
-                                                            style:
-                                                                const TextStyle(
-                                                                  color: Colors
-                                                                      .white,
-                                                                  fontSize: 10,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  height: 1.4,
-                                                                ),
-                                                            textAlign: TextAlign
-                                                                .center,
-                                                          ),
-                                                        ),
+                                                            ),
+                                                          );
+                                                        },
                                                       ),
                                                   ],
                                                 ),

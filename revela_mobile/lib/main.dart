@@ -1,4 +1,6 @@
 import 'dart:ui';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'theme/app_theme.dart';
 import 'pages/splash_screen.dart';
@@ -6,13 +8,27 @@ import 'pages/login_page.dart';
 import 'pages/main_layout.dart';
 import 'service/auth_service.dart';
 import 'service/connectivity_service.dart';
+import 'service/push_notifications.dart';
 
 final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(
   ThemeMode.system,
 );
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase configuration can be absent in a local/dev build. Push is
+  // optional, so never let its initialization prevent the Flutter UI from
+  // reaching runApp().
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await PushNotifications.initialize();
+  } catch (error, stackTrace) {
+    debugPrint('[FIREBASE INIT WARNING] $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
   ConnectivityService().start();
   runApp(const MyApp());
 }

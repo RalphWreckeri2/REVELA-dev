@@ -555,7 +555,7 @@ export default function RegistryPage() {
       </div>
 
       {/* Summary Strip */}
-      <div style={styles.summaryStrip}>
+      <div className="registry-summary-strip" style={styles.summaryStrip}>
         {[
           { label: "Total Businesses", value: loading ? "—" : total, color: "var(--color-ink)" },
           { label: "Showing", value: loading ? "—" : businesses.length, color: "var(--color-primary)" },
@@ -577,8 +577,8 @@ export default function RegistryPage() {
       )}
 
       {/* Filters Bar */}
-      <div className="frosted-glass saas-card" style={styles.filtersBar}>
-        <div className="search-bar" style={{ width: 280 }}>
+      <div className="frosted-glass saas-card registry-filters" style={styles.filtersBar}>
+        <div className="search-bar registry-search" style={{ width: 280 }}>
           <Icon.Search />
           <input
             type="text"
@@ -588,7 +588,7 @@ export default function RegistryPage() {
           />
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginLeft: "auto", alignItems: "center" }}>
+        <div className="registry-filter-controls" style={{ display: "flex", gap: 10, marginLeft: "auto", alignItems: "center" }}>
           <Icon.Filter />
 
           <select
@@ -717,11 +717,11 @@ export default function RegistryPage() {
 
         {/* Pagination */}
         {!loading && businesses.length > 0 && (
-          <div style={styles.pagination}>
+          <div className="registry-pagination" style={styles.pagination}>
             <span style={styles.pageInfo}>
               Page {page} of {totalPages} &nbsp;·&nbsp; {total} total entries
             </span>
-            <div style={{ display: "flex", gap: 6 }}>
+            <div className="registry-page-actions" style={{ display: "flex", gap: 6 }}>
               <button
                 style={styles.pageBtn}
                 disabled={page === 1}

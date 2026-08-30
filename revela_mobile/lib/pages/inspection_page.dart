@@ -7,6 +7,7 @@ import 'main_layout.dart';
 import '../component/inspection_modal.dart';
 import '../widgets/floating_mascot.dart';
 import '../service/inspection_service.dart';
+import '../service/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/task_card.dart';
 import '../widgets/modern_segmented_filter.dart';
@@ -23,8 +24,8 @@ class InspectionPage extends StatefulWidget {
 }
 
 class _InspectionPageState extends State<InspectionPage>
-    with SingleTickerProviderStateMixin {
-  static const Set<String> _activeStatuses = {'Assigned', 'Reassigned'};
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  static const Set<String> _activeStatuses = {'assigned', 'reassigned'};
 
   late TabController _tabController;
   int _currentFilterIndex = 0;
@@ -41,6 +42,7 @@ class _InspectionPageState extends State<InspectionPage>
   bool _showFilters = false;
   bool _loadingCurrent = true;
   bool _loadingHistory = true;
+  Timer? _refreshTimer;
 
   List<InspectionTask> get _activeTabTasks {
     if (_currentFilterIndex == 0) return _currentTasks;
@@ -92,13 +94,20 @@ class _InspectionPageState extends State<InspectionPage>
 
   String _formatResult(String result) {
     switch (result) {
-      case 'Green': return 'Registered';
-      case 'Yellow': return 'Suspected / Needs Verification';
-      case 'Orange': return 'Warned / Non-Compliant';
-      case 'Red': return 'Unregistered';
-      case 'Black': return 'Blacklisted / Non-Responsive';
-      case 'Purple': return 'Closed / Abandoned';
-      default: return result;
+      case 'Green':
+        return 'Registered';
+      case 'Yellow':
+        return 'Suspected / Needs Verification';
+      case 'Orange':
+        return 'Warned / Non-Compliant';
+      case 'Red':
+        return 'Unregistered';
+      case 'Black':
+        return 'Blacklisted / Non-Responsive';
+      case 'Purple':
+        return 'Closed / Abandoned';
+      default:
+        return result;
     }
   }
 
@@ -161,6 +170,7 @@ class _InspectionPageState extends State<InspectionPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!mounted) return;
@@ -178,10 +188,38 @@ class _InspectionPageState extends State<InspectionPage>
     unawaited(_fetchHistory());
     unawaited(_inspectionService.refreshPendingDraftStatuses());
     _inspectionService.syncNotification.addListener(_showSyncNotification);
+    _startRefreshTimer();
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer ??= Timer.periodic(const Duration(seconds: 10), (_) {
+      unawaited(_fetchCurrent(silent: true));
+      unawaited(_fetchHistory(silent: true));
+    });
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startRefreshTimer();
+      unawaited(_fetchCurrent(silent: true));
+      unawaited(_fetchHistory(silent: true));
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _stopRefreshTimer();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopRefreshTimer();
     _inspectionService.syncNotification.removeListener(_showSyncNotification);
     _searchController.dispose();
     _tabController.dispose();
@@ -205,22 +243,49 @@ class _InspectionPageState extends State<InspectionPage>
     );
   }
 
-  Future<void> _fetchCurrent() async {
-    setState(() {
-      _loadingCurrent = true;
-      _currentError = null;
-    });
+  Future<void> _fetchCurrent({bool silent = false}) async {
+    final hasCachedTasks = _currentTasks.isNotEmpty || _missingTasks.isNotEmpty;
+    if (!silent && mounted) {
+      setState(() {
+        _loadingCurrent = true;
+        _currentError = null;
+      });
+    }
     try {
-      final tasks = await InspectionService().getMyTasks();
+      var tasks = await _inspectionService.getMyTasks();
+
+      // Dashboard keeps its last known assignments while a resumed request is
+      // settling. Use the same account-scoped cache here so the Current tab
+      // never becomes empty merely because one API response is delayed/empty.
+      if (tasks.isEmpty) {
+        final userId = await AuthService().getAuthenticatedUserId();
+        final cached = await _inspectionService.getLocalTasksForUser(
+          userId,
+          activeOnly: true,
+        );
+        if (cached.isNotEmpty) tasks = cached;
+      }
+
       final activeTasks = tasks
-          .where((t) => _activeStatuses.contains(t.verificationStatus))
+          .where(
+            (task) => _activeStatuses.contains(
+              task.verificationStatus.trim().toLowerCase(),
+            ),
+          )
           .toList();
+
+      // A malformed/missing status should not make a valid task returned by
+      // the active-task endpoint disappear from Current. The endpoint itself
+      // already guarantees Assigned/Reassigned reports only.
+      final displayTasks = activeTasks.isEmpty && tasks.isNotEmpty
+          ? tasks
+          : activeTasks;
 
       final now = DateTime.now();
       final currentList = <InspectionTask>[];
       final missingList = <InspectionTask>[];
 
-      for (var t in activeTasks) {
+      for (var t in displayTasks) {
         if (t.deadline != null && t.deadline!.isNotEmpty) {
           final dl = DateTime.tryParse(t.deadline!);
           if (dl != null && dl.isBefore(now)) {
@@ -233,8 +298,10 @@ class _InspectionPageState extends State<InspectionPage>
 
       if (mounted) {
         setState(() {
-          _currentTasks = currentList;
-          _missingTasks = missingList;
+          if (currentList.isNotEmpty || !hasCachedTasks) {
+            _currentTasks = currentList;
+            _missingTasks = missingList;
+          }
           if (_currentFilterIndex == 0 || _currentFilterIndex == 1) {
             _validateFilters();
           }
@@ -244,19 +311,23 @@ class _InspectionPageState extends State<InspectionPage>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _currentError =
-              'Unable to load your tasks. Please pull down to refresh.';
+          _currentError = hasCachedTasks
+              ? null
+              : 'Unable to load your tasks. Please pull down to refresh.';
           _loadingCurrent = false;
         });
       }
     }
   }
 
-  Future<void> _fetchHistory() async {
-    setState(() {
-      _loadingHistory = true;
-      _historyError = null;
-    });
+  Future<void> _fetchHistory({bool silent = false}) async {
+    final hasCachedTasks = _historyTasks.isNotEmpty;
+    if (!silent && mounted) {
+      setState(() {
+        _loadingHistory = true;
+        _historyError = null;
+      });
+    }
     try {
       final all = await InspectionService().getMyReportHistory();
       final historyTasks = all
@@ -274,8 +345,9 @@ class _InspectionPageState extends State<InspectionPage>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _historyError =
-              'Unable to load your inspection history. Please pull down to refresh.';
+          _historyError = hasCachedTasks
+              ? null
+              : 'Unable to load your inspection history. Please pull down to refresh.';
           _loadingHistory = false;
         });
       }
@@ -398,7 +470,10 @@ class _InspectionPageState extends State<InspectionPage>
     final hasBarangayFilter = barangays.length > 1;
 
     // Check if we have anything to show
-    if (isHistory && !hasStatusFilter && !hasResultFilter && !hasBarangayFilter) {
+    if (isHistory &&
+        !hasStatusFilter &&
+        !hasResultFilter &&
+        !hasBarangayFilter) {
       return const SizedBox.shrink();
     }
 

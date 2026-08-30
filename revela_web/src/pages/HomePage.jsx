@@ -864,7 +864,7 @@ export default function HomePage() {
       {/* shimmer keyframe now defined globally in global.css */}
 
       {/* Main Layout: 2 Columns */}
-      <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 24, alignItems: "start" }}>
+      <div className="overview-layout" style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 24, alignItems: "start" }}>
 
         {/* Left Column (Main Content) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>

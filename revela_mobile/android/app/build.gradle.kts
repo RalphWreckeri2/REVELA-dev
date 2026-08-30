@@ -75,3 +75,17 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
+
+// Firebase configuration is deliberately applied to development (debug) tasks
+// only. Do not apply the plugin until the environment-specific Firebase file
+// has been provisioned: the plugin fails configuration when it is absent.
+val googleServicesConfig = file("google-services.json")
+if (gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) } &&
+    googleServicesConfig.exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else if (gradle.startParameter.taskNames.any { it.contains("debug", ignoreCase = true) }) {
+    logger.warn(
+        "google-services.json not found at ${googleServicesConfig.path}; " +
+            "Firebase Android services are disabled for this debug build.",
+    )
+}

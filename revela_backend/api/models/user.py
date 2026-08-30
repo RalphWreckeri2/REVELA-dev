@@ -1,6 +1,66 @@
 from app import mysql
 
 
+_fcm_token_column_ready = False
+
+
+def _ensure_fcm_token_column():
+    """Add the device-token column for development databases created before FCM."""
+    global _fcm_token_column_ready
+    if _fcm_token_column_ready:
+        return
+
+    cur = mysql.connection.cursor()
+    try:
+        cur.execute("SHOW COLUMNS FROM USERS LIKE 'fcm_token'")
+        if cur.fetchone() is None:
+            cur.execute("ALTER TABLE USERS ADD COLUMN fcm_token TEXT NULL")
+            mysql.connection.commit()
+        _fcm_token_column_ready = True
+    finally:
+        cur.close()
+
+
+def update_fcm_token(user_id, fcm_token):
+    """Persist the current device token; it remains until explicit logout."""
+    _ensure_fcm_token_column()
+    cur = mysql.connection.cursor()
+    try:
+        cur.execute(
+            "UPDATE USERS SET fcm_token = %s, updatedAt = NOW() WHERE userID = %s",
+            (fcm_token, user_id),
+        )
+        mysql.connection.commit()
+        return cur.rowcount == 1
+    finally:
+        cur.close()
+
+
+def clear_fcm_token(user_id):
+    """Clear a device token only for a deliberate in-app logout."""
+    _ensure_fcm_token_column()
+    cur = mysql.connection.cursor()
+    try:
+        cur.execute(
+            "UPDATE USERS SET fcm_token = NULL, updatedAt = NOW() WHERE userID = %s",
+            (user_id,),
+        )
+        mysql.connection.commit()
+    finally:
+        cur.close()
+
+
+def get_fcm_token(user_id):
+    _ensure_fcm_token_column()
+    cur = mysql.connection.cursor()
+    try:
+        cur.execute("SELECT fcm_token FROM USERS WHERE userID = %s", (user_id,))
+        row = cur.fetchone() or {}
+        return (row.get("fcm_token") or "").strip() or None
+    finally:
+        cur.close()
+
+
 def find_user_by_email(email):
     """Fetch a single user row by email."""
     cur = mysql.connection.cursor()

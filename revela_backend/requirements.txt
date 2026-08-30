@@ -24,6 +24,7 @@ Flask-JWT-Extended==4.7.1
 Flask-Mail==0.10.0
 Flask-MySQLdb==2.0.0
 Flask-Session==0.8.0
+firebase-admin>=6.5.0,<7.0.0
 frozenlist==1.8.0
 geographiclib==2.1
 geopy==2.5.0

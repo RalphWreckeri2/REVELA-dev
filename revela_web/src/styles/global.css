@@ -733,6 +733,120 @@ body {
   color: var(--color-ink);
 }
 
+/* Page-level responsive guardrails. Inline page styles provide the desktop
+   composition; these classes take over before split-screen widths can force
+   controls, stats, legends, or footer content to overlap. */
+.registry-filters,
+.registry-filter-controls,
+.registry-pagination,
+.registry-page-actions,
+.saas-footer {
+  min-width: 0;
+}
+
+.registry-filter-controls,
+.registry-page-actions {
+  flex-wrap: wrap;
+}
+
+.registry-filter-controls select {
+  max-width: 100%;
+}
+
+.map-page-layout > *,
+.overview-layout > * {
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .map-page-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .map-side-panel {
+    position: relative !important;
+    top: auto !important;
+    max-height: none !important;
+  }
+
+  .map-stats-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .overview-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .registry-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .registry-filters {
+    align-items: stretch !important;
+    flex-wrap: wrap;
+  }
+
+  .registry-search {
+    width: 100% !important;
+    min-width: 0;
+  }
+
+  .registry-filter-controls {
+    width: 100%;
+    margin-left: 0 !important;
+    align-items: center !important;
+  }
+
+  .registry-filter-controls > select,
+  .registry-filter-controls > label {
+    flex: 1 1 150px;
+    min-width: 0;
+  }
+
+  .registry-filter-controls > span {
+    flex: 1 1 100%;
+  }
+
+  .registry-pagination {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .registry-page-actions {
+    width: 100%;
+    gap: 6px !important;
+  }
+
+  .registry-page-actions button {
+    flex: 1 1 32px;
+  }
+
+  .map-stats-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .saas-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 20px;
+  }
+
+  .saas-footer p {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 420px) {
+  .registry-summary-strip,
+  .map-stats-strip {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
 /* Light-theme contrast guardrails for controls that sit on white surfaces. */
 html:not(.theme-dark) .priority-dispatch-item {
   background: #fff !important;

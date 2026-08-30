@@ -33,6 +33,11 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${GOOGLE_MAPS_API_KEY}"/>
+        <!-- Ensures background FCM notification payloads use the audible,
+             high-importance inspection channel created by Flutter. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="revela_inspection_alerts" />
 
         <activity
             android:name=".MainActivity"

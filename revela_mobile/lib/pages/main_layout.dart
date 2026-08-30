@@ -206,7 +206,11 @@ class _WelcomeLoadingOverlay extends StatelessWidget {
 class _MainLayoutState extends State<MainLayout> {
   late int _selectedIndex;
   bool _isNavBarVisible = true;
-  late final List<Widget> _pages;
+  // Keep an already visited tab alive, but do not construct expensive tabs
+  // (notably the Google Map/location tab) during the first Dashboard frame.
+  // Constructing every IndexedStack child after login can block Android long
+  // enough to trigger an ANR dialog on lower-end devices.
+  late final List<Widget?> _pages;
 
   int _unreadAlerts = 0;
   Timer? _pollingTimer;
@@ -237,39 +241,9 @@ class _MainLayoutState extends State<MainLayout> {
       enableAutoScroll: true,
       scrollDuration: const Duration(milliseconds: 450),
     );
-    _selectedIndex = widget.initialIndex;
-    _pages = [
-      DashboardPage(
-        onDrawerToggled: (expanded) {
-          setState(() {
-            _isNavBarVisible = !expanded;
-          });
-        },
-        onSwitchTab: _onItemTapped,
-      ),
-      HomePage(
-        onDrawerToggled: (expanded) {
-          setState(() {
-            _isNavBarVisible = !expanded;
-          });
-        },
-      ),
-      InspectionPage(
-        onDrawerToggled: (expanded) {
-          setState(() {
-            _isNavBarVisible = !expanded;
-          });
-        },
-      ),
-      NotificationsPage(
-        onDrawerToggled: (expanded) {
-          setState(() {
-            _isNavBarVisible = !expanded;
-          });
-        },
-      ),
-      const SettingsScreen(),
-    ];
+    _selectedIndex = widget.initialIndex.clamp(0, 4);
+    _pages = List<Widget?>.filled(5, null);
+    _ensurePageLoaded(_selectedIndex);
     _fetchUnreadCount();
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _fetchUnreadCount();
@@ -279,6 +253,52 @@ class _MainLayoutState extends State<MainLayout> {
       _checkTabTour(_selectedIndex);
       if (widget.showWelcomeGreeting) _showWelcomeGreeting();
     });
+  }
+
+  Widget _createPage(int index) {
+    switch (index) {
+      case 0:
+        return DashboardPage(
+          onDrawerToggled: (expanded) {
+            setState(() {
+              _isNavBarVisible = !expanded;
+            });
+          },
+          onSwitchTab: _onItemTapped,
+        );
+      case 1:
+        return HomePage(
+          onDrawerToggled: (expanded) {
+            setState(() {
+              _isNavBarVisible = !expanded;
+            });
+          },
+        );
+      case 2:
+        return InspectionPage(
+          onDrawerToggled: (expanded) {
+            setState(() {
+              _isNavBarVisible = !expanded;
+            });
+          },
+        );
+      case 3:
+        return NotificationsPage(
+          onDrawerToggled: (expanded) {
+            setState(() {
+              _isNavBarVisible = !expanded;
+            });
+          },
+        );
+      case 4:
+        return const SettingsScreen();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  void _ensurePageLoaded(int index) {
+    _pages[index] ??= _createPage(index);
   }
 
   void _showWelcomeGreeting() {
@@ -390,6 +410,7 @@ class _MainLayoutState extends State<MainLayout> {
   void _onItemTapped(int index) {
     HapticFeedback.lightImpact();
     setState(() {
+      _ensurePageLoaded(index);
       _selectedIndex = index;
     });
     _popIndicator();
@@ -431,7 +452,12 @@ class _MainLayoutState extends State<MainLayout> {
                 }
                 return false;
               },
-              child: IndexedStack(index: _selectedIndex, children: _pages),
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: [
+                  for (final page in _pages) page ?? const SizedBox.shrink(),
+                ],
+              ),
             ),
           ),
           if (_isWelcomeGreetingVisible)

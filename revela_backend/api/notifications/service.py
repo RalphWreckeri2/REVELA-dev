@@ -1,13 +1,86 @@
+import logging
+import os
+import smtplib
+import socket
+import ssl
 import threading
+from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-import os
 
 from app import mysql
 from api.notifications import hub
+from api.notifications.fcm import send_inspection_dispatch_push
 
 _tables_ready = False
+logger = logging.getLogger(__name__)
+
+
+def _is_revela_dev() -> bool:
+    """Keep the SMTP alert implementation isolated to the development stack."""
+    return os.getenv("REVELA_ENV", "").strip().lower() == "revela-dev"
+
+
+def _send_smtp_email(to_email: str, subject: str, text_body: str) -> bool:
+    """Send one dev alert with bounded SMTP I/O and actionable server logs."""
+    host = os.getenv("MAIL_SERVER", "").strip()
+    username = os.getenv("MAIL_USERNAME", "").strip()
+    password = os.getenv("MAIL_PASSWORD", "")
+    sender = os.getenv("MAIL_DEFAULT_SENDER", "").strip() or username
+    try:
+        port = int(os.getenv("MAIL_PORT", "587"))
+    except ValueError:
+        logger.error("Inspection email not sent: MAIL_PORT must be an integer")
+        return False
+
+    if not all((host, username, password, sender)):
+        logger.error(
+            "Inspection email not sent: MAIL_SERVER, MAIL_USERNAME, "
+            "MAIL_PASSWORD, and MAIL_DEFAULT_SENDER are required in revela-dev"
+        )
+        return False
+
+    message = EmailMessage()
+    message["From"] = sender
+    message["To"] = to_email
+    message["Subject"] = subject
+    message.set_content(text_body)
+
+    timeout = float(os.getenv("MAIL_TIMEOUT_SECONDS", "15"))
+    use_ssl = os.getenv("MAIL_USE_SSL", "false").lower() == "true"
+    use_tls = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
+
+    try:
+        context = ssl.create_default_context()
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port, timeout=timeout, context=context) as server:
+                server.login(username, password)
+                server.send_message(message)
+        else:
+            with smtplib.SMTP(host, port, timeout=timeout) as server:
+                server.ehlo()
+                if use_tls:
+                    server.starttls(context=context)
+                    server.ehlo()
+                server.login(username, password)
+                server.send_message(message)
+        logger.info("Inspection alert email sent to %s", to_email)
+        return True
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("Inspection email authentication failed for %s", to_email)
+    except (socket.timeout, TimeoutError):
+        logger.exception("Inspection email timed out for %s", to_email)
+    except (smtplib.SMTPException, OSError):
+        logger.exception("Inspection email transport failed for %s", to_email)
+    return False
+
+
+def _send_inspection_alert_email(to_email: str, subject: str, text_body: str) -> bool:
+    """Use SMTP only in revela-dev; retain the existing production transport."""
+    if _is_revela_dev():
+        return _send_smtp_email(to_email, subject, text_body)
+    return _send_resend_email(to_email, subject, text_body)
 
 
 def _ensure_tables() -> None:
@@ -186,8 +259,8 @@ def _send_resend_email(to_email: str, subject: str, text_body: str) -> bool:
             timeout=15,
         )
         return r.status_code in (200, 201)
-    except Exception as e:
-        print(f"Resend inspection alert error: {e}")
+    except requests.RequestException:
+        logger.exception("Resend inspection alert request failed for %s", to_email)
         return False
 
 
@@ -237,8 +310,8 @@ def notify_inspection_assigned(
             ),
         )
         mysql.connection.commit()
-        mysql.connection.commit()
         cur.close()
+        send_inspection_dispatch_push(report_id, int(inspector_user_id), biz)
     except Exception as e:
         print(f"notify_inspection_assigned error: {e}")
 
@@ -363,20 +436,33 @@ def notify_inspection_submitted(
             if email and get_email_inspection_alerts(aid):
                 recipients.append(email)
 
+        email_subject = f"[REVELA] Inspection Alert — {biz}"
+        email_body = (
+            f'{inspector_name} submitted a field inspection for "{biz}". '
+            f"Recorded result: {inspection_result}. "
+            f"Open Inspections to review (report #{report_id})."
+            "\n\n— REVELA Municipality Dashboard"
+        )
+
         def _emails(targets):
             for email in targets:
-                _send_resend_email(
-                    email,
-                    f"[REVELA] {title} — {biz}",
-                    body + "\n\n— REVELA Municipality Dashboard",
-                )
+                _send_inspection_alert_email(email, email_subject, email_body)
 
         if recipients:
-            threading.Thread(target=_emails, args=(
-                recipients,), daemon=True).start()
+            threading.Thread(
+                target=_emails,
+                args=(tuple(dict.fromkeys(recipients)),),
+                name=f"inspection-email-{report_id}",
+                daemon=True,
+            ).start()
+        else:
+            logger.warning(
+                "Inspection alert email skipped for report #%s: no opted-in admin email recipients",
+                report_id,
+            )
 
-    except Exception as e:
-        print(f"notify_inspection_submitted error: {e}")
+    except Exception:
+        logger.exception("notify_inspection_submitted failed")
 
 
 def notify_yellow_flag_reported(

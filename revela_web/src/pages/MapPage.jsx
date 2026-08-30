@@ -1961,7 +1961,7 @@ export default function MapPage() {
       )}
 
       {/* Map layout */}
-      <div style={styles.mapLayout}>
+      <div className="map-page-layout" style={styles.mapLayout}>
 
         {/* Left: map + layer controls */}
         <div style={styles.mapColumn}>
@@ -2082,7 +2082,7 @@ export default function MapPage() {
           </div>
 
           {/* Stats strip */}
-          <div style={styles.statsStrip}>
+          <div className="map-stats-strip" style={styles.statsStrip}>
             {[
               { label: "Total Flags", value: flags.length, color: "var(--color-ink)" },
               { label: "Active Businesses", value: counts.Green, color: "#22c55e" },
@@ -2101,7 +2101,7 @@ export default function MapPage() {
         </div>
 
         {/* Right: side panel */}
-        <div className="frosted-glass saas-card" style={styles.sidePanel}>
+        <div className="frosted-glass saas-card map-side-panel" style={styles.sidePanel}>
 
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>

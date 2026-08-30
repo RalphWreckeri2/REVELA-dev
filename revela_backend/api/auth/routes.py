@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, get_jwt, create_access_token
 from api.auth.service import login_user, request_otp, reset_password, update_user_password, generate_2fa_setup, verify_totp_code
 from api.middleware.decorators import jwt_required
-from api.models.user import find_user_by_id, find_user_by_email, enable_user_2fa, update_user_2fa_secret, get_user_2fa_secret, set_reset_requested
+from api.models.user import find_user_by_id, find_user_by_email, enable_user_2fa, update_user_2fa_secret, get_user_2fa_secret, set_reset_requested, update_fcm_token, clear_fcm_token
 from api.notifications.service import get_email_inspection_alerts, set_email_inspection_alerts, notify_password_reset_request
 from datetime import timedelta
 
@@ -79,9 +79,27 @@ def login():
 
 # ── POST /api/auth/logout ─────────────────────────────────────────────────────
 @auth_bp.route("/logout", methods=["POST"])
+@jwt_required()
 def logout():
-    """No-op endpoint — JWT is stateless, but the mobile app calls this on logout."""
+    """Clear the device token only when the user explicitly logs out."""
+    clear_fcm_token(int(get_jwt_identity()))
     return jsonify({"message": "Logged out"}), 200
+
+
+@auth_bp.route("/fcm-token", methods=["PUT"])
+@jwt_required()
+def save_fcm_token():
+    """Save/refresh the device FCM token for the authenticated inspector."""
+    data = request.get_json(silent=True) or {}
+    fcm_token = data.get("fcmToken")
+    if not isinstance(fcm_token, str) or not fcm_token.strip():
+        return jsonify({"error": "fcmToken is required"}), 400
+
+    user_id = int(get_jwt_identity())
+    if not update_fcm_token(user_id, fcm_token.strip()):
+        return jsonify({"error": "User not found"}), 404
+    print(f"FCM token saved for user {user_id}")
+    return jsonify({"message": "FCM token saved"}), 200
 
 
 # ── GET /api/auth/me ──────────────────────────────────────────────────────────

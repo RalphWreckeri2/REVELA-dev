@@ -15,41 +15,76 @@ import '../utils/date_utils.dart';
 
 class NotificationsPage extends StatefulWidget {
   final ValueChanged<bool>? onDrawerToggled;
-  const NotificationsPage({super.key, this.onDrawerToggled});
+  final String? initialReportId;
+
+  const NotificationsPage({
+    super.key,
+    this.onDrawerToggled,
+    this.initialReportId,
+  });
 
   @override
   State<NotificationsPage> createState() => _NotificationsPageState();
 }
 
-class _NotificationsPageState extends State<NotificationsPage> {
+class _NotificationsPageState extends State<NotificationsPage>
+    with WidgetsBindingObserver {
   List<InAppNotification> _items = [];
   List<InspectionTask> _activeTasks = [];
   bool _loading = true;
   String? _error;
   bool _isDrawerOpen = false;
   Timer? _pollingTimer;
+  bool _loadInFlight = false;
   int _currentFilterIndex = 0;
   late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
     _load();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _startPolling();
+  }
+
+  void _startPolling() {
+    _pollingTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
       _load(silent: true);
     });
   }
 
+  void _stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startPolling();
+      _load(silent: _items.isNotEmpty || _activeTasks.isNotEmpty);
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _stopPolling();
+    }
+  }
+
   @override
   void dispose() {
-    _pollingTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stopPolling();
     _pageController.dispose();
     super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (!silent) {
+    if (_loadInFlight) return;
+    _loadInFlight = true;
+    final hasCachedContent = _items.isNotEmpty || _activeTasks.isNotEmpty;
+
+    if (!silent && !hasCachedContent) {
       setState(() {
         _loading = true;
         _error = null;
@@ -63,15 +98,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
           _items = list;
           _activeTasks = tasks;
           _loading = false;
+          _error = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Could not load notifications.';
+          // A background/resume timeout must not hide already loaded alerts.
+          _error = hasCachedContent ? null : 'Could not load notifications.';
           _loading = false;
         });
       }
+    } finally {
+      _loadInFlight = false;
     }
   }
 
@@ -93,10 +132,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => InspectionModal(
-        task: task,
-        onSubmitted: () => _load(),
-      ),
+      builder: (_) => InspectionModal(task: task, onSubmitted: () => _load()),
     );
     widget.onDrawerToggled?.call(false);
     if (mounted) setState(() => _isDrawerOpen = false);
@@ -125,7 +161,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
         actions: [
           if (_items.isNotEmpty) ...[
             IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent, size: 24),
+              icon: const Icon(
+                Icons.delete_sweep_outlined,
+                color: Colors.redAccent,
+                size: 24,
+              ),
               tooltip: 'Clear all notifications',
               onPressed: _loading
                   ? null
@@ -134,26 +174,39 @@ class _NotificationsPageState extends State<NotificationsPage> {
                         context: context,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Clear All'),
-                          content: const Text('Are you sure you want to permanently delete all notifications?'),
+                          content: const Text(
+                            'Are you sure you want to permanently delete all notifications?',
+                          ),
                           actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
                             TextButton(
                               onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Clear', style: TextStyle(color: Colors.redAccent)),
+                              child: const Text(
+                                'Clear',
+                                style: TextStyle(color: Colors.redAccent),
+                              ),
                             ),
                           ],
                         ),
                       );
                       if (confirm == true) {
                         setState(() => _loading = true);
-                        await InAppNotificationsService().deleteAllNotifications();
+                        await InAppNotificationsService()
+                            .deleteAllNotifications();
                         await _load();
                       }
                     },
             ),
             if (hasUnread)
               IconButton(
-                icon: Icon(Icons.mark_email_read_outlined, color: AppColors.darkGreen, size: 22),
+                icon: Icon(
+                  Icons.mark_email_read_outlined,
+                  color: AppColors.darkGreen,
+                  size: 22,
+                ),
                 tooltip: 'Mark all as read',
                 onPressed: _loading
                     ? null
@@ -171,7 +224,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: IconButton(
-                icon: Icon(Icons.refresh_rounded, color: context.adaptiveTextDark, size: 24),
+                icon: Icon(
+                  Icons.refresh_rounded,
+                  color: context.adaptiveTextDark,
+                  size: 24,
+                ),
                 onPressed: _loading ? null : _load,
               ),
             ),
@@ -182,6 +239,24 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.initialReportId != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.darkGreen.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Inspection alert: report #${widget.initialReportId}',
+                  style: TextStyle(
+                    color: context.adaptiveTextDark,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
 
             // ── Filter Tabs ──
             Showcase(
@@ -213,7 +288,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 children: [
                   PageView(
                     controller: _pageController,
-                    onPageChanged: (idx) => setState(() => _currentFilterIndex = idx),
+                    onPageChanged: (idx) =>
+                        setState(() => _currentFilterIndex = idx),
                     children: [
                       _buildAssignmentsTab(),
                       _buildDeadlinesTab(nearingTasks),
@@ -236,12 +312,19 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.error_outline_rounded,
-                                    size: 48, color: Colors.red[300]),
+                                Icon(
+                                  Icons.error_outline_rounded,
+                                  size: 48,
+                                  color: Colors.red[300],
+                                ),
                                 const SizedBox(height: 16),
-                                Text(_error!,
-                                    style: TextStyle(
-                                        color: Colors.red[300], fontSize: 16)),
+                                Text(
+                                  _error!,
+                                  style: TextStyle(
+                                    color: Colors.red[300],
+                                    fontSize: 16,
+                                  ),
+                                ),
                                 const SizedBox(height: 24),
                                 ElevatedButton.icon(
                                   onPressed: () => _load(),
@@ -276,8 +359,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
         padding: const EdgeInsets.only(bottom: 12.0),
         child: Shimmer.fromColors(
           baseColor: context.isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-          highlightColor:
-              context.isDarkMode ? Colors.grey[700]! : Colors.grey[100]!,
+          highlightColor: context.isDarkMode
+              ? Colors.grey[700]!
+              : Colors.grey[100]!,
           child: Container(
             height: 88,
             decoration: BoxDecoration(
@@ -298,14 +382,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FloatingMascot(imagePath: 'assets/images/searching.png', height: 160),
+              FloatingMascot(
+                imagePath: 'assets/images/searching.png',
+                height: 160,
+              ),
               const SizedBox(height: 16),
               Text(
                 'No notifications yet.',
                 style: TextStyle(
-                    color: AppColors.textLight,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600),
+                  color: AppColors.textLight,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -345,145 +433,149 @@ class _NotificationsPageState extends State<NotificationsPage> {
           },
           child: GestureDetector(
             onTap: () async {
-            if (n.isUnread) {
-              try {
-                await InAppNotificationsService().markRead([n.id]);
-                if (mounted) {
-                  setState(() {
-                    _items[i] = InAppNotification(
-                      id: n.id,
-                      type: n.type,
-                      title: n.title,
-                      body: n.body,
-                      createdAt: n.createdAt,
-                      readAt: DateTime.now().toIso8601String(),
-                    );
-                  });
-                }
-              } catch (_) {}
-            }
+              if (n.isUnread) {
+                try {
+                  await InAppNotificationsService().markRead([n.id]);
+                  if (mounted) {
+                    setState(() {
+                      _items[i] = InAppNotification(
+                        id: n.id,
+                        type: n.type,
+                        title: n.title,
+                        body: n.body,
+                        createdAt: n.createdAt,
+                        readAt: DateTime.now().toIso8601String(),
+                      );
+                    });
+                  }
+                } catch (_) {}
+              }
 
-            if (n.type == 'inspection_assigned') {
-              final match = RegExp(r'\(report #(\d+)\)').firstMatch(n.body);
-              final reportId =
-                  match != null ? int.tryParse(match.group(1) ?? '') : null;
-              if (reportId != null) {
-                InspectionTask? task;
-                for (var t in _activeTasks) {
-                  if (t.reportID == reportId) {
-                    task = t;
-                    break;
+              if (n.type == 'inspection_assigned') {
+                final match = RegExp(r'\(report #(\d+)\)').firstMatch(n.body);
+                final reportId = match != null
+                    ? int.tryParse(match.group(1) ?? '')
+                    : null;
+                if (reportId != null) {
+                  InspectionTask? task;
+                  for (var t in _activeTasks) {
+                    if (t.reportID == reportId) {
+                      task = t;
+                      break;
+                    }
+                  }
+                  if (task != null) {
+                    _onTaskTap(task);
+                    return;
                   }
                 }
-                if (task != null) {
-                  _onTaskTap(task);
-                  return;
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Task no longer active or found.'),
+                    ),
+                  );
                 }
               }
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Task no longer active or found.')));
-              }
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: n.isUnread
-                  ? AppColors.darkGreen.withValues(alpha: 0.06)
-                  : context.adaptiveSurface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
                 color: n.isUnread
-                    ? AppColors.darkGreen.withValues(alpha: 0.25)
-                    : context.isDarkMode
-                        ? Colors.grey.shade800
-                        : Colors.grey.shade200,
+                    ? AppColors.darkGreen.withValues(alpha: 0.06)
+                    : context.adaptiveSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: n.isUnread
+                      ? AppColors.darkGreen.withValues(alpha: 0.25)
+                      : context.isDarkMode
+                      ? Colors.grey.shade800
+                      : Colors.grey.shade200,
+                ),
+                boxShadow: [
+                  if (n.isUnread)
+                    BoxShadow(
+                      color: AppColors.darkGreen.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                ],
               ),
-              boxShadow: [
-                if (n.isUnread)
-                  BoxShadow(
-                    color: AppColors.darkGreen.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: n.isUnread
-                        ? AppColors.darkGreen.withValues(alpha: 0.1)
-                        : context.isDarkMode
-                            ? Colors.grey.shade800
-                            : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    _iconForType(n.type),
-                    color: n.isUnread
-                        ? AppColors.darkGreen
-                        : context.adaptiveTextMid,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        n.title,
-                        style: TextStyle(
-                          fontWeight:
-                              n.isUnread ? FontWeight.w700 : FontWeight.w600,
-                          fontSize: 14,
-                          color: context.adaptiveTextDark,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        n.body,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: context.adaptiveTextMid,
-                          height: 1.4,
-                        ),
-                      ),
-                      if (n.createdAt.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          AppDateUtils.formatRelative(n.createdAt),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: context.adaptiveTextLight,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (n.isUnread)
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Container(
-                    width: 8,
-                    height: 8,
-                    margin: const EdgeInsets.only(top: 4),
-                    decoration: const BoxDecoration(
-                      color: AppColors.darkGreen,
-                      shape: BoxShape.circle,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: n.isUnread
+                          ? AppColors.darkGreen.withValues(alpha: 0.1)
+                          : context.isDarkMode
+                          ? Colors.grey.shade800
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _iconForType(n.type),
+                      color: n.isUnread
+                          ? AppColors.darkGreen
+                          : context.adaptiveTextMid,
+                      size: 22,
                     ),
                   ),
-              ],
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          n.title,
+                          style: TextStyle(
+                            fontWeight: n.isUnread
+                                ? FontWeight.w700
+                                : FontWeight.w600,
+                            fontSize: 14,
+                            color: context.adaptiveTextDark,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          n.body,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.adaptiveTextMid,
+                            height: 1.4,
+                          ),
+                        ),
+                        if (n.createdAt.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            AppDateUtils.formatRelative(n.createdAt),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: context.adaptiveTextLight,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (n.isUnread)
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(top: 4),
+                      decoration: const BoxDecoration(
+                        color: AppColors.darkGreen,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
-    },
+        );
+      },
     );
   }
 
@@ -495,14 +587,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FloatingMascot(imagePath: 'assets/images/standing.png', height: 160),
+              FloatingMascot(
+                imagePath: 'assets/images/standing.png',
+                height: 160,
+              ),
               const SizedBox(height: 16),
               Text(
                 'All clear!',
                 style: TextStyle(
-                    color: AppColors.textLight,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600),
+                  color: AppColors.textLight,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 6),
               Text(

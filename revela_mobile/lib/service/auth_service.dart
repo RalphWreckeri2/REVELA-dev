@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'dart:convert';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
@@ -28,6 +30,7 @@ class AuthService extends ChangeNotifier {
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
+  StreamSubscription<String>? _fcmTokenRefreshSubscription;
 
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
@@ -124,6 +127,7 @@ class AuthService extends ChangeNotifier {
 
           final String token = response.data['access_token'];
           await _storage.write(key: 'jwt_token', value: token);
+          await _registerFcmToken();
 
           // Save credentials securely for biometric re-login
           await _storage.write(key: 'saved_email', value: email);
@@ -232,6 +236,7 @@ class AuthService extends ChangeNotifier {
         final String token = response.data['access_token'];
         await _storage.write(key: 'jwt_token', value: token);
         await _storage.delete(key: 'temp_2fa_token');
+        await _registerFcmToken();
 
         final profile = await getProfile();
         if (profile != null) {
@@ -746,6 +751,41 @@ class AuthService extends ChangeNotifier {
     await _storage.write(key: 'last_logged_in_user_id', value: userId);
   }
 
+  /// Registers the token after login and whenever Firebase rotates it.
+  /// This is intentionally never called for app lifecycle pauses/termination.
+  Future<void> _registerFcmToken() async {
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken == null || fcmToken.isEmpty) {
+        debugPrint('[FCM TOKEN WARNING] Firebase returned no device token.');
+        return;
+      }
+
+      await _dio.put('/api/auth/fcm-token', data: {'fcmToken': fcmToken});
+      debugPrint(
+        '[FCM TOKEN REGISTERED] Device token saved for this inspector.',
+      );
+
+      _fcmTokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh
+          .listen((refreshedToken) async {
+            try {
+              await _dio.put(
+                '/api/auth/fcm-token',
+                data: {'fcmToken': refreshedToken},
+              );
+              debugPrint(
+                '[FCM TOKEN REGISTERED] Refreshed device token saved.',
+              );
+            } catch (e) {
+              debugPrint('[FCM TOKEN ERROR] Refresh sync failed: $e');
+            }
+          });
+    } catch (e) {
+      // A token-sync failure must not prevent a valid inspector login.
+      debugPrint('[FCM TOKEN ERROR] Registration failed: $e');
+    }
+  }
+
   /// Clears only the saved password, typically after a biometric login fails.
   Future<void> clearSavedPassword() async {
     await _storage.delete(key: 'saved_password');
@@ -778,6 +818,9 @@ class AuthService extends ChangeNotifier {
     try {
       await _dio.post('/api/auth/logout');
     } catch (_) {}
+
+    await _fcmTokenRefreshSubscription?.cancel();
+    _fcmTokenRefreshSubscription = null;
 
     final email = await _storage.read(key: 'saved_email');
     final password = await _storage.read(key: 'saved_password');

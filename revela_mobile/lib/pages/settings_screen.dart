@@ -549,7 +549,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         context: context,
                                         applicationName: 'REVELA Mobile',
                                         applicationVersion: '1.0.0',
-                                        applicationLegalese: '© 2024 REVELA',
+                                        applicationLegalese: '© 2026 REVELA',
                                       );
                                     },
                                   ),

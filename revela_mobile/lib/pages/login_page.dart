@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../service/auth_service.dart';
 import '../service/connectivity_service.dart';
+import '../service/push_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'main_layout.dart';
 
@@ -580,7 +581,9 @@ class _LoginPageState extends State<LoginPage> {
         );
         break;
       case LoginResult.failed:
-        _showSnackBar(authError ?? 'Incorrect email or password. Please try again.');
+        _showSnackBar(
+          authError ?? 'Incorrect email or password. Please try again.',
+        );
         break;
       case LoginResult.networkError:
         _showErrorDialog(
@@ -597,14 +600,21 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _showWelcomeGreetingAndNavigate() async {
     if (!mounted) return;
+
+    // Save FCM token to backend now that user is authenticated
+    await PushNotifications.refreshFcmToken();
+
+    // Navigate to main layout
     // Normally MyApp's auth listener performs this navigation. This fallback
     // covers a successful response that did not emit an auth-state update.
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => const MainLayout(showWelcomeGreeting: true),
-      ),
-      (route) => false,
-    );
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const MainLayout(showWelcomeGreeting: true),
+        ),
+        (route) => false,
+      );
+    }
   }
 
   void _showForgotPasswordDialog() {

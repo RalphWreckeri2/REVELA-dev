@@ -373,12 +373,6 @@ class _DashboardPageState extends State<DashboardPage>
     final int orangeFlagsCount = _activeTasks
         .where((t) => t.flagColor.toLowerCase() == 'orange')
         .length;
-    final int blackFlagsCount = _activeTasks
-        .where((t) => t.flagColor.toLowerCase() == 'black')
-        .length;
-    final int purpleFlagsCount = _activeTasks
-        .where((t) => t.flagColor.toLowerCase() == 'purple')
-        .length;
     final int submittedCount = _historyTasks
         .where((t) => t.verificationStatus.toLowerCase() == 'submitted')
         .length;
@@ -1174,7 +1168,7 @@ class _DashboardPageState extends State<DashboardPage>
                                   targetKey: _flagsTourTargetKey,
                                   title: 'Flag Reports',
                                   description:
-                                      'Quickly gauge risk levels. Red flags indicate unregistered establishments requiring priority.',
+                                      'Quickly gauge risk levels. Red, yellow, and orange flags indicate active priorities.',
                                   targetPadding: const EdgeInsets.all(4),
                                   child: Row(
                                     children: [
@@ -1227,7 +1221,7 @@ class _DashboardPageState extends State<DashboardPage>
                                                     ),
                                                   ),
                                       ),
-                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 12),
                                       Expanded(
                                         child:
                                             _buildGlassMetricCard(
@@ -1245,71 +1239,26 @@ class _DashboardPageState extends State<DashboardPage>
                                                     0.95,
                                                   ),
                                                 ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child:
-                                          _buildGlassMetricCard(
-                                                'Yellow',
-                                                '$yellowFlagsCount',
-                                                Icons.flag_rounded,
-                                                Colors.amber,
-                                                isZero: yellowFlagsCount == 0,
-                                              )
-                                              .animate()
-                                              .fadeIn(delay: 400.ms)
-                                              .scale(
-                                                begin: const Offset(0.95, 0.95),
-                                              ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child:
-                                          _buildGlassMetricCard(
-                                                'Orange',
-                                                '$orangeFlagsCount',
-                                                Icons.flag_rounded,
-                                                Colors.orange,
-                                                isZero: orangeFlagsCount == 0,
-                                              )
-                                              .animate()
-                                              .fadeIn(delay: 450.ms)
-                                              .scale(
-                                                begin: const Offset(0.95, 0.95),
-                                              ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child:
-                                          _buildGlassMetricCard(
-                                                'Black',
-                                                '$blackFlagsCount',
-                                                Icons.flag_rounded,
-                                                context.isDarkMode ? Colors.white70 : Colors.black87,
-                                                isZero: blackFlagsCount == 0,
-                                              )
-                                              .animate()
-                                              .fadeIn(delay: 500.ms)
-                                              .scale(
-                                                begin: const Offset(0.95, 0.95),
-                                              ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child:
-                                          _buildGlassMetricCard(
-                                                'Purple',
-                                                '$purpleFlagsCount',
-                                                Icons.store_rounded,
-                                                const Color(0xFF7C3AED),
-                                                isZero: purpleFlagsCount == 0,
-                                              )
-                                              .animate()
-                                              .fadeIn(delay: 550.ms)
-                                              .scale(
-                                                begin: const Offset(0.95, 0.95),
-                                              ),
-                                    ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child:
+                                            _buildGlassMetricCard(
+                                                  'Orange',
+                                                  '$orangeFlagsCount',
+                                                  Icons.flag_rounded,
+                                                  Colors.orange,
+                                                  isZero: orangeFlagsCount == 0,
+                                                )
+                                                .animate()
+                                                .fadeIn(delay: 450.ms)
+                                                .scale(
+                                                  begin: const Offset(
+                                                    0.95,
+                                                    0.95,
+                                                  ),
+                                                ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1752,10 +1701,12 @@ class _DashboardPageState extends State<DashboardPage>
           Text(
             title,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: context.adaptiveTextMid,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
           ),
         ],

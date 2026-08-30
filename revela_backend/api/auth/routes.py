@@ -71,6 +71,8 @@ def login():
         "user": {
             "userID": user["userID"],
             "fullName": user["fullName"],
+            "email": user.get("email") or "",
+            "phone": user.get("phone") or "",
             "userRole": user["userRole"],
             "mustChangePassword": bool(user.get("mustChangePassword", False))
         }
@@ -119,6 +121,7 @@ def me():
         "userID":   user["userID"],
         "fullName": user["fullName"],
         "email":    user["email"],
+        "phone":    user.get("phone") or "",
         "role":     claims.get("role"),
         "is_2fa_enabled": bool(user.get("is_2fa_enabled")),
         "mustChangePassword": bool(user.get("mustChangePassword", False)),
@@ -130,7 +133,7 @@ def me():
 @auth_bp.route("/me", methods=["PATCH"])
 @jwt_required()
 def update_me():
-    """Allow users to update their own profile (name, email)."""
+    """Allow users to update their own profile (name, email, phone)."""
     user_id = int(get_jwt_identity())
     data = request.get_json()
 
@@ -146,15 +149,26 @@ def update_me():
         if find_user_by_email(data["email"]):
             return jsonify({"error": "Email already in use by another account"}), 409
 
+    # Validate phone number if provided
+    phone = data.get("phone")
+    if phone is not None and phone.strip():
+        from api.auth.service import format_phone_number
+        formatted_phone = format_phone_number(phone)
+        if not formatted_phone:
+            return jsonify({"error": "Invalid phone number format. Please use a valid Philippine number."}), 400
+        phone = formatted_phone
+    else:
+        phone = user.get("phone")  # Keep existing phone if not provided
+
     from api.models.user import update_user
     
-    # Update user (keeping their existing role and phone if not provided)
+    # Update user (keeping their existing role if not provided)
     update_user(
         user_id=user_id,
         full_name=data.get("fullName", user["fullName"]),
         email=data.get("email", user["email"]),
         role=user["userRole"], # Cannot change own role
-        phone=user.get("phone")
+        phone=phone
     )
 
     return jsonify({"message": "Profile updated successfully"}), 200

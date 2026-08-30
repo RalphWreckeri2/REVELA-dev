@@ -99,7 +99,8 @@ class AuthService extends ChangeNotifier {
     _lastAuthError = null;
     final reachable = await ApiConfig.ensureReachable();
     if (reachable == null) {
-      _lastAuthError = 'Cannot connect to server at ${ApiConfig.apiBase}. Please verify the backend is running.';
+      _lastAuthError =
+          'Cannot connect to server at ${ApiConfig.apiBase}. Please verify the backend is running.';
       return LoginResult.networkError;
     }
     syncBaseUrl();
@@ -127,7 +128,8 @@ class AuthService extends ChangeNotifier {
           final String userRole =
               user?['userRole']?.toString() ?? user?['role']?.toString() ?? '';
           if (userRole.trim().toLowerCase() != 'inspector') {
-            _lastAuthError = 'Access denied. Account has role "$userRole", but only Inspectors can use the mobile app.';
+            _lastAuthError =
+                'Access denied. Account has role "$userRole", but only Inspectors can use the mobile app.';
             return LoginResult.notInspector;
           }
 
@@ -165,21 +167,35 @@ class AuthService extends ChangeNotifier {
                 fullName: user['fullName']?.toString() ?? '',
                 role: userRole,
                 token: token,
+                email: email,
+                phone: user['phone']?.toString(),
               );
               await _persistAuthenticatedUserState(
                 userId,
                 user['fullName']?.toString() ?? '',
                 userRole,
+                phone: user['phone']?.toString(),
               );
+              if (user['phone'] != null &&
+                  user['phone'].toString().isNotEmpty) {
+                await _storage.write(
+                  key: 'user_phone',
+                  value: user['phone'].toString(),
+                );
+              }
               if (!mustChange) {
                 _currentUser = {
                   'id': userId,
                   'fullName': user['fullName']?.toString() ?? '',
                   'role': userRole,
                   'token': token,
+                  'email': email,
+                  'phone': user['phone']?.toString() ?? '',
                 };
                 notifyListeners();
               }
+              // Sync FCM token immediately on successful login
+              unawaited(_registerFcmToken());
             }
           }
 
@@ -190,19 +206,26 @@ class AuthService extends ChangeNotifier {
           return LoginResult.success;
         }
       }
-      _lastAuthError = response.data?['error']?.toString() ?? 'Invalid email or password.';
+      _lastAuthError =
+          response.data?['error']?.toString() ?? 'Invalid email or password.';
       return LoginResult.failed;
     } on DioException catch (e) {
       if (e.type == DioExceptionType.connectionError ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.sendTimeout) {
-        _lastAuthError = 'Connection timed out or failed to reach ${ApiConfig.apiBase}.';
+        _lastAuthError =
+            'Connection timed out or failed to reach ${ApiConfig.apiBase}.';
         return LoginResult.networkError;
       }
 
-      final errorMsg = e.response?.data?['error']?.toString() ?? e.response?.data?['message']?.toString() ?? '';
-      _lastAuthError = errorMsg.isNotEmpty ? errorMsg : (e.message ?? 'Authentication failed');
+      final errorMsg =
+          e.response?.data?['error']?.toString() ??
+          e.response?.data?['message']?.toString() ??
+          '';
+      _lastAuthError = errorMsg.isNotEmpty
+          ? errorMsg
+          : (e.message ?? 'Authentication failed');
 
       if (e.response?.statusCode == 403) {
         if (errorMsg.toLowerCase().contains('inspector')) {
@@ -210,7 +233,9 @@ class AuthService extends ChangeNotifier {
         }
       }
 
-      debugPrint('Login Error (${e.response?.statusCode}): ${e.response?.data ?? e.message}');
+      debugPrint(
+        'Login Error (${e.response?.statusCode}): ${e.response?.data ?? e.message}',
+      );
       return LoginResult.failed;
     }
   }
@@ -274,12 +299,24 @@ class AuthService extends ChangeNotifier {
                 fullName: profile['fullName']?.toString() ?? '',
                 role: userRole,
                 token: token,
+                email: profile['email']?.toString(),
+                phone: profile['phone']?.toString(),
               );
               await _persistAuthenticatedUserState(
                 userId,
                 profile['fullName']?.toString() ?? '',
                 userRole,
+                phone: profile['phone']?.toString(),
               );
+              if (profile['phone'] != null &&
+                  profile['phone'].toString().isNotEmpty) {
+                await _storage.write(
+                  key: 'user_phone',
+                  value: profile['phone'].toString(),
+                );
+              }
+              // Sync FCM token after 2FA login
+              unawaited(_registerFcmToken());
             }
             // Do not notifyListeners inside dialog flow; caller will pop dialog and activate session
           } catch (e) {
@@ -353,29 +390,71 @@ class AuthService extends ChangeNotifier {
   Future<Map<String, dynamic>?> getProfile() async {
     try {
       final response = await _dio.get('/api/auth/me');
-      if (response.statusCode == 200) {
-        return response.data;
+      if (response.statusCode == 200 && response.data is Map) {
+        final data = Map<String, dynamic>.from(response.data);
+        if (data['fullName'] != null) {
+          await _storage.write(
+            key: 'user_fullName',
+            value: data['fullName'].toString(),
+          );
+        }
+        if (data['email'] != null) {
+          await _storage.write(
+            key: 'saved_email',
+            value: data['email'].toString(),
+          );
+        }
+        if (data['phone'] != null) {
+          await _storage.write(
+            key: 'user_phone',
+            value: data['phone'].toString(),
+          );
+        }
+        return data;
       }
       return null;
     } catch (e) {
       debugPrint('Error getting profile: $e');
+      final fullName = await _storage.read(key: 'user_fullName');
+      final email = await _storage.read(key: 'saved_email');
+      final phone = await _storage.read(key: 'user_phone');
+      if (fullName != null || email != null || phone != null) {
+        return {
+          'fullName': fullName ?? '',
+          'email': email ?? '',
+          'phone': phone ?? '',
+        };
+      }
       return null;
     }
   }
 
-  Future<Map<String, dynamic>> updateProfile(String name, String email) async {
+  Future<Map<String, dynamic>> updateProfile(
+    String name,
+    String email, [
+    String? phone,
+  ]) async {
     try {
+      final data = {
+        'fullName': name,
+        'email': email,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+      };
+
       final response = await _dio.patch(
         '/api/auth/me',
-        data: {'fullName': name, 'email': email},
+        data: data,
         options: Options(
-          sendTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 3),
+          sendTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
         ),
       );
       if (response.statusCode == 200) {
         await _storage.write(key: 'user_fullName', value: name);
         await _storage.write(key: 'saved_email', value: email);
+        if (phone != null && phone.trim().isNotEmpty) {
+          await _storage.write(key: 'user_phone', value: phone.trim());
+        }
         return {
           'success': true,
           'message': response.data['message'] ?? 'Profile updated successfully',
@@ -389,10 +468,12 @@ class AuthService extends ChangeNotifier {
       debugPrint(
         'updateProfile API failed or hung: ${e.message}. Mocking success.',
       );
-      // Since the exact endpoint wasn't confirmed, we'll mock the success locally
-      // so the app UI updates immediately without freezing.
+      // Fallback: save locally
       await _storage.write(key: 'user_fullName', value: name);
       await _storage.write(key: 'saved_email', value: email);
+      if (phone != null && phone.trim().isNotEmpty) {
+        await _storage.write(key: 'user_phone', value: phone.trim());
+      }
       return {'success': true, 'message': 'Profile updated locally'};
     }
   }
@@ -506,6 +587,20 @@ class AuthService extends ChangeNotifier {
       await _storage.write(key: 'active_biometric_user_id', value: userId);
       // Also persist a last_logged_in_user_id to help fallback restores
       await _storage.write(key: 'last_logged_in_user_id', value: userId);
+      if (profile['phone'] != null &&
+          profile['phone'].toString().isNotEmpty) {
+        await _storage.write(
+          key: 'user_phone',
+          value: profile['phone'].toString(),
+        );
+      }
+      if (profile['email'] != null &&
+          profile['email'].toString().isNotEmpty) {
+        await _storage.write(
+          key: 'saved_email',
+          value: profile['email'].toString(),
+        );
+      }
       _currentUser = profile;
       notifyListeners();
       debugPrint('hydrateLocalSessionForUserId: hydrated user $userId');
@@ -730,12 +825,16 @@ class AuthService extends ChangeNotifier {
     required String fullName,
     required String role,
     required String token,
+    String? email,
+    String? phone,
   }) async {
     final profile = {
       'id': userId,
       'fullName': fullName,
       'role': role,
       'token': token,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
     };
 
     try {
@@ -752,13 +851,17 @@ class AuthService extends ChangeNotifier {
   Future<void> _persistAuthenticatedUserState(
     String userId,
     String fullName,
-    String role,
-  ) async {
+    String role, {
+    String? phone,
+  }) async {
     if (userId.isEmpty) return;
     await _storage.write(key: 'authenticated_user_id', value: userId);
     await _storage.write(key: 'active_biometric_user_id', value: userId);
     await _storage.write(key: 'user_fullName', value: fullName);
     await _storage.write(key: 'user_role', value: role);
+    if (phone != null && phone.isNotEmpty) {
+      await _storage.write(key: 'user_phone', value: phone);
+    }
     await _storage.write(key: 'last_logged_in_user_id', value: userId);
   }
 
@@ -796,6 +899,9 @@ class AuthService extends ChangeNotifier {
       debugPrint('[FCM TOKEN ERROR] Registration failed: $e');
     }
   }
+
+  /// Manually sync FCM token to backend
+  Future<void> syncFcmToken() => _registerFcmToken();
 
   /// Clears only the saved password, typically after a biometric login fails.
   Future<void> clearSavedPassword() async {

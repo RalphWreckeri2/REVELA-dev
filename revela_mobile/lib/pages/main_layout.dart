@@ -245,6 +245,8 @@ class _MainLayoutState extends State<MainLayout> {
     _pages = List<Widget?>.filled(5, null);
     _ensurePageLoaded(_selectedIndex);
     _fetchUnreadCount();
+    // Proactively refresh and sync FCM device token upon entering the workspace
+    unawaited(PushNotifications.refreshFcmToken());
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _fetchUnreadCount();
     });

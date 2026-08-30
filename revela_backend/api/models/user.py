@@ -17,6 +17,8 @@ def _ensure_fcm_token_column():
             cur.execute("ALTER TABLE USERS ADD COLUMN fcm_token TEXT NULL")
             mysql.connection.commit()
         _fcm_token_column_ready = True
+    except Exception as e:
+        print(f"_ensure_fcm_token_column warning: {e}")
     finally:
         cur.close()
 
@@ -31,7 +33,10 @@ def update_fcm_token(user_id, fcm_token):
             (fcm_token, user_id),
         )
         mysql.connection.commit()
-        return cur.rowcount == 1
+        return True
+    except Exception as e:
+        print(f"Error updating fcm_token for user {user_id}: {e}")
+        return False
     finally:
         cur.close()
 

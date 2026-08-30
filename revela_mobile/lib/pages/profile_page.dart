@@ -14,7 +14,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  
+
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -52,14 +52,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isSaving = true);
-    
+
     final result = await AuthService().updateProfile(
       _nameController.text.trim(),
       _emailController.text.trim(),
     );
-    
+
     if (mounted) {
       setState(() => _isSaving = false);
       if (result['success'] == true) {
@@ -91,7 +91,10 @@ class _ProfilePageState extends State<ProfilePage> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 32.0,
+                ),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -101,13 +104,13 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            color: context.isDarkMode 
-                                ? Colors.white.withValues(alpha: 0.05) 
+                            color: context.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.05)
                                 : Colors.black.withValues(alpha: 0.03),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: context.isDarkMode 
-                                  ? Colors.white.withValues(alpha: 0.1) 
+                              color: context.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.1)
                                   : Colors.black.withValues(alpha: 0.05),
                               width: 1,
                             ),
@@ -120,7 +123,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ),
                       const SizedBox(height: 48),
-                      
+
                       _buildTextField(
                         controller: _nameController,
                         label: 'Full Name',
@@ -134,7 +137,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      
+
                       _buildTextField(
                         controller: _emailController,
                         label: 'Email Address',
@@ -152,7 +155,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       const SizedBox(height: 56),
-                      
+
                       SizedBox(
                         width: double.infinity,
                         height: 56,
@@ -165,7 +168,9 @@ class _ProfilePageState extends State<ProfilePage> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                             elevation: context.isDarkMode ? 0 : 4,
-                            shadowColor: AppColors.darkGreen.withValues(alpha: 0.4),
+                            shadowColor: AppColors.darkGreen.withValues(
+                              alpha: 0.4,
+                            ),
                           ),
                           child: _isSaving
                               ? const SizedBox(
@@ -229,8 +234,8 @@ class _ProfilePageState extends State<ProfilePage> {
             hintStyle: TextStyle(color: context.adaptiveTextLight),
             prefixIcon: Icon(icon, color: context.adaptivePrimary),
             filled: true,
-            fillColor: context.isDarkMode 
-                ? Colors.black.withValues(alpha: 0.2) 
+            fillColor: context.isDarkMode
+                ? Colors.black.withValues(alpha: 0.2)
                 : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -239,17 +244,14 @@ class _ProfilePageState extends State<ProfilePage> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(
-                color: context.isDarkMode 
-                    ? Colors.white.withValues(alpha: 0.1) 
+                color: context.isDarkMode
+                    ? Colors.white.withValues(alpha: 0.1)
                     : Colors.black.withValues(alpha: 0.05),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(
-                color: context.adaptivePrimary,
-                width: 2,
-              ),
+              borderSide: BorderSide(color: context.adaptivePrimary, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -259,7 +261,10 @@ class _ProfilePageState extends State<ProfilePage> {
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: Colors.redAccent, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 18,
+            ),
           ),
           validator: validator,
         ),

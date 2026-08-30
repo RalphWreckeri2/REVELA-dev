@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
+import 'auth_service.dart';
+import 'push_notifications.dart';
+
 /// App-wide connectivity monitor.
 ///
 /// Exposes [isOffline] as a [ValueNotifier] any widget can listen to, and
@@ -84,6 +87,12 @@ class ConnectivityService extends ChangeNotifier {
         } catch (e) {
           debugPrint('ConnectivityService: offline listener error: $e');
         }
+      }
+    } else if (!none && wasOffline) {
+      debugPrint('ConnectivityService: device back ONLINE');
+      // Sync FCM token upon reconnection if user is authenticated
+      if (AuthService().isAuthenticated) {
+        unawaited(PushNotifications.refreshFcmToken());
       }
     }
   }

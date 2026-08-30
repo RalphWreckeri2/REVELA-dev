@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../pages/notifications_page.dart';
 import 'auth_service.dart';
@@ -79,6 +80,15 @@ class PushNotifications {
           >();
       await android?.requestNotificationsPermission();
 
+      // Save FCM token to backend so push notifications can be sent
+      unawaited(_saveFcmTokenToBackend());
+
+      // Listen for FCM token refresh and resave to backend
+      _messaging.onTokenRefresh.listen((newToken) {
+        debugPrint('[FCM] Token refreshed, saving new token to backend');
+        unawaited(_saveFcmTokenToBackend());
+      });
+
       FirebaseMessaging.onMessage.listen((message) async {
         await showRemoteNotification(message);
         // Refresh unread count in real-time on foreground message
@@ -88,8 +98,8 @@ class PushNotifications {
       FirebaseMessaging.onMessageOpenedApp.listen(_openInspectionAlerts);
 
       // Covers local notification that launched a terminated app.
-      final localLaunch =
-          await _localNotifications.getNotificationAppLaunchDetails();
+      final localLaunch = await _localNotifications
+          .getNotificationAppLaunchDetails();
       if (localLaunch?.didNotificationLaunchApp ?? false) {
         final payload = localLaunch?.notificationResponse?.payload;
         if (payload != null && payload.isNotEmpty) {
@@ -142,6 +152,63 @@ class PushNotifications {
     });
   }
 
+  /// Fetch the FCM token from Firebase and save it to the backend.
+  /// This allows the backend to send push notifications to this device.
+  static Future<bool> _saveFcmTokenToBackend() async {
+    try {
+      final token = await _messaging.getToken();
+      if (token == null || token.isEmpty) {
+        debugPrint('[FCM] No FCM token available from Firebase.');
+        return false;
+      }
+
+      final jwtToken =
+          await const FlutterSecureStorage().read(key: 'jwt_token');
+      final isAuthenticated =
+          AuthService().isAuthenticated ||
+          (jwtToken != null && jwtToken.isNotEmpty);
+
+      if (!isAuthenticated) {
+        debugPrint(
+          '[FCM] User not authenticated yet; FCM token will be registered upon login.',
+        );
+        return false;
+      }
+
+      debugPrint(
+        '[FCM] Saving FCM token to backend: ${token.substring(0, token.length > 20 ? 20 : token.length)}...',
+      );
+
+      // Save token to backend via authenticated endpoint
+      final dio = AuthService().dio;
+      final response = await dio.put(
+        '/api/auth/fcm-token',
+        data: {'fcmToken': token},
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('[FCM] FCM token saved successfully to backend');
+        return true;
+      } else {
+        debugPrint(
+          '[FCM] Unexpected response saving FCM token: ${response.statusCode}',
+        );
+        return false;
+      }
+    } catch (error, stackTrace) {
+      debugPrint('[FCM ERROR] Failed to save FCM token: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return false;
+    }
+  }
+
+  /// Public method to manually refresh and save the FCM token.
+  /// Call this after login to ensure the backend has a valid token.
+  static Future<bool> refreshFcmToken() async {
+    debugPrint('[FCM] Manually refreshing and registering FCM token');
+    return await _saveFcmTokenToBackend();
+  }
+
   /// Show a local notification for an incoming remote message.
   static Future<void> showRemoteNotification(RemoteMessage message) async {
     final notification = message.notification;
@@ -154,8 +221,9 @@ class PushNotifications {
 
     final reportId = _reportIdFromData(message.data);
     final notificationId =
-        ((message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) &
-            0x7FFFFFFF);
+        ((message.messageId?.hashCode ??
+            DateTime.now().millisecondsSinceEpoch) &
+        0x7FFFFFFF);
 
     await _localNotifications.show(
       notificationId,
@@ -191,8 +259,7 @@ class PushNotifications {
     if (!_initialized) return;
 
     final prevIds = previous.map((e) => e.reportID).toSet();
-    final newcomers =
-        next.where((t) => !prevIds.contains(t.reportID)).toList();
+    final newcomers = next.where((t) => !prevIds.contains(t.reportID)).toList();
     if (newcomers.isEmpty) return;
 
     for (final task in newcomers) {
